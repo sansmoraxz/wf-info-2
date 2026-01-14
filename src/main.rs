@@ -9,6 +9,10 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
 
+mod profile;
+use profile::Root;
+mod storage;
+
 fn find_ee_log() -> Option<PathBuf> {
     // Common Warframe installation paths on Linux (Steam/Proton)
     let home = env::var("HOME").ok()?;
@@ -85,6 +89,16 @@ fn parse_account_id(log_path: &Path) -> Result<Option<AccountInfo>, anyhow::Erro
     }
 
     Ok(account_info)
+}
+
+const PLAYER_INFO_URL: &str = "https://api.warframe.com/cdn/getProfileViewingData.php?playerId=";
+
+async fn fetch_player_profile(account_id: &str) -> Result<Root, reqwest::Error> {
+    let url = format!("{}{}", PLAYER_INFO_URL, account_id);
+    log::debug!("Fetching profile from: {}", url);
+    let response = reqwest::get(&url).await?;
+    let root: Root = response.json().await?;
+    Ok(root)
 }
 
 async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
@@ -183,6 +197,22 @@ async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error::Err
                         }) = parse_line_for_account(&line)
                         {
                             log::info!("User logged in: username={}, account_id={}", username, account_id);
+                            
+                            let acc_id = account_id.clone();
+                            let user_name = username.clone();
+                            tokio::spawn(async move {
+                                match fetch_player_profile(&acc_id).await {
+                                    Ok(profile) => {
+                                        log::info!("Fetched profile for {}: {:?}", user_name, profile);
+                                        if let Err(e) = storage::save_encrypted_profile(&profile) {
+                                            log::error!("Failed to save profile for {}: {}", user_name, e);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to fetch profile for {}: {}", user_name, e);
+                                    }
+                                }
+                            });
                         }
                     }
                 }
@@ -228,6 +258,15 @@ async fn main() {
                 account_id,
             })) => {
                 log::info!("Current session: username={}, account_id={}", username, account_id);
+                match fetch_player_profile(&account_id).await {
+                     Ok(profile) => {
+                         log::info!("Fetched profile: {:?}", profile);
+                         if let Err(e) = storage::save_encrypted_profile(&profile) {
+                             log::error!("Failed to save profile: {}", e);
+                         }
+                     }
+                     Err(e) => log::error!("Failed to fetch profile: {}", e),
+                }
             }
             Ok(None) => {
                 log::info!("No active login session found");
@@ -249,6 +288,15 @@ async fn main() {
                 account_id,
             })) => {
                 log::info!("User logged in: username={}, account_id={}", username, account_id);
+                match fetch_player_profile(&account_id).await {
+                    Ok(profile) => {
+                        log::info!("Fetched profile: {:?}", profile);
+                        if let Err(e) = storage::save_encrypted_profile(&profile) {
+                            log::error!("Failed to save profile: {}", e);
+                        }
+                    }
+                    Err(e) => log::error!("Failed to fetch profile: {}", e),
+                }
             }
             Ok(None) => {
                 log::info!("No active login session found");
