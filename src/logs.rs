@@ -1,0 +1,99 @@
+use regex::Regex;
+use std::env;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
+
+use crate::account::AccountInfo;
+
+pub enum LogEvent {
+    Login(AccountInfo),
+    Logout,
+}
+
+pub fn find_ee_log() -> Option<PathBuf> {
+    // Common Warframe installation paths on Linux (Steam/Proton)
+    let home = env::var("HOME").ok()?;
+
+    // Try Steam Proton path
+    let steam_path = PathBuf::from(&home)
+        .join(".steam/steam/steamapps/compatdata/230410/pfx/drive_c/users/steamuser/AppData/Local/Warframe/EE.log");
+
+    if steam_path.exists() {
+        return Some(steam_path);
+    }
+
+    // Try custom path from environment variable
+    if let Ok(custom_path) = env::var("WARFRAME_EE_LOG") {
+        let path = PathBuf::from(custom_path);
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+pub fn parse_log_line(line: &str) -> Option<LogEvent> {
+    // Regex patterns to find account ID and username
+    // Pattern 1: "Logged in Username (accountid)"
+    let login_regex = Regex::new(r"Sys \[Info\]: Logged in (\S+) \(([A-Fa-f0-9]+)\)").ok()?;
+    // Pattern 2: "Player name changed to Username ... AccountId: accountid"
+    let account_regex =
+        Regex::new(r"Player name changed to (\S+).*AccountId:\s*([A-Fa-f0-9]+)").ok()?;
+    // Pattern 3: Logout
+    let logout_regex = Regex::new(r"IRC out: QUIT :Logged out of game").ok()?;
+
+    // Check for "Logged in" pattern
+    if let Some(caps) = login_regex.captures(line) {
+        if let (Some(username), Some(id)) = (caps.get(1), caps.get(2)) {
+            return Some(LogEvent::Login(AccountInfo {
+                username: username.as_str().to_string(),
+                account_id: id.as_str().to_string(),
+            }));
+        }
+    }
+
+    // Check for "Player name changed" pattern
+    if let Some(caps) = account_regex.captures(line) {
+        if let (Some(username), Some(id)) = (caps.get(1), caps.get(2)) {
+            return Some(LogEvent::Login(AccountInfo {
+                username: username.as_str().to_string(),
+                account_id: id.as_str().to_string(),
+            }));
+        }
+    }
+
+    // Check for logout
+    if logout_regex.is_match(line) {
+        return Some(LogEvent::Logout);
+    }
+
+    None
+}
+
+pub fn parse_account_id(log_path: &Path) -> Result<Option<AccountInfo>, anyhow::Error> {
+    let file = File::open(log_path)?;
+    let reader = BufReader::new(file);
+
+    let mut account_info: Option<AccountInfo> = None;
+
+    // Read file from end to get most recent login status
+    let lines: Vec<String> = reader.lines().filter_map(|l| l.ok()).collect();
+
+    for line in lines.iter().rev() {
+        match parse_log_line(line) {
+            Some(LogEvent::Login(info)) => {
+                account_info = Some(info);
+                break;
+            }
+            Some(LogEvent::Logout) => {
+                account_info = None;
+                break;
+            }
+            None => continue,
+        }
+    }
+
+    Ok(account_info)
+}

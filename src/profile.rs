@@ -40,14 +40,14 @@ pub struct AccountId {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Stats {
-   #[serde(rename = "MissionsCompleted")]
-   pub missions_completed: Option<f64>,
-   #[serde(rename = "MissionsQuit")]
-   pub missions_quit: Option<f64>,
-   #[serde(rename = "MissionsFailed")]
-   pub missions_failed: Option<f64>,
-   #[serde(rename = "TimePlayedSec")]
-   pub time_played_sec: Option<f64>,
-   #[serde(rename = "Income")]
-   pub income: Option<f64>,
+    #[serde(rename = "MissionsCompleted")]
+    pub missions_completed: Option<f64>,
+    #[serde(rename = "MissionsQuit")]
+    pub missions_quit: Option<f64>,
+    #[serde(rename = "MissionsFailed")]
+    pub missions_failed: Option<f64>,
+    #[serde(rename = "TimePlayedSec")]
+    pub time_played_sec: Option<f64>,
+    #[serde(rename = "Income")]
+    pub income: Option<f64>,
 }
