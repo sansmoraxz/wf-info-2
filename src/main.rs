@@ -42,32 +42,44 @@ struct AccountInfo {
     account_id: String,
 }
 
-fn parse_line_for_account(line: &str) -> Option<AccountInfo> {
+enum LogEvent {
+    Login(AccountInfo),
+    Logout,
+}
+
+fn parse_log_line(line: &str) -> Option<LogEvent> {
     // Regex patterns to find account ID and username
     // Pattern 1: "Logged in Username (accountid)"
     let login_regex = Regex::new(r"Sys \[Info\]: Logged in (\S+) \(([A-Fa-f0-9]+)\)").ok()?;
     // Pattern 2: "Player name changed to Username ... AccountId: accountid"
     let account_regex =
         Regex::new(r"Player name changed to (\S+).*AccountId:\s*([A-Fa-f0-9]+)").ok()?;
+    // Pattern 3: Logout
+    let logout_regex = Regex::new(r"IRC out: QUIT :Logged out of game").ok()?;
 
     // Check for "Logged in" pattern
     if let Some(caps) = login_regex.captures(line) {
         if let (Some(username), Some(id)) = (caps.get(1), caps.get(2)) {
-            return Some(AccountInfo {
+            return Some(LogEvent::Login(AccountInfo {
                 username: username.as_str().to_string(),
                 account_id: id.as_str().to_string(),
-            });
+            }));
         }
     }
 
     // Check for "Player name changed" pattern
     if let Some(caps) = account_regex.captures(line) {
         if let (Some(username), Some(id)) = (caps.get(1), caps.get(2)) {
-            return Some(AccountInfo {
+            return Some(LogEvent::Login(AccountInfo {
                 username: username.as_str().to_string(),
                 account_id: id.as_str().to_string(),
-            });
+            }));
         }
+    }
+
+    // Check for logout
+    if logout_regex.is_match(line) {
+        return Some(LogEvent::Logout);
     }
 
     None
@@ -83,9 +95,16 @@ fn parse_account_id(log_path: &Path) -> Result<Option<AccountInfo>, anyhow::Erro
     let lines: Vec<String> = reader.lines().filter_map(|l| l.ok()).collect();
 
     for line in lines.iter().rev() {
-        if let Some(info) = parse_line_for_account(line) {
-            account_info = Some(info);
-            break;
+        match parse_log_line(line) {
+            Some(LogEvent::Login(info)) => {
+                account_info = Some(info);
+                break;
+            }
+            Some(LogEvent::Logout) => {
+                account_info = None;
+                break;
+            }
+            None => continue,
         }
     }
 
@@ -221,28 +240,33 @@ async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error::Err
                 for line_result in reader.lines() {
                     if let Ok(line) = line_result {
                         log::debug!("New line: {}", line);
-                        if let Some(AccountInfo {
-                            username,
-                            account_id,
-                        }) = parse_line_for_account(&line)
-                        {
-                            log::info!("User logged in: username={}, account_id={}", username, account_id);
-                            
-                            let acc_id = account_id.clone();
-                            let user_name = username.clone();
-                            tokio::spawn(async move {
-                                match fetch_player_profile(&acc_id).await {
-                                    Ok(profile) => {
-                                        log::info!("Fetched profile for {}: {:?}", user_name, profile);
-                                        if let Err(e) = storage::save_encrypted_profile(&profile) {
-                                            log::error!("Failed to save profile for {}: {}", user_name, e);
+                        match parse_log_line(&line) {
+                            Some(LogEvent::Login(AccountInfo { username, account_id })) => {
+                                log::info!("User logged in: username={}, account_id={}", username, account_id);
+                                
+                                let acc_id = account_id.clone();
+                                let user_name = username.clone();
+                                tokio::spawn(async move {
+                                    match fetch_player_profile(&acc_id).await {
+                                        Ok(profile) => {
+                                            log::info!("Fetched profile for {}: {:?}", user_name, profile);
+                                            if let Err(e) = storage::save_encrypted_profile(&profile) {
+                                                log::error!("Failed to save profile for {}: {}", user_name, e);
+                                            }
+                                        }
+                                        Err(e) => {
+                                            log::error!("Failed to fetch profile for {}: {}", user_name, e);
                                         }
                                     }
-                                    Err(e) => {
-                                        log::error!("Failed to fetch profile for {}: {}", user_name, e);
-                                    }
+                                });
+                            }
+                            Some(LogEvent::Logout) => {
+                                log::info!("User logged out");
+                                if let Err(e) = storage::delete_profile() {
+                                    log::error!("Failed to delete profile: {}", e);
                                 }
-                            });
+                            }
+                            None => {}
                         }
                     }
                 }

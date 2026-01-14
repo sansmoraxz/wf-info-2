@@ -52,3 +52,16 @@ pub fn save_encrypted_profile(profile: &Root) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+pub fn delete_profile() -> anyhow::Result<()> {
+    let cache_dir = dirs::cache_dir().ok_or_else(|| anyhow::anyhow!("Could not find cache directory"))?;
+    let app_cache_dir = cache_dir.join("wf-info-2");
+    let file_path = app_cache_dir.join("userstats.dat");
+    
+    if file_path.exists() {
+        fs::remove_file(&file_path).context("Failed to delete profile file")?;
+        log::info!("Deleted profile data at {}", file_path.display());
+    }
+    
+    Ok(())
+}
