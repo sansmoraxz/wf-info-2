@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
+use sysinfo::System;
 
 mod profile;
 use profile::Root;
@@ -99,6 +100,35 @@ async fn fetch_player_profile(account_id: &str) -> Result<Root, reqwest::Error> 
     let response = reqwest::get(&url).await?;
     let root: Root = response.json().await?;
     Ok(root)
+}
+
+async fn wait_for_warframe_start() {
+    log::info!("Waiting for Warframe to start...");
+    let mut system = System::new();
+    
+    loop {
+        system.refresh_all();
+        
+        let running = system.processes().values().any(|process| {
+            let name_match = process.name().to_string_lossy().contains("Warframe.x64.exe");
+            let cmd_match = process.cmd().iter().any(|arg| arg.to_string_lossy().contains("Warframe.x64.exe"));
+            
+            if name_match || cmd_match {
+                // Check excludes: ignore launcher which uses Preprocess.log
+                let is_launcher = process.cmd().iter().any(|arg| arg.to_string_lossy().contains("Preprocess.log"));
+                !is_launcher
+            } else {
+                false
+            }
+        });
+
+        if running {
+            log::info!("Warframe process detected.");
+            break;
+        }
+        
+        sleep(Duration::from_secs(5)).await;
+    }
 }
 
 async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
@@ -251,6 +281,8 @@ async fn main() {
     log::info!("Log file path: {}", log_path.display());
 
     if watch_mode {
+        wait_for_warframe_start().await;
+
         // Live monitoring mode
         match parse_account_id(&log_path) {
             Ok(Some(AccountInfo {
