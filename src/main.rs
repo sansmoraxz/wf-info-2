@@ -91,12 +91,8 @@ fn watch_log_file(log_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Press Ctrl+C to stop");
 
     let log_filename = log_path.file_name().ok_or("Invalid log path")?;
-    let mut file = File::open(log_path)?;
     let mut last_size = metadata(log_path)?.len();
     let mut last_position = last_size;
-
-    // Start from end of file
-    file.seek(SeekFrom::End(0))?;
 
     // Set up file watcher - watch parent directory to detect file recreation
     let (tx, rx) = channel();
@@ -144,8 +140,6 @@ fn watch_log_file(log_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 
                 log::info!("File recreated, launcher restarted");
 
-                // Reopen the file
-                file = File::open(log_path)?;
                 last_size = 0;
                 last_position = 0;
                 continue;
@@ -159,7 +153,6 @@ fn watch_log_file(log_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
             // Check if file was truncated/cleared (launcher restart without deletion)
             if current_size < last_size {
                 log::info!("File truncated, launcher restarted");
-                file = File::open(log_path)?;
                 last_size = 0;
                 last_position = 0;
                 continue;
