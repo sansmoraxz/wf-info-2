@@ -150,10 +150,14 @@ async fn wait_for_warframe_start() {
     }
 }
 
-async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+async fn watch_log_file(
+    log_path: PathBuf,
+    initial_account_id: Option<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Watching log file for login events: {}", log_path.display());
     log::info!("Press Ctrl+C to stop");
 
+    let mut current_account_id = initial_account_id;
     let log_filename = log_path.file_name().ok_or("Invalid log path")?.to_owned();
     let mut last_size = metadata(&log_path)?.len();
     let mut last_position = last_size;
@@ -206,6 +210,7 @@ async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error::Err
 
                 last_size = 0;
                 last_position = 0;
+                current_account_id = None;
                 continue;
             }
 
@@ -219,6 +224,7 @@ async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error::Err
                 log::info!("File truncated, launcher restarted");
                 last_size = 0;
                 last_position = 0;
+                current_account_id = None;
                 continue;
             }
 
@@ -242,6 +248,12 @@ async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error::Err
                         log::debug!("New line: {}", line);
                         match parse_log_line(&line) {
                             Some(LogEvent::Login(AccountInfo { username, account_id })) => {
+                                if current_account_id.as_deref() == Some(&account_id) {
+                                    log::debug!("Duplicate login event for account_id={}", account_id);
+                                    continue;
+                                }
+
+                                current_account_id = Some(account_id.clone());
                                 log::info!("User logged in: username={}, account_id={}", username, account_id);
                                 
                                 let acc_id = account_id.clone();
@@ -261,6 +273,7 @@ async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error::Err
                                 });
                             }
                             Some(LogEvent::Logout) => {
+                                current_account_id = None;
                                 log::info!("User logged out");
                                 if let Err(e) = storage::delete_profile() {
                                     log::error!("Failed to delete profile: {}", e);
@@ -308,7 +321,7 @@ async fn main() {
         wait_for_warframe_start().await;
 
         // Live monitoring mode
-        match parse_account_id(&log_path) {
+        let initial_account_id = match parse_account_id(&log_path) {
             Ok(Some(AccountInfo {
                 username,
                 account_id,
@@ -323,16 +336,19 @@ async fn main() {
                      }
                      Err(e) => log::error!("Failed to fetch profile: {}", e),
                 }
+                Some(account_id)
             }
             Ok(None) => {
                 log::info!("No active login session found");
+                None
             }
             Err(e) => {
                 log::warn!("Error reading log file: {}", e);
+                None
             }
-        }
+        };
 
-        if let Err(e) = watch_log_file(log_path).await {
+        if let Err(e) = watch_log_file(log_path, initial_account_id).await {
             log::error!("Error watching file: {}", e);
             std::process::exit(1);
         }
