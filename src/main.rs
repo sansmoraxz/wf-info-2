@@ -5,8 +5,9 @@ use std::env;
 use std::fs::{File, metadata};
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::channel;
 use std::time::Duration;
+use tokio::sync::mpsc;
+use tokio::time::sleep;
 
 fn find_ee_log() -> Option<PathBuf> {
     // Common Warframe installation paths on Linux (Steam/Proton)
@@ -86,22 +87,22 @@ fn parse_account_id(log_path: &Path) -> Result<Option<AccountInfo>, anyhow::Erro
     Ok(account_info)
 }
 
-fn watch_log_file(log_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Watching log file for login events: {}", log_path.display());
     log::info!("Press Ctrl+C to stop");
 
-    let log_filename = log_path.file_name().ok_or("Invalid log path")?;
-    let mut last_size = metadata(log_path)?.len();
+    let log_filename = log_path.file_name().ok_or("Invalid log path")?.to_owned();
+    let mut last_size = metadata(&log_path)?.len();
     let mut last_position = last_size;
 
     // Set up file watcher - watch parent directory to detect file recreation
-    let (tx, rx) = channel();
+    let (tx, mut rx) = mpsc::channel(100);
     let mut debouncer = new_debouncer(
         Duration::from_millis(500),
         move |res: DebounceEventResult| {
             if let Ok(events) = res {
                 for event in events {
-                    let _ = tx.send(event);
+                    let _ = tx.blocking_send(event);
                 }
             }
         },
@@ -115,12 +116,12 @@ fn watch_log_file(log_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 
     loop {
         // Wait for file change event
-        if let Ok(event) = rx.recv() {
+        if let Some(event) = rx.recv().await {
             // Filter events: only process if it's for our target file
             let is_our_file = event
                 .path
                 .file_name()
-                .map(|name| name == log_filename)
+                .map(|name| name == log_filename.as_os_str())
                 .unwrap_or(false);
 
             if !is_our_file {
@@ -135,7 +136,7 @@ fn watch_log_file(log_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 
                 // Wait for file to be recreated
                 while !log_path.exists() {
-                    std::thread::sleep(Duration::from_millis(100));
+                    sleep(Duration::from_millis(100)).await;
                 }
 
                 log::info!("File recreated, launcher restarted");
@@ -145,7 +146,7 @@ fn watch_log_file(log_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
                 continue;
             }
 
-            let current_size = match metadata(log_path) {
+            let current_size = match metadata(&log_path) {
                 Ok(meta) => meta.len(),
                 Err(_) => continue, // File might be temporarily unavailable
             };
@@ -167,7 +168,7 @@ fn watch_log_file(log_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
                 );
 
                 // Reopen file to get fresh handle
-                let mut read_file = File::open(log_path)?;
+                let mut read_file = File::open(&log_path)?;
                 read_file.seek(SeekFrom::Start(last_position))?;
 
                 let reader = BufReader::new(read_file);
@@ -194,7 +195,8 @@ fn watch_log_file(log_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     env_logger::init();
     log::info!("Warframe Account Info Scanner started");
 
@@ -235,7 +237,7 @@ fn main() {
             }
         }
 
-        if let Err(e) = watch_log_file(&log_path) {
+        if let Err(e) = watch_log_file(log_path).await {
             log::error!("Error watching file: {}", e);
             std::process::exit(1);
         }
