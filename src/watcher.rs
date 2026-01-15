@@ -10,16 +10,14 @@ use tokio::time::sleep;
 use crate::account::AccountInfo;
 use crate::api;
 use crate::logs::{self, LogEvent};
+use crate::process;
 use crate::storage;
 
-pub async fn watch_log_file(
-    log_path: PathBuf,
-    initial_account_id: Option<String>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Watching log file for login events: {}", log_path.display());
     log::info!("Press Ctrl+C to stop");
 
-    let mut current_account_id = initial_account_id;
+    let mut current_account_id: Option<String> = None;
     let log_filename = log_path.file_name().ok_or("Invalid log path")?.to_owned();
     let mut last_size = metadata(&log_path)?.len();
     let mut last_position = last_size;
@@ -131,6 +129,7 @@ pub async fn watch_log_file(
                                 let acc_id = account_id.clone();
                                 let user_name = username.clone();
                                 tokio::spawn(async move {
+                                    // 1. Fetch Profile
                                     match api::fetch_player_profile(&acc_id).await {
                                         Ok(profile) => {
                                             log::info!(
@@ -155,6 +154,67 @@ pub async fn watch_log_file(
                                                 e
                                             );
                                         }
+                                    }
+
+                                    // 2. Scan Memory & Fetch Inventory
+                                    if let Some(pid) = process::get_warframe_pid() {
+                                        log::info!(
+                                            "Warframe running (PID: {}), attempting to extract inventory auth...",
+                                            pid
+                                        );
+
+                                        match process::scan_memory_for_auth_with_retry(
+                                            pid,
+                                            &acc_id,
+                                            5,
+                                            Duration::from_secs(3),
+                                        )
+                                        .await
+                                        {
+                                            Ok(Some(auth)) => {
+                                                log::info!(
+                                                    "Successfully extracted auth: {}",
+                                                    auth.to_query_string()
+                                                );
+
+                                                match api::fetch_inventory(&auth).await {
+                                                    Ok(inventory) => {
+                                                        if let Err(e) =
+                                                            storage::save_inventory(&inventory)
+                                                        {
+                                                            log::error!(
+                                                                "Failed to save inventory: {}",
+                                                                e
+                                                            );
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        log::error!(
+                                                            "Failed to fetch inventory: {}",
+                                                            e
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                            Ok(None) => {
+                                                log::warn!(
+                                                    "Could not extract auth data from process memory"
+                                                );
+                                                log::info!(
+                                                    "Tip: Make sure you're logged into Warframe and try running with sudo"
+                                                );
+                                            }
+                                            Err(e) => {
+                                                log::error!("Memory scan error: {}", e);
+                                                log::info!(
+                                                    "Tip: Try running with sudo for memory access permissions"
+                                                );
+                                            }
+                                        }
+                                    } else {
+                                        log::info!(
+                                            "Warframe not running - skipping inventory fetch"
+                                        );
                                     }
                                 });
                             }

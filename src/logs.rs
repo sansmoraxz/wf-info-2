@@ -1,8 +1,6 @@
 use regex::Regex;
 use std::env;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::account::AccountInfo;
 
@@ -11,6 +9,7 @@ pub enum LogEvent {
     Logout,
 }
 
+#[cfg(target_os = "linux")]
 pub fn find_ee_log() -> Option<PathBuf> {
     // Common Warframe installation paths on Linux (Steam/Proton)
     let home = env::var("HOME").ok()?;
@@ -70,30 +69,4 @@ pub fn parse_log_line(line: &str) -> Option<LogEvent> {
     }
 
     None
-}
-
-pub fn parse_account_id(log_path: &Path) -> Result<Option<AccountInfo>, anyhow::Error> {
-    let file = File::open(log_path)?;
-    let reader = BufReader::new(file);
-
-    let mut account_info: Option<AccountInfo> = None;
-
-    // Read file from end to get most recent login status
-    let lines: Vec<String> = reader.lines().filter_map(|l| l.ok()).collect();
-
-    for line in lines.iter().rev() {
-        match parse_log_line(line) {
-            Some(LogEvent::Login(info)) => {
-                account_info = Some(info);
-                break;
-            }
-            Some(LogEvent::Logout) => {
-                account_info = None;
-                break;
-            }
-            None => continue,
-        }
-    }
-
-    Ok(account_info)
 }

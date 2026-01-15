@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Root {
+pub struct ProfileData {
     #[serde(rename = "Results")]
     pub results: Vec<ResultItem>,
     #[serde(rename = "Stats")]
