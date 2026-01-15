@@ -2,7 +2,9 @@ use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
-pub fn deserialize_mongo_date_option<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
+pub fn deserialize_mongo_date_option<'de, D>(
+    deserializer: D,
+) -> Result<Option<DateTime<Utc>>, D::Error>
 where
     D: Deserializer<'de>,
 {

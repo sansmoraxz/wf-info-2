@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io::Write;
 
-use crate::profile::ProfileData;
+use crate::{inventory, profile::ProfileData};
 
 // Get key from build-time environment variable
 // Can be any string now
@@ -85,7 +85,7 @@ pub fn delete_profile() -> anyhow::Result<()> {
 /// Saves inventory data in two formats:
 /// 1. inventory.json - Pretty-printed JSON for human readability
 /// 2. lastData.dat - AES-128-CBC encrypted (compatible with C++ reference)
-pub fn save_inventory(inventory: &serde_json::Value) -> anyhow::Result<()> {
+pub fn save_inventory(inventory: &inventory::Inventory) -> anyhow::Result<()> {
     use aes::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
     type Aes128CbcEnc = cbc::Encryptor<aes::Aes128>;
 
@@ -105,7 +105,7 @@ pub fn save_inventory(inventory: &serde_json::Value) -> anyhow::Result<()> {
     log::info!("Saved inventory JSON to {}", json_path.display());
 
     // Save encrypted lastData.dat (AES-128-CBC with PKCS7 padding)
-    let json_bytes = inventory.to_string().into_bytes();
+    let json_bytes = serde_json::to_vec(inventory).context("Failed to serialize inventory")?;
 
     // Calculate padded size (PKCS7 pads to block size boundary)
     let block_size = 16;
