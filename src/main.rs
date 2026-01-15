@@ -1,10 +1,11 @@
-
 mod account;
 mod api;
+mod inventory;
 mod logs;
 mod process;
 mod profile;
 mod storage;
+mod utils;
 mod watcher;
 
 #[tokio::main]

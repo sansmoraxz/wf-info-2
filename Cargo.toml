@@ -7,7 +7,7 @@ edition = "2024"
 regex = "1.10"
 notify = "8.2"
 notify-debouncer-mini = "0.7"
-chrono = "0.4"
+chrono = {version = "0.4", features = ["serde"] }
 anyhow = "1.0.100"
 log = "0.4.29"
 env_logger = "0.11.8"

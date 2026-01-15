@@ -1,8 +1,0 @@
-{
-    "rust-analyzer.cargo.extraEnv": {
-        "WF_PROFILE_KEY": "your_secure_key_here"
-    },
-    "terminal.integrated.env.linux": {
-        "WF_PROFILE_KEY": "your_secure_key_here"
-    }
-}
