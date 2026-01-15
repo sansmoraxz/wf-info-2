@@ -4,7 +4,11 @@ use serde_json::Value;
 /// Warframe frame module
 pub mod suite;
 
+/// Warframe primary weapon module
 pub mod long_gun;
+
+/// Warframe secondary weapon module
+pub mod pistol;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Inventory {
@@ -13,6 +17,9 @@ pub struct Inventory {
 
     #[serde(rename = "LongGuns")]
     pub long_guns: Vec<long_gun::LongGun>,
+
+    #[serde(rename = "Pistols")]
+    pub pistols: Vec<pistol::Pistol>,
 
     #[serde(flatten)]
     pub other: Option<Value>,
