@@ -14,6 +14,15 @@ pub mod pistol;
 pub mod upgrades;
 
 #[derive(Debug, Serialize, Deserialize)]
+pub enum FractionSyndicates {
+    SteelMeridianSyndicate,
+    ArbitersSyndicate,
+    CephalonSudaSyndicate,
+    PerrinSyndicate,
+    RedVeilSyndicate,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Inventory {
     #[serde(rename = "Suits")]
     pub suits: Vec<suite::Suit>,
@@ -29,6 +38,12 @@ pub struct Inventory {
 
     #[serde(rename = "Upgrades")]
     pub upgraded_mods: Vec<upgrades::Upgrade>,
+
+    #[serde(rename = "TradesRemaining")]
+    pub trades_remaining: Option<i64>,
+
+    #[serde(rename = "SupportedSyndicate")]
+    pub supported_syndicates: Option<FractionSyndicates>,
 
     #[serde(flatten)]
     pub other: Option<Value>,
