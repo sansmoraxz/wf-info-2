@@ -48,3 +48,29 @@ pub struct Inventory {
     #[serde(flatten)]
     pub other: Option<Value>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::from_str;
+
+    #[test]
+    fn test_inventory_deserialize() {
+        let inventory_str = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/sample_inventory.json"
+        ));
+        let inventory: Inventory =
+            from_str(inventory_str).unwrap();
+        assert!(!inventory.suits.is_empty(), "Suits should not be empty");
+        assert!(
+            !inventory.long_guns.is_empty(),
+            "Long guns should not be empty"
+        );
+        assert!(!inventory.pistols.is_empty(), "Pistols should not be empty");
+        assert!(
+            !inventory.upgrades.is_empty(),
+            "Upgrades should not be empty"
+        );
+    }
+}

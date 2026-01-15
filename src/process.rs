@@ -164,6 +164,7 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
                             // Like the C++ version, require multiple matches for confidence
                             if *count >= REQUIRED_MATCHES {
                                 log::info!("Confirmed auth data after {} matches", count);
+                                log::debug!("Auth data: accountId={}, nonce={}", account_id, nonce);
                                 return Ok(Some(AuthQuery {
                                     account_id: account_id.to_string(),
                                     nonce,

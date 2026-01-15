@@ -52,9 +52,9 @@ pub struct RivenFingerprint {
     pub compat: String,
     pub lim: i64,
     #[serde(rename = "lvlReq")]
-    pub lvl_req: i64,
-    pub lvl: i64,
-    pub rerolls: i64,
+    pub lvl_req: Option<i64>,
+    pub lvl: Option<i64>,
+    pub rerolls: Option<i64>,
     pub pol: String,
     pub buffs: Vec<Buff>,
 
@@ -62,12 +62,32 @@ pub struct RivenFingerprint {
     pub other: Option<Value>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RivenChallengeDetail {
+    #[serde(rename = "Type")]
+    pub type_path: String,
+    #[serde(rename = "Progress")]
+    pub progress: i64,
+    #[serde(rename = "Required")]
+    pub required: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RivenChallenge {
+    #[serde(rename = "challenge")]
+    pub challenge: RivenChallengeDetail,
+}
+
 #[derive(Debug, Clone)]
 pub enum UpgradeFingerprint {
     /// When the fingerprint is stored as a string containing JSON: "{\"lvl\":10}"
     ClassicObj(ClassicFingerprint),
     /// Riven mod structure as an object
-    Riven(RivenFingerprint),
+    RivenMod(RivenFingerprint),
+    /// Riven challenge for veiled riven mods
+    RivenChallenge(RivenChallenge),
+    /// Garbage fallback for unrecognized fingerprint types
+    Unknown(Value),
 }
 
 impl serde::Serialize for UpgradeFingerprint {
@@ -78,7 +98,9 @@ impl serde::Serialize for UpgradeFingerprint {
         // Serialize the inner struct as a JSON string (to match server/client stringified form)
         let s = match self {
             UpgradeFingerprint::ClassicObj(c) => serde_json::to_string(c),
-            UpgradeFingerprint::Riven(r) => serde_json::to_string(r),
+            UpgradeFingerprint::RivenMod(r) => serde_json::to_string(r),
+            UpgradeFingerprint::RivenChallenge(rc) => serde_json::to_string(rc),
+            UpgradeFingerprint::Unknown(v) => serde_json::to_string(v),
         }
         .map_err(serde::ser::Error::custom)?;
         serializer.serialize_str(&s)
@@ -97,28 +119,30 @@ impl<'de> serde::Deserialize<'de> for UpgradeFingerprint {
             serde_json::Value::String(s) => {
                 // When a string is provided, it should be JSON text we must parse.
                 // Try riven first, then classic.
+                if let Ok(r) = serde_json::from_str::<RivenChallenge>(&s) {
+                    return Ok(UpgradeFingerprint::RivenChallenge(r));
+                }
                 if let Ok(r) = serde_json::from_str::<RivenFingerprint>(&s) {
-                    return Ok(UpgradeFingerprint::Riven(r));
+                    return Ok(UpgradeFingerprint::RivenMod(r));
                 }
                 if let Ok(c) = serde_json::from_str::<ClassicFingerprint>(&s) {
                     return Ok(UpgradeFingerprint::ClassicObj(c));
                 }
-                Err(serde::de::Error::custom(
-                    "string fingerprint did not match known fingerprint shapes",
-                ))
+                Ok(UpgradeFingerprint::Unknown(serde_json::Value::String(s)))
             }
             serde_json::Value::Object(_) => {
                 // When an object is provided directly, try to deserialize into riven then classic.
                 let v_clone = v.clone();
-                if let Ok(r) = serde_json::from_value::<RivenFingerprint>(v_clone.clone()) {
-                    return Ok(UpgradeFingerprint::Riven(r));
+                if let Ok(r) = serde_json::from_value::<RivenChallenge>(v_clone.clone()) {
+                    return Ok(UpgradeFingerprint::RivenChallenge(r));
                 }
-                if let Ok(c) = serde_json::from_value::<ClassicFingerprint>(v_clone) {
+                if let Ok(r) = serde_json::from_value::<RivenFingerprint>(v_clone.clone()) {
+                    return Ok(UpgradeFingerprint::RivenMod(r));
+                }
+                if let Ok(c) = serde_json::from_value::<ClassicFingerprint>(v_clone.clone()) {
                     return Ok(UpgradeFingerprint::ClassicObj(c));
                 }
-                Err(serde::de::Error::custom(
-                    "object fingerprint did not match known fingerprint shapes",
-                ))
+                Ok(UpgradeFingerprint::Unknown(v_clone))
             }
             _ => Err(serde::de::Error::custom(
                 "unexpected type for UpgradeFingerprint; expected string or object",
@@ -174,39 +198,78 @@ mod tests {
         let js = r#"
 {
     "ItemId": {
-    "$oid": "5bc1067d57904a037245c7b0"
+    "$oid": "60f73b8103cbfb55fc3b1998"
     },
-    "ItemType": "/Lotus/Upgrades/Mods/Weapon/RivenExample",
-    "UpgradeFingerprint": {
-        "compat": "/Lotus/Weapons/Infested/Pistols/InfKitGun/Barrels/InfBarrelEgg/InfModularBarrelEggPart",
-        "lim": 1811314,
-        "lvlReq": 11,
-        "lvl": 8,
-        "rerolls": 9,
-        "pol": "AP_DEFENSE",
-        "buffs": [
-            { "Tag": "WeaponRecoilReductionMod", "Value": 119165508 },
-            { "Tag": "WeaponDamageAmountMod", "Value": 202120506 },
-            { "Tag": "WeaponStunChanceMod", "Value": 761824003 }
-        ]
-    }
+    "ItemType": "/Lotus/Upgrades/Mods/Randomized/LotusPistolRandomModRare",
+    "UpgradeFingerprint": "{\"compat\":\"/Lotus/Weapons/Tenno/Pistol/Pistol\",\"lim\":773424723,\"lvlReq\":13,\"pol\":\"AP_TACTIC\",\"buffs\":[{\"Tag\":\"WeaponDamageAmountMod\",\"Value\":128098035},{\"Tag\":\"WeaponPunctureDepthMod\",\"Value\":483497619},{\"Tag\":\"WeaponProcTimeMod\",\"Value\":490036261}],\"curses\":[{\"Tag\":\"WeaponFireIterationsMod\",\"Value\":235369015}],\"rerolls\":5,\"lvl\":8}"
 }
 "#;
         let u: Upgrade = from_str(js).unwrap();
         let fp = u.upgrade_fingerprint;
 
-        if let UpgradeFingerprint::Riven(r) = fp {
-            assert_eq!(
-                r.compat,
-                "/Lotus/Weapons/Infested/Pistols/InfKitGun/Barrels/InfBarrelEgg/InfModularBarrelEggPart"
-            );
-            assert_eq!(r.lim, 1811314);
-            assert_eq!(r.lvl_req, 11);
-            assert_eq!(r.lvl, 8);
-            assert_eq!(r.rerolls, 9);
+        if let UpgradeFingerprint::RivenMod(r) = fp {
+            assert_eq!(r.compat, "/Lotus/Weapons/Tenno/Pistol/Pistol");
+            assert_eq!(r.lim, 773424723);
+            assert_eq!(r.lvl_req, Some(13));
+            assert_eq!(r.lvl, Some(8));
+            assert_eq!(r.rerolls, Some(5));
             assert_eq!(r.buffs.len(), 3);
         } else {
             panic!("expected Riven variant");
+        }
+    }
+
+    #[test]
+    fn test_deserialize_upgrade_riven_object_2() {
+        let js = r#"
+{
+    "ItemId": {
+    "$oid": "629b688edf244f5a803d9a68"
+    },
+    "ItemType": "/Lotus/Upgrades/Mods/Randomized/PlayerMeleeWeaponRandomModRare",
+    "UpgradeFingerprint": "{\"compat\":\"/Lotus/Weapons/Tenno/Melee/Swords/DarkSword/DarkLongSword\",\"lim\":380023905,\"lvlReq\":12,\"pol\":\"AP_DEFENSE\",\"buffs\":[{\"Tag\":\"WeaponMeleeFactionDamageGrineer\",\"Value\":949496221},{\"Tag\":\"WeaponFireDamageMod\",\"Value\":51975813}]}"
+}
+"#;
+        let u: Upgrade = from_str(js).unwrap();
+        let fp = u.upgrade_fingerprint;
+
+        if let UpgradeFingerprint::RivenMod(r) = fp {
+            assert_eq!(
+                r.compat,
+                "/Lotus/Weapons/Tenno/Melee/Swords/DarkSword/DarkLongSword"
+            );
+            assert_eq!(r.lim, 380023905);
+            assert_eq!(r.lvl_req, Some(12));
+            assert_eq!(r.pol, "AP_DEFENSE");
+            assert_eq!(r.buffs.len(), 2);
+        } else {
+            panic!("expected Riven variant");
+        }
+    }
+
+    #[test]
+    fn test_deserialize_upgrade_riven_challenge() {
+        let js = r#"
+{
+    "ItemId": {
+    "$oid": "60fd88234f5be52ac1332f2c"
+    },
+    "ItemType": "/Lotus/Upgrades/Mods/Randomized/LotusShotgunRandomModRare",
+    "UpgradeFingerprint": "{\"challenge\":{\"Type\":\"/Lotus/Types/Challenges/RandomizedFlyingHeadshotSeries\",\"Progress\":0,\"Required\":8}}"
+}
+        "#;
+        let u: Upgrade = from_str(js).unwrap();
+        let fp = u.upgrade_fingerprint;
+
+        if let UpgradeFingerprint::RivenChallenge(rc) = fp {
+            assert_eq!(
+                rc.challenge.type_path,
+                "/Lotus/Types/Challenges/RandomizedFlyingHeadshotSeries"
+            );
+            assert_eq!(rc.challenge.progress, 0);
+            assert_eq!(rc.challenge.required, 8);
+        } else {
+            panic!("expected RivenChallenge variant");
         }
     }
 }
