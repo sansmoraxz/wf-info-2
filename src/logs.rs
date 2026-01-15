@@ -10,24 +10,24 @@ pub enum LogEvent {
 }
 
 #[cfg(target_os = "linux")]
-pub fn find_ee_log() -> Option<PathBuf> {
+pub fn find_wf_app_config() -> Option<PathBuf> {
+    // Try custom path from environment variable
+    if let Ok(custom_path) = env::var("WARFRAME_APP_CONFIG") {
+        let path = PathBuf::from(custom_path);
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
     // Common Warframe installation paths on Linux (Steam/Proton)
     let home = env::var("HOME").ok()?;
 
     // Try Steam Proton path
     let steam_path = PathBuf::from(&home)
-        .join(".steam/steam/steamapps/compatdata/230410/pfx/drive_c/users/steamuser/AppData/Local/Warframe/EE.log");
+        .join(".steam/steam/steamapps/compatdata/230410/pfx/drive_c/users/steamuser/AppData/Local/Warframe/");
 
     if steam_path.exists() {
         return Some(steam_path);
-    }
-
-    // Try custom path from environment variable
-    if let Ok(custom_path) = env::var("WARFRAME_EE_LOG") {
-        let path = PathBuf::from(custom_path);
-        if path.exists() {
-            return Some(path);
-        }
     }
 
     None

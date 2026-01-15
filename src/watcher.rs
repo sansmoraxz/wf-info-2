@@ -13,9 +13,24 @@ use crate::logs::{self, LogEvent};
 use crate::process;
 use crate::storage;
 
-pub async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
-    log::info!("Watching log file for login events: {}", log_path.display());
-    log::info!("Press Ctrl+C to stop");
+pub async fn observe_warframe_activity(app_config_path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    log::info!("Watching for Warframe activity...");
+
+    if !app_config_path.exists() {
+        // wait for folder to be created
+        log::info!("Waiting for Warframe config folder to be created...");
+        while !app_config_path.exists() {
+            sleep(Duration::from_millis(500)).await;
+        }
+    }
+
+    // wait for the log file to be created
+    log::info!("Waiting for EE.log to be created...");
+    let log_path = app_config_path.join("EE.log");
+    while !log_path.exists() {
+        sleep(Duration::from_millis(500)).await;
+    }
+    log::info!("EE.log found at {:?}", log_path);
 
     let mut current_account_id: Option<String> = None;
     let log_filename = log_path.file_name().ok_or("Invalid log path")?.to_owned();
@@ -35,11 +50,10 @@ pub async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error:
         },
     )?;
 
-    // Watch the parent directory to catch file deletion and recreation
-    let parent_dir = log_path.parent().ok_or("Invalid log path")?;
+    // Watch the parent directory of the log file for changes
     debouncer
         .watcher()
-        .watch(parent_dir, RecursiveMode::NonRecursive)?;
+        .watch(&app_config_path, RecursiveMode::NonRecursive)?;
 
     loop {
         // Wait for file change event
@@ -55,7 +69,7 @@ pub async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error:
                 continue;
             }
 
-            log::debug!("Event for EE.log: {:?}", event);
+            log::trace!("Event for EE.log: {:?}", event);
 
             // Check if file still exists
             if !log_path.exists() {
@@ -66,7 +80,7 @@ pub async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error:
                     sleep(Duration::from_millis(100)).await;
                 }
 
-                log::info!("File recreated, launcher restarted");
+                log::info!("File recreated, game restarted");
 
                 last_size = 0;
                 last_position = 0;
@@ -79,9 +93,9 @@ pub async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error:
                 Err(_) => continue, // File might be temporarily unavailable
             };
 
-            // Check if file was truncated/cleared (launcher restart without deletion)
+            // Check if file was truncated/cleared (game restart without deletion)
             if current_size < last_size {
-                log::info!("File truncated, launcher restarted");
+                log::info!("File truncated, game restarted");
                 last_size = 0;
                 last_position = 0;
                 current_account_id = None;
@@ -105,7 +119,7 @@ pub async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error:
                 // Process new lines
                 for line_result in reader.lines() {
                     if let Ok(line) = line_result {
-                        log::debug!("New line: {}", line);
+                        log::trace!("New line: {}", line);
                         match logs::parse_log_line(&line) {
                             Some(LogEvent::Login(AccountInfo {
                                 username,
@@ -201,13 +215,13 @@ pub async fn watch_log_file(log_path: PathBuf) -> Result<(), Box<dyn std::error:
                                                     "Could not extract auth data from process memory"
                                                 );
                                                 log::info!(
-                                                    "Tip: Make sure you're logged into Warframe and try running with sudo"
+                                                    "Tip: Make sure you're logged into Warframe"
                                                 );
                                             }
                                             Err(e) => {
                                                 log::error!("Memory scan error: {}", e);
                                                 log::info!(
-                                                    "Tip: Try running with sudo for memory access permissions"
+                                                    "Tip: Grant necessary permissions or try running with sudo"
                                                 );
                                             }
                                         }
