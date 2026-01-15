@@ -10,6 +10,9 @@ pub mod long_gun;
 /// Warframe secondary weapon module
 pub mod pistol;
 
+/// Warframe upgrade (mods) module
+pub mod upgrades;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Inventory {
     #[serde(rename = "Suits")]
@@ -20,6 +23,12 @@ pub struct Inventory {
 
     #[serde(rename = "Pistols")]
     pub pistols: Vec<pistol::Pistol>,
+
+    #[serde(rename = "RawUpgrades")]
+    pub upgrades: Vec<upgrades::RawUpgrade>,
+
+    #[serde(rename = "Upgrades")]
+    pub upgraded_mods: Vec<upgrades::Upgrade>,
 
     #[serde(flatten)]
     pub other: Option<Value>,
