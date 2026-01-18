@@ -34,10 +34,10 @@ pub struct Inventory {
     pub pistols: Vec<pistol::Pistol>,
 
     #[serde(rename = "RawUpgrades")]
-    pub upgrades: Vec<upgrades::RawUpgrade>,
+    pub raw_upgrades: Vec<upgrades::RawUpgrade>,
 
     #[serde(rename = "Upgrades")]
-    pub upgraded_mods: Vec<upgrades::Upgrade>,
+    pub upgrades: Vec<upgrades::Upgrade>,
 
     #[serde(rename = "TradesRemaining")]
     pub trades_remaining: Option<i64>,
@@ -69,7 +69,7 @@ mod tests {
         );
         assert!(!inventory.pistols.is_empty(), "Pistols should not be empty");
         assert!(
-            !inventory.upgrades.is_empty(),
+            !inventory.raw_upgrades.is_empty(),
             "Upgrades should not be empty"
         );
     }
