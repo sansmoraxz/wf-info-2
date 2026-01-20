@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub mod arcane;
+pub mod arch_gun;
 
 #[derive(Debug, Serialize, Deserialize)]
 
