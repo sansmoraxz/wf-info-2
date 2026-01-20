@@ -1,6 +1,7 @@
 mod account;
 mod api;
 mod inventory;
+mod itemdata;
 mod logs;
 mod process;
 mod profile;
