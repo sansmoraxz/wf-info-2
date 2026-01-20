@@ -6,14 +6,8 @@ pub struct LongGun {
     #[serde(rename = "Configs")]
     pub configs: Option<Vec<Config>>,
 
-    #[serde(rename = "ItemId")]
-    pub item_id: Option<ObjectId>,
-
     #[serde(rename = "ItemType")]
-    pub item_type: Option<String>,
-
-    #[serde(rename = "UpgradeVer")]
-    pub upgrade_ver: Option<i64>,
+    pub item_type: String,
 
     #[serde(rename = "XP")]
     pub xp: Option<i64>,
@@ -32,12 +26,6 @@ pub struct Config {
 
     #[serde(flatten)]
     pub other: Option<Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ObjectId {
-    #[serde(rename = "$oid")]
-    pub oid: String,
 }
 
 #[cfg(test)]
@@ -94,10 +82,9 @@ mod tests {
         let long_gun: LongGun = from_str(json_data).unwrap();
 
         assert_eq!(
-            long_gun.item_type.as_ref().unwrap(),
+            long_gun.item_type,
             "/Lotus/Weapons/Grineer/LongGuns/GrineerSniperRifle/GrnSniperRifle"
         );
-        assert_eq!(long_gun.upgrade_ver.unwrap(), 101);
         assert_eq!(long_gun.xp.unwrap(), 524343);
         assert_eq!(long_gun.configs.as_ref().unwrap().len(), 3);
     }

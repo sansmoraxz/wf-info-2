@@ -6,14 +6,8 @@ pub struct Pistol {
     #[serde(rename = "Configs")]
     pub configs: Option<Vec<PistolConfig>>,
 
-    #[serde(rename = "ItemId")]
-    pub item_id: Option<ObjectId>,
-
     #[serde(rename = "ItemType")]
-    pub item_type: Option<String>,
-
-    #[serde(rename = "UpgradeVer")]
-    pub upgrade_ver: Option<i64>,
+    pub item_type: String,
 
     #[serde(rename = "XP")]
     pub xp: Option<i64>,
@@ -32,12 +26,6 @@ pub struct PistolConfig {
 
     #[serde(flatten)]
     pub other: Option<Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ObjectId {
-    #[serde(rename = "$oid")]
-    pub oid: String,
 }
 
 #[cfg(test)]
@@ -94,11 +82,10 @@ mod tests {
         let pistol: Pistol = from_str(json_data).unwrap();
 
         assert_eq!(
-            pistol.item_type.unwrap(),
+            pistol.item_type,
             "/Lotus/Weapons/Corpus/Pistols/CorpusMinigun/CorpusMinigun"
         );
 
-        assert_eq!(pistol.upgrade_ver.unwrap(), 101);
         assert_eq!(pistol.xp.unwrap(), 3744243);
     }
 }

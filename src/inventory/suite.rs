@@ -12,14 +12,8 @@ pub struct Suit {
     #[serde(rename = "InfestationDate")]
     pub infestation_date: Option<DateWrapper>,
 
-    #[serde(rename = "ItemId")]
-    pub item_id: Option<ObjectId>,
-
     #[serde(rename = "ItemType")]
-    pub item_type: Option<String>,
-
-    #[serde(rename = "UpgradeVer")]
-    pub upgrade_ver: Option<i64>,
+    pub item_type: String,
 
     #[serde(rename = "XP")]
     pub xp: Option<i64>,
@@ -58,11 +52,6 @@ pub struct Polarity {
     pub other: Option<Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ObjectId {
-    #[serde(rename = "$oid")]
-    pub oid: String,
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DateWrapper {
@@ -206,10 +195,9 @@ mod test {
         let suit: Suit = from_str(json_data).unwrap();
 
         assert_eq!(
-            suit.item_type.as_ref().unwrap(),
+            suit.item_type,
             "/Lotus/Powersuits/Gyre/GyrePrime"
         );
-        assert_eq!(suit.upgrade_ver.unwrap(), 101);
         assert_eq!(suit.xp.unwrap(), 420021);
     }
 }

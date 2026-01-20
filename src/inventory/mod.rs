@@ -24,24 +24,31 @@ pub enum FractionSyndicates {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Inventory {
+    /// Warframes
     #[serde(rename = "Suits")]
     pub suits: Vec<suite::Suit>,
 
+    /// Primary Weapons
     #[serde(rename = "LongGuns")]
     pub long_guns: Vec<long_gun::LongGun>,
 
+    /// Secondary Weapons
     #[serde(rename = "Pistols")]
     pub pistols: Vec<pistol::Pistol>,
 
+    /// Mods + Arcanes (unupgraded)
     #[serde(rename = "RawUpgrades")]
     pub raw_upgrades: Vec<upgrades::RawUpgrade>,
 
+    /// Mods + Arcanes (upgraded)
     #[serde(rename = "Upgrades")]
     pub upgrades: Vec<upgrades::Upgrade>,
 
+    /// Player remaining trades for the day
     #[serde(rename = "TradesRemaining")]
     pub trades_remaining: Option<i64>,
 
+    /// Syndicate
     #[serde(rename = "SupportedSyndicate")]
     pub supported_syndicates: Option<FractionSyndicates>,
 

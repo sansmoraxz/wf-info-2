@@ -10,9 +10,6 @@ pub struct RawUpgrade {
     #[serde(rename = "ItemType")]
     pub item_type: String,
 
-    #[serde(rename = "LastAdded")]
-    pub last_added: Option<ObjectId>,
-
     #[serde(flatten)]
     pub other: Option<Value>,
 }
