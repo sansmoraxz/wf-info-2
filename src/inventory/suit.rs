@@ -1,10 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{
-    inventory::{ObjectId, Polarity},
-    utils::deserialize_mongo_date_option,
-};
+use crate::inventory::{DateWrapper, ObjectId, Polarity};
 
 /// Represents a warframe suit in the inventory.
 #[derive(Debug, Serialize, Deserialize)]
@@ -41,13 +38,6 @@ pub struct Suit {
 
     #[serde(flatten)]
     pub other: Option<Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DateWrapper {
-    #[serde(rename = "$date")]
-    #[serde(deserialize_with = "deserialize_mongo_date_option")]
-    pub date: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[cfg(test)]

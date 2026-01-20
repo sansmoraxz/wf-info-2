@@ -25,6 +25,9 @@ pub mod space_gun;
 /// Warframe archmelee module
 pub mod space_melee;
 
+/// Blueprints
+pub mod recipe;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum FractionSyndicates {
     SteelMeridianSyndicate,
@@ -47,6 +50,13 @@ pub struct Polarity {
 
     #[serde(flatten)]
     pub other: Option<Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DateWrapper {
+    #[serde(rename = "$date")]
+    #[serde(deserialize_with = "crate::utils::deserialize_mongo_date_option")]
+    pub date: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -86,6 +96,14 @@ pub struct Inventory {
     /// Mods + Arcanes (upgraded)
     #[serde(rename = "Upgrades")]
     pub upgrades: Vec<upgrades::Upgrade>,
+
+    /// Blueprints
+    #[serde(rename = "Recipes")]
+    pub recipes: Vec<recipe::Recipe>,
+
+    /// Blueprint build in progress
+    #[serde(rename = "PendingRecipes")]
+    pub pending_recipes: Vec<recipe::PendingRecipe>,
 
     /// Player remaining trades for the day
     #[serde(rename = "TradesRemaining")]
