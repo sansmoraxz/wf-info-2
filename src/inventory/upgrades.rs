@@ -1,14 +1,19 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::inventory::ObjectId;
+
 /// Represent unupgraded mods
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RawUpgrade {
-    #[serde(rename = "ItemCount")]
-    pub item_count: i64,
-
     #[serde(rename = "ItemType")]
     pub item_type: String,
+
+    #[serde(rename = "LastAdded")]
+    pub last_added_id: ObjectId,
+
+    #[serde(rename = "ItemCount")]
+    pub item_count: i64,
 
     #[serde(flatten)]
     pub other: Option<Value>,
@@ -17,11 +22,11 @@ pub struct RawUpgrade {
 /// Represent upgraded mods
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Upgrade {
-    #[serde(rename = "ItemId")]
-    pub item_id: ObjectId,
-
     #[serde(rename = "ItemType")]
     pub item_type: String,
+
+    #[serde(rename = "ItemId")]
+    pub item_id: ObjectId,
 
     #[serde(rename = "UpgradeFingerprint")]
     pub upgrade_fingerprint: UpgradeFingerprint,
@@ -146,12 +151,6 @@ impl<'de> serde::Deserialize<'de> for UpgradeFingerprint {
             )),
         }
     }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ObjectId {
-    #[serde(rename = "$oid")]
-    pub oid: String,
 }
 
 #[cfg(test)]

@@ -1,9 +1,12 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::utils::deserialize_mongo_date_option;
+use crate::{
+    inventory::{ObjectId, Polarity},
+    utils::deserialize_mongo_date_option,
+};
 
-/// Represents a frame suit in the inventory.
+/// Represents a warframe suit in the inventory.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Suit {
     #[serde(rename = "InfestationDate")]
@@ -12,11 +15,11 @@ pub struct Suit {
     #[serde(rename = "ItemType")]
     pub item_type: String,
 
+    #[serde(rename = "ItemId")]
+    pub item_id: ObjectId,
+
     #[serde(rename = "XP")]
     pub xp: Option<i64>,
-
-    #[serde(rename = "Features")]
-    pub features: Option<i64>,
 
     #[serde(rename = "FocusLens")]
     pub focus_lens: Option<String>,
@@ -35,15 +38,6 @@ pub struct Suit {
 
     #[serde(rename = "IsNew")]
     pub is_new: Option<bool>,
-
-    #[serde(flatten)]
-    pub other: Option<Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Polarity {
-    #[serde(rename = "Value")]
-    pub value: Option<String>,
 
     #[serde(flatten)]
     pub other: Option<Value>,

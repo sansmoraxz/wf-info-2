@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Warframe frame module
-pub mod suite;
+pub mod suit;
 
 /// Warframe primary weapon module
 pub mod long_gun;
@@ -22,11 +22,27 @@ pub enum FractionSyndicates {
     RedVeilSyndicate,
 }
 
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ObjectId {
+    #[serde(rename = "$oid")]
+    pub oid: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Polarity {
+    #[serde(rename = "Value")]
+    pub value: Option<String>,
+
+    #[serde(flatten)]
+    pub other: Option<Value>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Inventory {
     /// Warframes
     #[serde(rename = "Suits")]
-    pub suits: Vec<suite::Suit>,
+    pub suits: Vec<suit::Suit>,
 
     /// Primary Weapons
     #[serde(rename = "LongGuns")]

@@ -1,10 +1,15 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::inventory::ObjectId;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Pistol {
     #[serde(rename = "ItemType")]
     pub item_type: String,
+
+    #[serde(rename = "ItemId")]
+    pub item_id: ObjectId,
 
     #[serde(rename = "XP")]
     pub xp: Option<i64>,
