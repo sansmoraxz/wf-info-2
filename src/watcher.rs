@@ -13,7 +13,9 @@ use crate::logs::{self, LogEvent};
 use crate::process;
 use crate::storage;
 
-pub async fn observe_warframe_activity(app_config_path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn observe_warframe_activity(
+    app_config_path: PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Watching for Warframe activity...");
 
     if !app_config_path.exists() {

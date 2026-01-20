@@ -77,6 +77,5 @@ where
 fn ms_to_dt(ms: i64) -> Option<DateTime<Utc>> {
     let secs = ms / 1000;
     let nsec = ((ms % 1000).abs() as u32) * 1_000_000;
-    Utc.timestamp_opt(secs, nsec)
-        .single()
+    Utc.timestamp_opt(secs, nsec).single()
 }
