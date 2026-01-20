@@ -10,8 +10,20 @@ pub mod long_gun;
 /// Warframe secondary weapon module
 pub mod pistol;
 
+/// Warframe melee module
+pub mod melee;
+
 /// Warframe upgrade (mods) module
 pub mod upgrades;
+
+/// Warframe archwing module
+pub mod space_suit;
+
+/// Warframe archgun module
+pub mod space_gun;
+
+/// Warframe archmelee module
+pub mod space_melee;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum FractionSyndicates {
@@ -21,7 +33,6 @@ pub enum FractionSyndicates {
     PerrinSyndicate,
     RedVeilSyndicate,
 }
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ObjectId {
@@ -51,6 +62,22 @@ pub struct Inventory {
     /// Secondary Weapons
     #[serde(rename = "Pistols")]
     pub pistols: Vec<pistol::Pistol>,
+
+    /// Melee
+    #[serde(rename = "Melee")]
+    pub melee: Vec<melee::Melee>,
+
+    /// Archwing
+    #[serde(rename = "SpaceSuits")]
+    pub space_suits: Vec<space_suit::SpaceSuit>,
+
+    /// Archgun
+    #[serde(rename = "SpaceGuns")]
+    pub space_guns: Vec<space_gun::SpaceGun>,
+
+    /// ArchMelee
+    #[serde(rename = "SpaceMelee")]
+    pub space_melee: Vec<space_melee::SpaceMelee>,
 
     /// Mods + Arcanes (unupgraded)
     #[serde(rename = "RawUpgrades")]

@@ -9,14 +9,14 @@ use crate::{
 /// Represents a warframe suit in the inventory.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Suit {
-    #[serde(rename = "InfestationDate")]
-    pub infestation_date: Option<DateWrapper>,
-
     #[serde(rename = "ItemType")]
     pub item_type: String,
 
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,
+
+    #[serde(rename = "InfestationDate")]
+    pub infestation_date: Option<DateWrapper>,
 
     #[serde(rename = "XP")]
     pub xp: Option<i64>,
