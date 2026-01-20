@@ -6,9 +6,6 @@ use crate::utils::deserialize_mongo_date_option;
 /// Represents a frame suit in the inventory.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Suit {
-    #[serde(rename = "Configs")]
-    pub configs: Option<Vec<Value>>,
-
     #[serde(rename = "InfestationDate")]
     pub infestation_date: Option<DateWrapper>,
 
@@ -51,7 +48,6 @@ pub struct Polarity {
     #[serde(flatten)]
     pub other: Option<Value>,
 }
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DateWrapper {
@@ -194,10 +190,7 @@ mod test {
 
         let suit: Suit = from_str(json_data).unwrap();
 
-        assert_eq!(
-            suit.item_type,
-            "/Lotus/Powersuits/Gyre/GyrePrime"
-        );
+        assert_eq!(suit.item_type, "/Lotus/Powersuits/Gyre/GyrePrime");
         assert_eq!(suit.xp.unwrap(), 420021);
     }
 }

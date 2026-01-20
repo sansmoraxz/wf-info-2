@@ -3,26 +3,11 @@ use serde_json::Value;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Pistol {
-    #[serde(rename = "Configs")]
-    pub configs: Option<Vec<PistolConfig>>,
-
     #[serde(rename = "ItemType")]
     pub item_type: String,
 
     #[serde(rename = "XP")]
     pub xp: Option<i64>,
-
-    #[serde(flatten)]
-    pub other: Option<Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PistolConfig {
-    #[serde(rename = "Skins")]
-    pub skins: Option<Vec<String>>,
-
-    #[serde(rename = "Upgrades")]
-    pub upgrades: Option<Vec<String>>,
 
     #[serde(flatten)]
     pub other: Option<Value>,

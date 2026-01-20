@@ -67,8 +67,7 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/testdata/sample_inventory.json"
         ));
-        let inventory: Inventory =
-            from_str(inventory_str).unwrap();
+        let inventory: Inventory = from_str(inventory_str).unwrap();
         assert!(!inventory.suits.is_empty(), "Suits should not be empty");
         assert!(
             !inventory.long_guns.is_empty(),
