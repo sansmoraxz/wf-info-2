@@ -39,7 +39,7 @@ mod tests {
     use serde_json::from_str;
 
     #[test]
-    fn test_deserialize_long_gun() {
+    fn test_deserialize_pistol() {
         let json_data = r#"
 {
     "Configs": [
