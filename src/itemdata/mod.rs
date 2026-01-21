@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 pub mod arcane;
 pub mod arch_gun;
+pub mod arch_melee;
+pub mod archwing;
 
 #[derive(Debug, Serialize, Deserialize)]
 

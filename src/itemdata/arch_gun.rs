@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-use crate::itemdata::{PatchLog, Update};
+use crate::itemdata::{DropChance, PatchLog, Rarity};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ArchGun {
@@ -14,14 +13,26 @@ pub struct ArchGun {
     #[serde(rename = "type")]
     pub r#type: String,
 
-    #[serde(rename = "isPrime")]
-    pub is_prime: bool,
+    pub rarity: Option<Rarity>,
+    pub drops: Option<Vec<DropChance>>,
+
+    #[serde(rename = "imageName")]
+    pub image_name: Option<String>,
+
+    #[serde(rename = "masteryReq")]
+    pub mastery_req: Option<u8>,
+
+    #[serde(rename = "patchlogs")]
+    pub patch_log: Option<Vec<PatchLog>>,
 
     #[serde(rename = "tradable")]
-    pub tradable: bool,
+    pub tradable: Option<bool>,
 
     #[serde(rename = "masterable")]
-    pub masterable: bool,
+    pub masterable: Option<bool>,
+
+    #[serde(rename = "isPrime")]
+    pub is_prime: Option<bool>,
 }
 
 #[cfg(test)]
