@@ -2265,6 +2265,7 @@ dependencies = [
  "rand",
  "regex",
  "reqwest",
+ "rustc-hash",
  "serde",
  "serde_json",
  "sha2",

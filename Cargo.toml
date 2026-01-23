@@ -24,3 +24,7 @@ sysinfo = "0.37"
 hex = "0.4"
 sha2 = "0.10"
 multi_index_map = { version = "0.15.1", features = ["serde"] }
+rustc-hash = "2.1.1"
+
+[features]
+test_with_wf_items = [] # used to test deserialization with downloaded wf-items from https://github.com/WFCD/warframe-items/
