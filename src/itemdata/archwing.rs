@@ -11,7 +11,7 @@ pub struct Archwing {
     pub unique_name: String,
 
     #[serde(rename = "type")]
-    pub r#type: String,
+    pub type_: String,
 
     pub rarity: Option<Rarity>,
     pub drops: Option<Vec<DropChance>>,

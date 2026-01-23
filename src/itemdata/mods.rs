@@ -12,7 +12,7 @@ pub struct RawMod {
     pub unique_name: String,
 
     #[serde(rename = "type")]
-    pub r#type: String,
+    pub type_: String,
 
     pub polarity: String,
     pub transmutable: Option<bool>,
@@ -52,7 +52,7 @@ pub struct ModSets {
     pub unique_name: String,
 
     #[serde(rename = "type")]
-    pub r#type: String,
+    pub type_: String,
 
     pub stats: Vec<String>,
 

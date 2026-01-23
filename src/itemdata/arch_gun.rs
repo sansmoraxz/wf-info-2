@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::itemdata::{DropChance, PatchLog, Rarity};
+use crate::itemdata::{DropChance, Noise, PatchLog, Rarity, Trigger};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ArchGun {
@@ -11,7 +11,13 @@ pub struct ArchGun {
     pub unique_name: String,
 
     #[serde(rename = "type")]
-    pub r#type: String,
+    pub type_: String,
+
+    pub description: Option<String>,
+
+    pub noise: Noise,
+    pub trigger: Trigger,
+    pub disposition: Option<u8>,
 
     pub rarity: Option<Rarity>,
     pub drops: Option<Vec<DropChance>>,

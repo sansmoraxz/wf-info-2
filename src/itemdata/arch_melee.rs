@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::itemdata::{DropChance, LevelStats, PatchLog, Rarity};
+use crate::itemdata::{DropChance, Noise, PatchLog, Rarity, Trigger};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ArchMelee {
@@ -11,7 +11,12 @@ pub struct ArchMelee {
     pub unique_name: String,
 
     #[serde(rename = "type")]
-    pub r#type: String,
+    pub type_: String,
+
+    pub description: Option<String>,
+
+    pub range: Option<f32>,
+    pub disposition: Option<u8>,
 
     pub rarity: Option<Rarity>,
     pub drops: Option<Vec<DropChance>>,

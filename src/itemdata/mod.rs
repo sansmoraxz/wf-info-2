@@ -1,9 +1,15 @@
 use serde::{Deserialize, Serialize};
 
-pub mod arcane;
+pub mod melee;
+pub mod primary;
+pub mod secondary;
+pub mod warframe;
+
 pub mod arch_gun;
 pub mod arch_melee;
 pub mod archwing;
+
+pub mod arcane;
 pub mod mods;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,7 +87,15 @@ pub enum Polarity {
     Any,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Noise {
+    #[serde(rename = "Alarming")]
+    Alarming,
+    #[serde(rename = "Silent")]
+    Silent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Trigger {
     #[serde(rename = "Active")]
     Active,
