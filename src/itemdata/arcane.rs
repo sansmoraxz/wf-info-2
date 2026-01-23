@@ -7,7 +7,7 @@ use crate::itemdata::{DropChance, LevelStats, PatchLog, Rarity};
 #[multi_index_derive(Debug)]
 #[multi_index_hash(rustc_hash::FxBuildHasher)]
 pub struct Arcane {
-    #[multi_index(hashed_unique)]
+    #[multi_index(hashed_non_unique)]
     #[serde(rename = "name")]
     pub name: String,
 

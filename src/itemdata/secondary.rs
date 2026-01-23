@@ -1,15 +1,21 @@
+use multi_index_map::MultiIndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::itemdata::{DropChance, Noise, PatchLog, Rarity, Trigger};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, MultiIndexMap, Serialize, Deserialize)]
+#[multi_index_derive(Debug)]
+#[multi_index_hash(rustc_hash::FxBuildHasher)]
 pub struct Secondary {
+    #[multi_index(hashed_non_unique)]
     #[serde(rename = "name")]
     pub name: String,
 
+    #[multi_index(hashed_unique)]
     #[serde(rename = "uniqueName")]
     pub unique_name: String,
 
+    #[multi_index(hashed_non_unique)]
     #[serde(rename = "type")]
     pub type_: String,
 
@@ -40,7 +46,6 @@ pub struct Secondary {
     #[serde(rename = "isPrime")]
     pub is_prime: Option<bool>,
 }
-
 
 #[cfg(test)]
 mod tests {

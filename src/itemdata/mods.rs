@@ -1,16 +1,21 @@
+use multi_index_map::MultiIndexMap;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::itemdata::{DropChance, LevelStats, PatchLog, Rarity};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, MultiIndexMap, Serialize, Deserialize)]
+#[multi_index_derive(Debug)]
+#[multi_index_hash(rustc_hash::FxBuildHasher)]
 pub struct RawMod {
+    #[multi_index(hashed_non_unique)]
     #[serde(rename = "name")]
     pub name: String,
 
+    #[multi_index(hashed_unique)]
     #[serde(rename = "uniqueName")]
     pub unique_name: String,
 
+    #[multi_index(hashed_non_unique)]
     #[serde(rename = "type")]
     pub type_: String,
 
@@ -43,14 +48,19 @@ pub struct RawMod {
     pub tradable: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, MultiIndexMap, Serialize, Deserialize)]
+#[multi_index_derive(Debug)]
+#[multi_index_hash(rustc_hash::FxBuildHasher)]
 pub struct ModSets {
+    #[multi_index(hashed_non_unique)]
     #[serde(rename = "name")]
     pub name: String,
 
+    #[multi_index(hashed_unique)]
     #[serde(rename = "uniqueName")]
     pub unique_name: String,
 
+    #[multi_index(hashed_non_unique)]
     #[serde(rename = "type")]
     pub type_: String,
 
