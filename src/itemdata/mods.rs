@@ -70,7 +70,6 @@ pub struct ModSets {
 pub enum Mod {
     RawMod(RawMod),
     ModSets(ModSets),
-    Unknown(Value),
 }
 
 impl serde::Serialize for Mod {
@@ -82,7 +81,6 @@ impl serde::Serialize for Mod {
         let s = match self {
             Mod::RawMod(raw_mod) => serde_json::to_string(raw_mod),
             Mod::ModSets(mod_sets) => serde_json::to_string(mod_sets),
-            Mod::Unknown(value) => serde_json::to_string(value),
         }
         .map_err(serde::ser::Error::custom)?;
         serializer.serialize_str(&s)
@@ -104,10 +102,10 @@ impl<'de> serde::Deserialize<'de> for Mod {
                 if let Ok(m) = serde_json::from_value::<ModSets>(v_clone.clone()) {
                     return Ok(Mod::ModSets(m));
                 }
-                if let Ok(m) = serde_json::from_value::<RawMod>(v_clone.clone()) {
-                    return Ok(Mod::RawMod(m));
+                match serde_json::from_value::<RawMod>(v_clone.clone()) {
+                    Ok(m) => return Ok(Mod::RawMod(m)),
+                    Err(e) => Err(serde::de::Error::custom(e)),
                 }
-                Ok(Mod::Unknown(v_clone))
             }
             _ => Err(serde::de::Error::custom(
                 "unexpected type for Mod, expected object",

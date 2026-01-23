@@ -37,8 +37,8 @@ pub struct Update {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DropChance {
-    pub chance: f32,
-    pub location: String,
+    pub chance: Option<f32>,
+    pub location: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,3 +127,8 @@ pub enum Trigger {
     #[serde(rename = "")]
     Unknown,
 }
+
+#[rustfmt::skip]
+#[cfg(feature = "test_with_wf_items")]
+#[cfg(test)]
+mod tests;
