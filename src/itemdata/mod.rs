@@ -4,8 +4,9 @@ pub mod arcane;
 pub mod arch_gun;
 pub mod arch_melee;
 pub mod archwing;
+pub mod mods;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 
 pub struct PatchLog {
     pub name: String,
@@ -28,18 +29,18 @@ pub struct Update {
     date: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DropChance {
     pub chance: f32,
     pub location: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LevelStats {
     pub stats: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Rarity {
     Common,
     Uncommon,
