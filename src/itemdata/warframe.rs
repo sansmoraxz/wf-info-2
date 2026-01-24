@@ -1,11 +1,20 @@
 use serde::{Deserialize, Serialize};
 
-use crate::itemdata::BaseItem;
+use crate::itemdata::{BaseItem, Buildable, Equippable, WikiaItem};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Warframe {
     #[serde(flatten)]
     pub base: BaseItem,
+
+    #[serde(flatten)]
+    pub equippable: Equippable,
+
+    #[serde(flatten)]
+    pub buildable: Buildable,
+
+    #[serde(flatten)]
+    pub wikia_item: WikiaItem,
 
     pub health: u32,
     pub shield: u32,
@@ -1556,6 +1565,9 @@ mod tests {
 
         let rec: Warframe = from_str(json_data).unwrap();
 
-        assert_eq!(rec.base.minimal.named.unique_name, "/Lotus/Powersuits/Priest/HarrowPrime");
+        assert_eq!(
+            rec.base.minimal.named.unique_name,
+            "/Lotus/Powersuits/Priest/HarrowPrime"
+        );
     }
 }

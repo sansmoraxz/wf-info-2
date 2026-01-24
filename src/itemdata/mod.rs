@@ -82,7 +82,7 @@ pub struct BaseItem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Equipable {
+pub struct Equippable {
     pub polarities: Option<Vec<Polarity>>,
     pub slot: Option<u8>,
 }
@@ -118,7 +118,7 @@ pub struct WikiaItem {
     #[serde(rename = "wikiaUrl")]
     pub wikia_url: Option<String>,
     pub tags: Option<Vec<String>>,
-    pub introduced: Option<Vec<Update>>,
+    pub introduced: Option<Update>,
     #[serde(rename = "wikiAvailable")]
     pub wiki_available: Option<bool>,
 }
@@ -285,7 +285,7 @@ pub struct Update {
     url: String,
     aliases: Vec<String>,
     parent: String,
-    date: chrono::DateTime<chrono::Utc>,
+    date: String, // TODO: to chrono deserialize
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
