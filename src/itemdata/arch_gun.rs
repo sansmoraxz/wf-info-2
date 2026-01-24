@@ -1,21 +1,12 @@
-use multi_index_map::MultiIndexMap;
 use serde::{Deserialize, Serialize};
 
-use crate::itemdata::{DropChance, Noise, PatchLog, Rarity, Trigger};
+use crate::itemdata::{DropChance, Named, Noise, PatchLog, Rarity, Trigger};
 
-#[derive(Debug, MultiIndexMap, Serialize, Deserialize)]
-#[multi_index_derive(Debug)]
-#[multi_index_hash(rustc_hash::FxBuildHasher)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArchGun {
-    #[multi_index(hashed_non_unique)]
-    #[serde(rename = "name")]
-    pub name: String,
+    #[serde(flatten)]
+    pub named: Named,
 
-    #[multi_index(hashed_unique)]
-    #[serde(rename = "uniqueName")]
-    pub unique_name: String,
-
-    #[multi_index(hashed_non_unique)]
     #[serde(rename = "type")]
     pub type_: String,
 
@@ -33,9 +24,6 @@ pub struct ArchGun {
 
     #[serde(rename = "masteryReq")]
     pub mastery_req: Option<u8>,
-
-    #[serde(rename = "patchlogs")]
-    pub patch_log: Option<Vec<PatchLog>>,
 
     #[serde(rename = "tradable")]
     pub tradable: Option<bool>,
@@ -521,7 +509,7 @@ mod tests {
         let rec: ArchGun = from_str(json_data).unwrap();
 
         assert_eq!(
-            rec.unique_name,
+            rec.named.unique_name,
             "/Lotus/Weapons/Tenno/Archwing/Primary/NokkoArchGun/NokkoArchGun"
         );
     }

@@ -1,48 +1,34 @@
-use multi_index_map::MultiIndexMap;
 use serde::{Deserialize, Serialize};
 
-use crate::itemdata::{DropChance, PatchLog, Rarity};
+use crate::itemdata::BaseItem;
 
-#[derive(Debug, MultiIndexMap, Serialize, Deserialize)]
-#[multi_index_derive(Debug)]
-#[multi_index_hash(rustc_hash::FxBuildHasher)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Warframe {
-    #[multi_index(hashed_non_unique)]
-    #[serde(rename = "name")]
-    pub name: String,
+    #[serde(flatten)]
+    pub base: BaseItem,
 
-    #[multi_index(hashed_unique)]
-    #[serde(rename = "uniqueName")]
-    pub unique_name: String,
+    pub health: u32,
+    pub shield: u32,
+    pub armor: u32,
+    pub stamina: u32,
+    pub power: u32,
+    #[serde(rename = "sprintSpeed")]
+    pub sprint_speed: Option<f32>,
+    pub sex: Option<Sex>,
+    #[serde(rename = "passiveDescription")]
+    pub passive_description: Option<String>,
+    pub exalted: Option<String>,
+}
 
-    #[multi_index(hashed_non_unique)]
-    #[serde(rename = "type")]
-    pub type_: String,
-
-    pub rarity: Option<Rarity>,
-    pub drops: Option<Vec<DropChance>>,
-
-    pub exalted: Option<Vec<String>>,
-    #[serde(rename = "productCategory")]
-    pub product_category: Option<String>,
-
-    #[serde(rename = "imageName")]
-    pub image_name: Option<String>,
-
-    #[serde(rename = "masteryReq")]
-    pub mastery_req: Option<u8>,
-
-    #[serde(rename = "patchlogs")]
-    pub patch_log: Option<Vec<PatchLog>>,
-
-    #[serde(rename = "tradable")]
-    pub tradable: Option<bool>,
-
-    #[serde(rename = "masterable")]
-    pub masterable: Option<bool>,
-
-    #[serde(rename = "isPrime")]
-    pub is_prime: Option<bool>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Sex {
+    Male,
+    Female,
+    Androgynous,
+    #[serde(rename = "Non-binary (Pluriform)")]
+    NonBiP,
+    #[serde(rename = "Non-binary")]
+    NonBi,
 }
 
 #[cfg(test)]
@@ -51,7 +37,7 @@ mod tests {
     use serde_json::from_str;
 
     #[test]
-    fn test_deserialize_archwing() {
+    fn test_deserialize_warframe() {
         let json_data = r#"
 {
   "abilities": [
@@ -1570,6 +1556,6 @@ mod tests {
 
         let rec: Warframe = from_str(json_data).unwrap();
 
-        assert_eq!(rec.unique_name, "/Lotus/Powersuits/Priest/HarrowPrime");
+        assert_eq!(rec.base.minimal.named.unique_name, "/Lotus/Powersuits/Priest/HarrowPrime");
     }
 }

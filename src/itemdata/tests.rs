@@ -1,6 +1,5 @@
 use crate::itemdata;
 
-
 #[test]
 fn test_deserialize_all_warframes() {
     let raw = include_str!(concat!(
@@ -12,7 +11,6 @@ fn test_deserialize_all_warframes() {
 
     assert!(!arr.is_empty());
 }
-
 
 #[test]
 fn test_deserialize_all_primary_weapons() {
@@ -26,7 +24,6 @@ fn test_deserialize_all_primary_weapons() {
     assert!(!arr.is_empty());
 }
 
-
 #[test]
 fn test_deserialize_all_secondary_weapons() {
     let raw = include_str!(concat!(
@@ -39,7 +36,6 @@ fn test_deserialize_all_secondary_weapons() {
     assert!(!arr.is_empty());
 }
 
-
 #[test]
 fn test_deserialize_all_melee_weapons() {
     let raw = include_str!(concat!(
@@ -51,7 +47,6 @@ fn test_deserialize_all_melee_weapons() {
 
     assert!(!arr.is_empty());
 }
-
 
 #[test]
 fn test_deserialize_all_arcanes() {
