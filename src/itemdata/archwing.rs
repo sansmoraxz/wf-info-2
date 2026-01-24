@@ -1,38 +1,28 @@
 use serde::{Deserialize, Serialize};
 
-use crate::itemdata::{DropChance, PatchLog, Rarity};
+use crate::itemdata::{BaseItem, Buildable, Equippable, WikiaItem};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Archwing {
-    #[serde(rename = "name")]
-    pub name: String,
+    #[serde(flatten)]
+    pub base: BaseItem,
 
-    #[serde(rename = "uniqueName")]
-    pub unique_name: String,
+    #[serde(flatten)]
+    pub equippable: Equippable,
 
-    #[serde(rename = "type")]
-    pub type_: String,
+    #[serde(flatten)]
+    pub buildable: Buildable,
 
-    pub rarity: Option<Rarity>,
-    pub drops: Option<Vec<DropChance>>,
+    #[serde(flatten)]
+    pub wikia_item: WikiaItem,
 
-    #[serde(rename = "imageName")]
-    pub image_name: Option<String>,
-
-    #[serde(rename = "masteryReq")]
-    pub mastery_req: Option<u8>,
-
-    #[serde(rename = "patchlogs")]
-    pub patch_log: Option<Vec<PatchLog>>,
-
-    #[serde(rename = "tradable")]
-    pub tradable: Option<bool>,
-
-    #[serde(rename = "masterable")]
-    pub masterable: Option<bool>,
-
-    #[serde(rename = "isPrime")]
-    pub is_prime: Option<bool>,
+    pub health: u32,
+    pub shield: u32,
+    pub armor: u32,
+    pub stamina: u32,
+    pub power: u32,
+    #[serde(rename = "sprintSpeed")]
+    pub sprint_speed: Option<f32>,
 }
 
 #[cfg(test)]
@@ -425,7 +415,7 @@ mod tests {
         let rec: Archwing = from_str(json_data).unwrap();
 
         assert_eq!(
-            rec.unique_name,
+            rec.base.minimal.named.unique_name,
             "/Lotus/Powersuits/Archwing/StealthJetPack/StealthJetPack"
         );
     }
