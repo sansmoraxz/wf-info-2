@@ -12,3 +12,8 @@ pub mod sentinel;
 
 pub mod arcane;
 pub mod mods;
+
+pub mod gear;
+pub mod misc;
+pub mod relics;
+pub mod resource;
