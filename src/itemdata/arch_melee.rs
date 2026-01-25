@@ -58,7 +58,6 @@ pub struct ArchMelee {
     pub patchlogs: Vec<Patchlog>,
 }
 
-
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Attack {
     pub name: String,
@@ -127,7 +126,6 @@ pub struct Component {
     pub introduced: Option<Introduced>,
     pub release_date: Option<String>,
 }
-
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Drop {

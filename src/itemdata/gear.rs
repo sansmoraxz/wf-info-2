@@ -76,7 +76,6 @@ pub struct Drop2 {
     pub type_field: String,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

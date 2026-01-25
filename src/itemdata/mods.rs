@@ -239,8 +239,14 @@ mod tests {
 
         let m: Mod = from_str(json_data).unwrap();
 
-        assert_eq!(m.unique_name, "/Lotus/Upgrades/Mods/Sets/Amar/AmarWarframeMod");
-        assert_eq!(m.mod_set, Some("/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod".into()));
+        assert_eq!(
+            m.unique_name,
+            "/Lotus/Upgrades/Mods/Sets/Amar/AmarWarframeMod"
+        );
+        assert_eq!(
+            m.mod_set,
+            Some("/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod".into())
+        );
     }
 
     #[test]

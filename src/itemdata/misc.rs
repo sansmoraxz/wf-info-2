@@ -238,7 +238,6 @@ pub struct Introduced {
     pub date: String,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

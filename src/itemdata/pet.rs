@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 
 pub type Root = Vec<Pet>;
 
-
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pet {

@@ -241,7 +241,6 @@ pub struct Damage2 {
     pub true_field: i64,
 }
 
-
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Attack2 {
     pub name: String,

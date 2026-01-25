@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-
 pub type Root = Vec<SentinelWeapon>;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -168,7 +167,6 @@ pub struct Drop {
     #[serde(rename = "type")]
     pub type_field: String,
 }
-
 
 #[cfg(test)]
 mod tests {

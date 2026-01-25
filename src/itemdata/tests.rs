@@ -2,108 +2,224 @@ use crate::itemdata;
 
 #[test]
 fn test_deserialize_all_warframes() {
-    let raw = include_str!(concat!(
+    let f = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/warframe-items-json-data/Warframes.json"
-    ));
+        "/warframe-items-data/json/Warframes.json"
+    );
 
-    let arr: Vec<itemdata::warframe::Warframe> = serde_json::from_str(raw).unwrap();
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::warframe::Root = serde_json::from_str(&raw).unwrap();
 
     assert!(!arr.is_empty());
 }
 
 #[test]
 fn test_deserialize_all_primary_weapons() {
-    let raw = include_str!(concat!(
+    let f = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/warframe-items-json-data/Primary.json"
-    ));
+        "/warframe-items-data/json/Primary.json"
+    );
 
-    let arr: Vec<itemdata::primary::Primary> = serde_json::from_str(raw).unwrap();
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::primary::Root = serde_json::from_str(&raw).unwrap();
 
     assert!(!arr.is_empty());
 }
 
 #[test]
 fn test_deserialize_all_secondary_weapons() {
-    let raw = include_str!(concat!(
+    let f = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/warframe-items-json-data/Secondary.json"
-    ));
+        "/warframe-items-data/json/Secondary.json"
+    );
 
-    let arr: Vec<itemdata::secondary::Secondary> = serde_json::from_str(raw).unwrap();
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::secondary::Root = serde_json::from_str(&raw).unwrap();
 
     assert!(!arr.is_empty());
 }
 
 #[test]
 fn test_deserialize_all_melee_weapons() {
-    let raw = include_str!(concat!(
+    let f = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/warframe-items-json-data/Melee.json"
-    ));
+        "/warframe-items-data/json/Melee.json"
+    );
 
-    let arr: Vec<itemdata::melee::Melee> = serde_json::from_str(raw).unwrap();
+    let raw = std::fs::read_to_string(f).unwrap();
 
-    assert!(!arr.is_empty());
-}
-
-#[test]
-fn test_deserialize_all_arcanes() {
-    let raw = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/warframe-items-json-data/Arcanes.json"
-    ));
-
-    let arr: Vec<itemdata::arcane::Arcane> = serde_json::from_str(raw).unwrap();
-
-    assert!(!arr.is_empty());
-}
-
-#[test]
-fn test_deserialize_all_mods() {
-    let raw = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/warframe-items-json-data/Mods.json"
-    ));
-
-    let arr: Vec<itemdata::mods::Mod> = serde_json::from_str(raw).unwrap();
+    let arr: itemdata::melee::Root = serde_json::from_str(&raw).unwrap();
 
     assert!(!arr.is_empty());
 }
 
 #[test]
 fn test_deserialize_all_archwings() {
-    let raw = include_str!(concat!(
+    let f = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/warframe-items-json-data/Archwing.json"
-    ));
+        "/warframe-items-data/json/Archwing.json"
+    );
 
-    let arr: Vec<itemdata::archwing::Archwing> = serde_json::from_str(raw).unwrap();
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::archwing::Root = serde_json::from_str(&raw).unwrap();
 
     assert!(!arr.is_empty());
 }
 
 #[test]
 fn test_deserialize_all_archguns() {
-    let raw = include_str!(concat!(
+    let f = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/warframe-items-json-data/Arch-Gun.json"
-    ));
+        "/warframe-items-data/json/Arch-Gun.json"
+    );
 
-    let arr: Vec<itemdata::arch_gun::ArchGun> = serde_json::from_str(raw).unwrap();
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::arch_gun::Root = serde_json::from_str(&raw).unwrap();
 
     assert!(!arr.is_empty());
 }
 
 #[test]
 fn test_deserialize_all_archmelee() {
-    let raw = include_str!(concat!(
+    let f = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/warframe-items-json-data/Arch-Melee.json"
-    ));
+        "/warframe-items-data/json/Arch-Melee.json"
+    );
 
-    let arr: Vec<itemdata::arch_melee::ArchMelee> = serde_json::from_str(raw).unwrap();
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::arch_melee::Root = serde_json::from_str(&raw).unwrap();
+
+    assert!(!arr.is_empty());
+}
+
+#[test]
+fn test_deserialize_all_arcanes() {
+    let f = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/warframe-items-data/json/Arcanes.json"
+    );
+
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::arcane::Root = serde_json::from_str(&raw).unwrap();
+
+    assert!(!arr.is_empty());
+}
+
+#[test]
+fn test_deserialize_all_mods() {
+    let f = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/warframe-items-data/json/Mods.json"
+    );
+
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::mods::Root = serde_json::from_str(&raw).unwrap();
+
+    assert!(!arr.is_empty());
+}
+
+#[test]
+fn test_deserialize_all_pets() {
+    let f = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/warframe-items-data/json/Pets.json"
+    );
+
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::pet::Root = serde_json::from_str(&raw).unwrap();
+
+    assert!(!arr.is_empty());
+}
+
+#[test]
+fn test_deserialize_all_sentinel() {
+    let f = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/warframe-items-data/json/Sentinels.json"
+    );
+
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::sentinel::Root = serde_json::from_str(&raw).unwrap();
+
+    assert!(!arr.is_empty());
+}
+
+#[test]
+fn test_deserialize_all_sentinel_weapons() {
+    let f = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/warframe-items-data/json/SentinelWeapons.json"
+    );
+
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::sentinel_weapon::Root = serde_json::from_str(&raw).unwrap();
+
+    assert!(!arr.is_empty());
+}
+
+#[test]
+fn test_deserialize_all_gear() {
+    let f = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/warframe-items-data/json/Gear.json"
+    );
+
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::gear::Root = serde_json::from_str(&raw).unwrap();
+
+    assert!(!arr.is_empty());
+}
+
+#[test]
+fn test_deserialize_all_misc() {
+    let f = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/warframe-items-data/json/Misc.json"
+    );
+
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::misc::Root = serde_json::from_str(&raw).unwrap();
+
+    assert!(!arr.is_empty());
+}
+
+#[test]
+fn test_deserialize_all_relics() {
+    let f = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/warframe-items-data/json/Relics.json"
+    );
+
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::relics::Root = serde_json::from_str(&raw).unwrap();
+
+    assert!(!arr.is_empty());
+}
+
+#[test]
+fn test_deserialize_all_resources() {
+    let f = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/warframe-items-data/json/Resources.json"
+    );
+
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::resource::Root = serde_json::from_str(&raw).unwrap();
 
     assert!(!arr.is_empty());
 }

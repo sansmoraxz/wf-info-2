@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-
 pub type Root = Vec<Archwing>;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -99,7 +98,6 @@ pub struct Patchlog {
     pub changes: String,
     pub fixes: String,
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -18,3 +18,6 @@ pub mod gear;
 pub mod misc;
 pub mod relics;
 pub mod resource;
+
+#[cfg(test)]
+mod tests;
