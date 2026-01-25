@@ -1,30 +1,32 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// Represent unupgraded mods
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RawUpgrade {
-    #[serde(rename = "ItemCount")]
-    pub item_count: i64,
+use crate::inventory::ObjectId;
 
+/// Represent unupgraded mods
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RawUpgrade {
     #[serde(rename = "ItemType")]
     pub item_type: String,
 
     #[serde(rename = "LastAdded")]
-    pub last_added: Option<ObjectId>,
+    pub last_added_id: ObjectId,
+
+    #[serde(rename = "ItemCount")]
+    pub item_count: i64,
 
     #[serde(flatten)]
     pub other: Option<Value>,
 }
 
 /// Represent upgraded mods
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Upgrade {
-    #[serde(rename = "ItemId")]
-    pub item_id: ObjectId,
-
     #[serde(rename = "ItemType")]
     pub item_type: String,
+
+    #[serde(rename = "ItemId")]
+    pub item_id: ObjectId,
 
     #[serde(rename = "UpgradeFingerprint")]
     pub upgrade_fingerprint: UpgradeFingerprint,
@@ -33,12 +35,12 @@ pub struct Upgrade {
     pub other: Option<Value>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ClassicFingerprint {
     pub lvl: i64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Buff {
     #[serde(rename = "Tag")]
     pub tag: String,
@@ -47,7 +49,7 @@ pub struct Buff {
     pub value: i64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RivenFingerprint {
     pub compat: String,
     pub lim: i64,
@@ -62,7 +64,7 @@ pub struct RivenFingerprint {
     pub other: Option<Value>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RivenChallengeDetail {
     #[serde(rename = "Type")]
     pub type_path: String,
@@ -72,13 +74,13 @@ pub struct RivenChallengeDetail {
     pub required: i64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RivenChallenge {
     #[serde(rename = "challenge")]
     pub challenge: RivenChallengeDetail,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum UpgradeFingerprint {
     /// When the fingerprint is stored as a string containing JSON: "{\"lvl\":10}"
     ClassicObj(ClassicFingerprint),
@@ -149,12 +151,6 @@ impl<'de> serde::Deserialize<'de> for UpgradeFingerprint {
             )),
         }
     }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ObjectId {
-    #[serde(rename = "$oid")]
-    pub oid: String,
 }
 
 #[cfg(test)]

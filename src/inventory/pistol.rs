@@ -1,43 +1,36 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Debug, Serialize, Deserialize)]
+use crate::inventory::{ObjectId, Polarity};
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Pistol {
-    #[serde(rename = "Configs")]
-    pub configs: Option<Vec<PistolConfig>>,
+    #[serde(rename = "ItemType")]
+    pub item_type: String,
 
     #[serde(rename = "ItemId")]
-    pub item_id: Option<ObjectId>,
-
-    #[serde(rename = "ItemType")]
-    pub item_type: Option<String>,
-
-    #[serde(rename = "UpgradeVer")]
-    pub upgrade_ver: Option<i64>,
+    pub item_id: ObjectId,
 
     #[serde(rename = "XP")]
     pub xp: Option<i64>,
 
+    #[serde(rename = "FocusLens")]
+    pub focus_lens: Option<String>,
+
+    #[serde(rename = "Polarity")]
+    pub polarity: Option<Vec<Polarity>>,
+
+    #[serde(rename = "Polarized")]
+    pub polarized: Option<i64>,
+
+    #[serde(rename = "ModSlotPurchases")]
+    pub mod_slot_purchases: Option<i64>,
+
+    #[serde(rename = "IsNew")]
+    pub is_new: Option<bool>,
+
     #[serde(flatten)]
     pub other: Option<Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PistolConfig {
-    #[serde(rename = "Skins")]
-    pub skins: Option<Vec<String>>,
-
-    #[serde(rename = "Upgrades")]
-    pub upgrades: Option<Vec<String>>,
-
-    #[serde(flatten)]
-    pub other: Option<Value>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ObjectId {
-    #[serde(rename = "$oid")]
-    pub oid: String,
 }
 
 #[cfg(test)]
@@ -46,7 +39,7 @@ mod tests {
     use serde_json::from_str;
 
     #[test]
-    fn test_deserialize_long_gun() {
+    fn test_deserialize_pistol() {
         let json_data = r#"
 {
     "Configs": [
@@ -94,11 +87,10 @@ mod tests {
         let pistol: Pistol = from_str(json_data).unwrap();
 
         assert_eq!(
-            pistol.item_type.unwrap(),
+            pistol.item_type,
             "/Lotus/Weapons/Corpus/Pistols/CorpusMinigun/CorpusMinigun"
         );
 
-        assert_eq!(pistol.upgrade_ver.unwrap(), 101);
         assert_eq!(pistol.xp.unwrap(), 3744243);
     }
 }
