@@ -91,7 +91,7 @@ pub struct Misc {
     pub fill_rate: Option<f64>,
     pub repair_rate: Option<i64>,
     #[serde(default)]
-    pub specialities: Vec<Value>,
+    pub specialities: Vec<Value>, // NOTE: it has been observed to be empty array or null
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

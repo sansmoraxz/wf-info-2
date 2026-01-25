@@ -8,10 +8,10 @@ pub struct Relic {
     pub category: String,
     pub description: String,
     pub image_name: String,
-    pub locations: Vec<Value>,
+    pub locations: Vec<Value>, // observed to be empty array
     pub masterable: bool,
     pub name: String,
-    pub rewards: Vec<Value>,
+    pub rewards: Vec<Value>, // observed to be empty array
     pub tradable: bool,
     #[serde(rename = "type")]
     pub type_field: String,

@@ -1,14 +1,16 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_with::{OneOrMany, formats, serde_as};
 
 pub type Root = Vec<Warframe>;
 
+#[serde_as]
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Warframe {
     pub abilities: Vec<Ability>,
     pub armor: i64,
-    pub aura: Value,
+    #[serde_as(as = "Option<OneOrMany<_, formats::PreferOne>>")]
+    pub aura: Option<Vec<String>>,
     pub bp_cost: Option<i64>,
     pub build_price: Option<i64>,
     pub build_quantity: Option<i64>,
@@ -123,7 +125,6 @@ pub struct Drop2 {
     #[serde(rename = "type")]
     pub type_field: String,
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -1650,9 +1651,6 @@ mod tests {
 
         let rec: Warframe = from_str(json_data).unwrap();
 
-        assert_eq!(
-            rec.unique_name,
-            "/Lotus/Powersuits/Priest/HarrowPrime"
-        );
+        assert_eq!(rec.unique_name, "/Lotus/Powersuits/Priest/HarrowPrime");
     }
 }

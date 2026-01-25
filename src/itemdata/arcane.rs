@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 pub type Root = Vec<Arcane>;
 
@@ -63,7 +62,7 @@ pub struct Component {
     pub image_name: String,
     pub tradable: bool,
     pub masterable: bool,
-    pub drops: Vec<Value>,
+    pub drops: Vec<Drop>,
     pub description: Option<String>,
 }
 
