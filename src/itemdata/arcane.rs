@@ -1,35 +1,70 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
-use crate::itemdata::{DropChance, LevelStats, PatchLog, Rarity};
+pub type Root = Vec<Arcane>;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Arcane {
-    #[serde(rename = "name")]
-    pub name: String,
-
-    #[serde(rename = "uniqueName")]
-    pub unique_name: String,
-
-    #[serde(rename = "type")]
-    pub type_: String,
-
-    pub rarity: Option<Rarity>,
-    pub drops: Option<Vec<DropChance>>,
-
-    #[serde(rename = "imageName")]
+    pub category: String,
+    #[serde(default)]
+    pub drops: Vec<Drop>,
     pub image_name: String,
-
-    #[serde(rename = "levelStats")]
-    pub level_stats: Option<Vec<LevelStats>>,
-
-    #[serde(rename = "patchlogs")]
-    pub patch_log: Option<Vec<PatchLog>>,
-
-    #[serde(rename = "tradable")]
-    pub tradable: bool,
-
-    #[serde(rename = "masterable")]
+    #[serde(default)]
+    pub level_stats: Vec<LevelStat>,
     pub masterable: bool,
+    pub name: String,
+    pub rarity: Option<String>,
+    pub tradable: bool,
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub unique_name: String,
+    pub exclude_from_codex: Option<bool>,
+    #[serde(default)]
+    pub patchlogs: Vec<Patchlog>,
+    pub build_price: Option<i64>,
+    pub build_quantity: Option<i64>,
+    pub build_time: Option<i64>,
+    pub components: Option<Vec<Component>>,
+    pub consume_on_build: Option<bool>,
+    pub skip_build_time_price: Option<i64>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Drop {
+    pub chance: f64,
+    pub location: String,
+    pub rarity: String,
+    #[serde(rename = "type")]
+    pub type_field: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LevelStat {
+    pub stats: Vec<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Patchlog {
+    pub name: String,
+    pub date: String,
+    pub url: String,
+    pub additions: String,
+    pub changes: String,
+    pub fixes: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Component {
+    pub unique_name: String,
+    pub name: String,
+    pub item_count: i64,
+    pub image_name: String,
+    pub tradable: bool,
+    pub masterable: bool,
+    pub drops: Vec<Value>,
+    pub description: Option<String>,
 }
 
 #[cfg(test)]

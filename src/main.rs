@@ -1,17 +1,8 @@
-mod account;
-mod api;
-mod inventory;
-mod itemdata;
-mod logs;
-mod process;
-mod profile;
-mod storage;
-mod utils;
-mod watcher;
-
 use std::env;
 use tokio::process::Command;
 use tokio::signal;
+
+use wf_info_2::*;
 
 #[tokio::main]
 async fn main() {

@@ -1,116 +1,121 @@
 use serde::{Deserialize, Serialize};
 
-use crate::itemdata::{DropChance, LevelStats, PatchLog, Rarity};
+pub type Root = Vec<Mod>;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RawMod {
-    #[serde(rename = "name")]
-    pub name: String,
-
-    #[serde(rename = "uniqueName")]
-    pub unique_name: String,
-
-    #[serde(rename = "type")]
-    pub type_: String,
-
-    pub polarity: String,
-    pub transmutable: Option<bool>,
-    #[serde(rename = "isAugment")]
-    pub is_augment: Option<bool>,
-    #[serde(rename = "fusionLimit")]
-    pub fusion_limit: u32,
-
-    #[serde(rename = "modSet")]
-    pub mod_set: Option<String>,
-
-    pub rarity: Option<Rarity>,
-    pub drops: Option<Vec<DropChance>>,
-
-    #[serde(rename = "imageName")]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Mod {
+    pub base_drain: Option<i64>,
+    pub category: String,
+    pub compat_name: Option<String>,
+    #[serde(default)]
+    pub drops: Vec<Drop>,
+    pub fusion_limit: Option<i64>,
     pub image_name: String,
-
-    #[serde(rename = "isPrime")]
-    pub is_prime: Option<bool>,
-
-    #[serde(rename = "levelStats")]
-    pub level_stats: Option<Vec<LevelStats>>,
-
-    #[serde(rename = "patchlogs")]
-    pub patch_log: Option<Vec<PatchLog>>,
-
-    #[serde(rename = "tradable")]
-    pub tradable: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModSets {
-    #[serde(rename = "name")]
+    pub introduced: Option<Introduced>,
+    pub is_augment: Option<bool>,
+    pub is_prime: bool,
+    #[serde(default)]
+    pub level_stats: Vec<LevelStat>,
+    pub masterable: bool,
     pub name: String,
-
-    #[serde(rename = "uniqueName")]
-    pub unique_name: String,
-
-    #[serde(rename = "type")]
-    pub type_: String,
-
-    pub stats: Vec<String>,
-
-    #[serde(rename = "numUpgradesInSet")]
-    pub num_upgrades_in_set: u16,
-
-    #[serde(rename = "tradable")]
+    #[serde(default)]
+    pub patchlogs: Vec<Patchlog>,
+    pub polarity: Option<String>,
+    pub rarity: Option<String>,
+    pub release_date: Option<String>,
     pub tradable: bool,
-
-    #[serde(rename = "isPrime")]
-    pub is_prime: Option<bool>,
+    pub transmutable: Option<bool>,
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub unique_name: String,
+    pub wiki_available: Option<bool>,
+    pub wikia_thumbnail: Option<String>,
+    pub wikia_url: Option<String>,
+    pub is_utility: Option<bool>,
+    pub mod_set: Option<String>,
+    pub exclude_from_codex: Option<bool>,
+    pub is_exilus: Option<bool>,
+    pub description: Option<String>,
+    pub num_upgrades_in_set: Option<i64>,
+    #[serde(default)]
+    pub stats: Vec<String>,
+    #[serde(default)]
+    pub available_challenges: Vec<AvailableChallenge>,
+    #[serde(default)]
+    pub upgrade_entries: Vec<UpgradeEntry>,
+    pub buff_set: Option<bool>,
+    pub mod_set_values: Option<Vec<f64>>,
 }
 
-#[derive(Debug, Clone)]
-pub enum Mod {
-    RawMod(RawMod),
-    ModSets(ModSets),
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Drop {
+    pub chance: Option<f64>,
+    pub location: String,
+    pub rarity: String,
+    #[serde(rename = "type")]
+    pub type_field: String,
 }
 
-impl serde::Serialize for Mod {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        // Serialize the inner struct as a JSON string (to match server/client stringified form)
-        let s = match self {
-            Mod::RawMod(raw_mod) => serde_json::to_string(raw_mod),
-            Mod::ModSets(mod_sets) => serde_json::to_string(mod_sets),
-        }
-        .map_err(serde::ser::Error::custom)?;
-        serializer.serialize_str(&s)
-    }
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Introduced {
+    pub name: String,
+    pub url: String,
+    pub aliases: Vec<String>,
+    pub parent: String,
+    pub date: String,
 }
 
-impl<'de> serde::Deserialize<'de> for Mod {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        // First deserialize into a serde_json::Value so we can handle both string and object forms.
-        let v = serde_json::Value::deserialize(deserializer).map_err(serde::de::Error::custom)?;
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LevelStat {
+    pub stats: Vec<String>,
+}
 
-        match v {
-            serde_json::Value::Object(_) => {
-                // When an object is provided directly, try to deserialize into modset then raw mod
-                let v_clone = v.clone();
-                if let Ok(m) = serde_json::from_value::<ModSets>(v_clone.clone()) {
-                    return Ok(Mod::ModSets(m));
-                }
-                match serde_json::from_value::<RawMod>(v_clone.clone()) {
-                    Ok(m) => return Ok(Mod::RawMod(m)),
-                    Err(e) => Err(serde::de::Error::custom(e)),
-                }
-            }
-            _ => Err(serde::de::Error::custom(
-                "unexpected type for Mod, expected object",
-            )),
-        }
-    }
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Patchlog {
+    pub name: String,
+    pub date: String,
+    pub url: String,
+    pub additions: String,
+    pub changes: String,
+    pub fixes: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AvailableChallenge {
+    pub full_name: String,
+    pub description: String,
+    pub complications: Vec<Complication>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Complication {
+    pub full_name: String,
+    pub description: String,
+    pub override_tag: Option<String>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpgradeEntry {
+    pub tag: String,
+    pub prefix_tag: String,
+    pub suffix_tag: String,
+    pub upgrade_values: Vec<UpgradeValue>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpgradeValue {
+    pub value: f64,
+    pub loc_tag: Option<String>,
+    pub reverse_value_symbol: Option<bool>,
 }
 
 #[cfg(test)]
@@ -232,20 +237,10 @@ mod tests {
 }
 "#;
 
-        let rec: Mod = from_str(json_data).unwrap();
+        let m: Mod = from_str(json_data).unwrap();
 
-        if let Mod::RawMod(m) = rec {
-            assert_eq!(
-                m.unique_name,
-                "/Lotus/Upgrades/Mods/Sets/Amar/AmarWarframeMod"
-            );
-            assert_eq!(
-                m.mod_set.unwrap(),
-                "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod"
-            );
-        } else {
-            panic!("expected Mod variant");
-        }
+        assert_eq!(m.unique_name, "/Lotus/Upgrades/Mods/Sets/Amar/AmarWarframeMod");
+        assert_eq!(m.mod_set, Some("/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod".into()));
     }
 
     #[test]
@@ -269,13 +264,9 @@ mod tests {
 }
 "#;
 
-        let rec: Mod = from_str(json_data).unwrap();
+        let m: Mod = from_str(json_data).unwrap();
 
-        if let Mod::ModSets(m) = rec {
-            assert_eq!(m.unique_name, "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod");
-            assert_eq!(m.num_upgrades_in_set, 3);
-        } else {
-            panic!("expected Mod variant");
-        }
+        assert_eq!(m.unique_name, "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod");
+        assert_eq!(m.num_upgrades_in_set, Some(3));
     }
 }
