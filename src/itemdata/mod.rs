@@ -9,6 +9,7 @@ pub mod archwing;
 
 pub mod pet;
 pub mod sentinel;
+pub mod sentinel_weapon;
 
 pub mod arcane;
 pub mod mods;
