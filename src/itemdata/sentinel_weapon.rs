@@ -168,3 +168,119 @@ pub struct Drop {
     #[serde(rename = "type")]
     pub type_field: String,
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::from_str;
+
+    #[test]
+    fn test_deserialize_sentinel_weapon() {
+        let json_data = r#"
+{
+  "attacks": [
+    {
+      "name": "Normal Attack",
+      "speed": 1,
+      "crit_chance": 10,
+      "crit_mult": 3,
+      "status_chance": 15,
+      "damage": {
+        "impact": 150,
+        "puncture": 150
+      }
+    }
+  ],
+  "blockingAngle": 90,
+  "category": "Primary",
+  "criticalChance": 0.1,
+  "criticalMultiplier": 3,
+  "damage": {
+    "total": 300,
+    "impact": 150,
+    "puncture": 0,
+    "slash": 150,
+    "heat": 0,
+    "cold": 0,
+    "electricity": 0,
+    "toxin": 0,
+    "blast": 0,
+    "radiation": 0,
+    "gas": 0,
+    "magnetic": 0,
+    "viral": 0,
+    "corrosive": 0,
+    "void": 0,
+    "tau": 0,
+    "cinematic": 0,
+    "shieldDrain": 0,
+    "healthDrain": 0,
+    "energyDrain": 0,
+    "true": 0
+  },
+  "damagePerShot": [
+    150,
+    150,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "description": "Hound melee attacks pierce hard with <DT_IMPACT_COLOR>Impact and <DT_PUNCTURE_COLOR>Puncture Damage.",
+  "disposition": 3,
+  "excludeFromCodex": true,
+  "fireRate": 1,
+  "imageName": "batoten-a5990aba68.png",
+  "introduced": {
+    "name": "Update 30.5",
+    "url": "https://wiki.warframe.com/w/Update_30%23Update_30.5",
+    "aliases": [
+      "30.5"
+    ],
+    "parent": "30.5",
+    "date": "2021-07-06"
+  },
+  "isPrime": false,
+  "masterable": true,
+  "masteryReq": 0,
+  "name": "Batoten",
+  "omegaAttenuation": 1,
+  "procChance": 0.14999998,
+  "productCategory": "SentinelWeapons",
+  "releaseDate": "2021-07-06",
+  "sentinel": true,
+  "slot": 1,
+  "tags": [],
+  "totalDamage": 300,
+  "tradable": false,
+  "type": "Companion Weapon",
+  "uniqueName": "/Lotus/Types/Friendly/Pets/ZanukaPets/ZanukaPetMeleeWeaponIP",
+  "wikiAvailable": true,
+  "wikiaThumbnail": "https://wiki.warframe.com/images/Batoten.png?8d059",
+  "wikiaUrl": "https://wiki.warframe.com/w/Batoten"
+}
+"#;
+
+        let rec: SentinelWeapon = from_str(json_data).unwrap();
+
+        assert_eq!(
+            rec.unique_name,
+            "/Lotus/Types/Friendly/Pets/ZanukaPets/ZanukaPetMeleeWeaponIP"
+        );
+    }
+}

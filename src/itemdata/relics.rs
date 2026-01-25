@@ -4,7 +4,7 @@ use serde_json::Value;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Relics {
+pub struct Relic {
     pub category: String,
     pub description: String,
     pub image_name: String,
@@ -42,4 +42,36 @@ pub struct Patchlog {
     pub additions: String,
     pub changes: String,
     pub fixes: String,
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::from_str;
+
+    #[test]
+    fn test_deserialize_relic() {
+        let json_data = r#"
+{
+  "category": "Relics",
+  "description": "An artifact containing Orokin secrets. It can only be opened through the power of the Void.",
+  "imageName": "axi-intact.png",
+  "locations": [],
+  "masterable": false,
+  "name": "Axi A1 Intact",
+  "rewards": [],
+  "tradable": true,
+  "type": "Relic",
+  "uniqueName": "/Lotus/Types/Game/Projections/T4VoidProjectionEBronze"
+}
+"#;
+
+        let rec: Relic = from_str(json_data).unwrap();
+
+        assert_eq!(
+            rec.unique_name,
+            "/Lotus/Types/Game/Projections/T4VoidProjectionEBronze"
+        );
+    }
 }
