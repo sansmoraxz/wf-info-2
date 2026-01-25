@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::inventory::ObjectId;
 
 /// Represent unupgraded mods
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RawUpgrade {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -20,7 +20,7 @@ pub struct RawUpgrade {
 }
 
 /// Represent upgraded mods
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Upgrade {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -35,12 +35,12 @@ pub struct Upgrade {
     pub other: Option<Value>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ClassicFingerprint {
     pub lvl: i64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Buff {
     #[serde(rename = "Tag")]
     pub tag: String,
@@ -49,7 +49,7 @@ pub struct Buff {
     pub value: i64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RivenFingerprint {
     pub compat: String,
     pub lim: i64,
@@ -64,7 +64,7 @@ pub struct RivenFingerprint {
     pub other: Option<Value>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RivenChallengeDetail {
     #[serde(rename = "Type")]
     pub type_path: String,
@@ -74,13 +74,13 @@ pub struct RivenChallengeDetail {
     pub required: i64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RivenChallenge {
     #[serde(rename = "challenge")]
     pub challenge: RivenChallengeDetail,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum UpgradeFingerprint {
     /// When the fingerprint is stored as a string containing JSON: "{\"lvl\":10}"
     ClassicObj(ClassicFingerprint),

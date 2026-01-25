@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use crate::inventory::{ObjectId, Polarity};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LongGun {
     #[serde(rename = "ItemType")]
     pub item_type: String,

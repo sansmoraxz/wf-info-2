@@ -1,4 +1,6 @@
-use crate::itemdata;
+use std::collections::HashMap;
+
+use crate::{inventory, itemdata};
 
 #[test]
 fn test_deserialize_all_warframes() {
@@ -222,4 +224,49 @@ fn test_deserialize_all_resources() {
     let arr: itemdata::resource::Root = serde_json::from_str(&raw).unwrap();
 
     assert!(!arr.is_empty());
+}
+
+#[test]
+fn test_map_warframe_inventory() {
+    use crate::inventory::tests::load_test_inventory;
+    let f = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/warframe-items-data/json/Warframes.json"
+    );
+
+    let raw = std::fs::read_to_string(f).unwrap();
+
+    let arr: itemdata::warframe::Root = serde_json::from_str(&raw).unwrap();
+
+    let info_idx: HashMap<String, itemdata::warframe::Warframe> = arr
+        .into_iter()
+        .map(|item| (item.unique_name.clone(), item))
+        .collect();
+
+    let inventory: inventory::Inventory = load_test_inventory();
+    let inv_index = inventory
+        .suits
+        .iter()
+        .map(|frame| (frame.item_type.clone(), frame.clone()))
+        .collect::<HashMap<_, _>>();
+
+    #[allow(dead_code)]
+    #[derive(Debug)]
+    struct Data {
+        info: itemdata::warframe::Warframe,
+        inventory: Option<inventory::suit::Suit>,
+    };
+
+    let data: Vec<Data> = info_idx
+        .iter()
+        .map(|(key, info)| {
+            let inv_data = inv_index.get(key).cloned();
+            Data {
+                info: info.clone(),
+                inventory: inv_data,
+            }
+        })
+        .collect();
+
+    print!("Data: {:?}", data);
 }

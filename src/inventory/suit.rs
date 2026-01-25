@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use crate::inventory::{DateWrapper, ObjectId, Polarity};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ArchonCrystalUpgrade {
     #[serde(rename = "Color")]
     pub color: Option<String>,
@@ -11,7 +11,7 @@ pub struct ArchonCrystalUpgrade {
     pub upgrade_type: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ArchonCrystalUpgradeWrapper {
     ArchonCrystalUpgrade(ArchonCrystalUpgrade),
@@ -19,7 +19,7 @@ pub enum ArchonCrystalUpgradeWrapper {
 }
 
 /// Represents a warframe suit in the inventory.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Suit {
     #[serde(rename = "ItemType")]
     pub item_type: String,

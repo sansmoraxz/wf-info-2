@@ -28,7 +28,7 @@ pub mod space_melee;
 /// Blueprints
 pub mod recipe;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FractionSyndicates {
     SteelMeridianSyndicate,
     ArbitersSyndicate,
@@ -37,13 +37,13 @@ pub enum FractionSyndicates {
     RedVeilSyndicate,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ObjectId {
     #[serde(rename = "$oid")]
     pub oid: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Polarity {
     #[serde(rename = "Value")]
     pub value: Option<String>,
@@ -52,14 +52,14 @@ pub struct Polarity {
     pub other: Option<Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DateWrapper {
     #[serde(rename = "$date")]
     #[serde(deserialize_with = "crate::utils::deserialize_mongo_date_option")]
     pub date: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Inventory {
     /// Warframes
     #[serde(rename = "Suits")]
@@ -118,17 +118,21 @@ pub struct Inventory {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use serde_json::from_str;
 
-    #[test]
-    fn test_inventory_deserialize() {
+    pub fn load_test_inventory() -> Inventory {
         let inventory_str = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/testdata/sample_inventory.json"
         ));
-        let inventory: Inventory = from_str(inventory_str).unwrap();
+        from_str(inventory_str).unwrap()
+    }
+
+    #[test]
+    fn test_inventory_deserialize() {
+        let inventory: Inventory = load_test_inventory();
         assert!(!inventory.suits.is_empty(), "Suits should not be empty");
         assert!(
             !inventory.long_guns.is_empty(),
