@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
+
 pub type Root = Vec<Resource>;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -29,6 +31,12 @@ pub struct Resource {
     #[serde(default)]
     pub drops: Vec<Drop2>,
     pub exclude_from_codex: Option<bool>,
+}
+
+impl ProductCategory for Resource {
+    fn get_product_categories(&self) -> Vec<String> {
+        vec!["MiscItems".to_string()]
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

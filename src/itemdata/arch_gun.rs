@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
+
 pub type Root = Vec<ArchGun>;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -59,6 +61,13 @@ pub struct ArchGun {
     pub vaulted: Option<bool>,
     pub max_level_cap: Option<i64>,
 }
+
+impl ProductCategory for ArchGun {
+    fn get_product_categories(&self) -> Vec<String> {
+        vec![self.product_category.clone()]
+    }
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Attack {
     pub name: String,

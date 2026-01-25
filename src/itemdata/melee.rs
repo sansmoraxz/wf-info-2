@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
+
 pub type Root = Vec<Melee>;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -73,6 +75,12 @@ pub struct Melee {
     pub item_count: Option<i64>,
     #[serde(default)]
     pub parents: Vec<String>,
+}
+
+impl ProductCategory for Melee {
+    fn get_product_categories(&self) -> Vec<String> {
+        vec![self.product_category.clone()]
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

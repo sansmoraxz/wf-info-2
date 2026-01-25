@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
+
 pub type Root = Vec<Primary>;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -62,6 +64,12 @@ pub struct Primary {
     pub parents: Vec<String>,
     #[serde(default)]
     pub drops: Vec<Drop2>,
+}
+
+impl ProductCategory for Primary {
+    fn get_product_categories(&self) -> Vec<String> {
+        vec![self.product_category.clone()]
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

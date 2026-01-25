@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use serde_json::Value;
 
+use crate::itemdata::ProductCategory;
+
 pub type Root = Vec<Relic>;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -23,6 +25,12 @@ pub struct Relic {
     #[serde(default)]
     pub patchlogs: Vec<Patchlog>,
     pub exclude_from_codex: Option<bool>,
+}
+
+impl ProductCategory for Relic {
+    fn get_product_categories(&self) -> Vec<String> {
+        vec!["MiscItems".to_string()]
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

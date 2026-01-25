@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
+
 pub type Root = Vec<SentinelWeapon>;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -54,6 +56,12 @@ pub struct SentinelWeapon {
     #[serde(default)]
     pub polarities: Vec<String>,
     pub skip_build_time_price: Option<i64>,
+}
+
+impl ProductCategory for SentinelWeapon {
+    fn get_product_categories(&self) -> Vec<String> {
+        vec![self.product_category.clone()]
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

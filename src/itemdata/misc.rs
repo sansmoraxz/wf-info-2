@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::itemdata::ProductCategory;
+
 pub type Root = Vec<Misc>;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -92,6 +94,16 @@ pub struct Misc {
     pub repair_rate: Option<i64>,
     #[serde(default)]
     pub specialities: Vec<Value>, // NOTE: it has been observed to be empty array or null
+}
+
+impl ProductCategory for Misc {
+    fn get_product_categories(&self) -> Vec<String> {
+        let s = match &self.product_category {
+            Some(v) => v.as_str(),
+            None => "MiscItems",
+        };
+        vec![s.into()]
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

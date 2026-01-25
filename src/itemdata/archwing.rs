@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
+
 pub type Root = Vec<Archwing>;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -43,6 +45,12 @@ pub struct Archwing {
     pub estimated_vault_date: Option<String>,
     pub vault_date: Option<String>,
     pub vaulted: Option<bool>,
+}
+
+impl ProductCategory for Archwing {
+    fn get_product_categories(&self) -> Vec<String> {
+        vec![self.product_category.clone()]
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_with::{OneOrMany, formats, serde_as};
 
+use crate::itemdata::ProductCategory;
+
 pub type Root = Vec<Warframe>;
 
 #[serde_as]
@@ -56,6 +58,15 @@ pub struct Warframe {
     pub vault_date: Option<String>,
     pub vaulted: Option<bool>,
     pub drops: Option<Vec<Drop2>>,
+}
+
+impl ProductCategory for Warframe {
+    fn get_product_categories(&self) -> Vec<String> {
+        match &self.product_category {
+            Some(v) => vec![v.to_string()],
+            None => vec![],
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

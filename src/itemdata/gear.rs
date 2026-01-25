@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
+
 pub type Root = Vec<Gear>;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -27,6 +29,12 @@ pub struct Gear {
     pub drops: Vec<Drop2>,
     pub item_count: Option<i64>,
     pub parents: Option<Vec<String>>,
+}
+
+impl ProductCategory for Gear {
+    fn get_product_categories(&self) -> Vec<String> {
+        vec!["Consumables".to_string()]
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

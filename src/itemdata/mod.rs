@@ -19,5 +19,9 @@ pub mod misc;
 pub mod relics;
 pub mod resource;
 
+pub trait ProductCategory {
+    fn get_product_categories(&self) -> Vec<String>;
+}
+
 #[cfg(test)]
 mod tests;

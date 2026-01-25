@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
+
 pub type Root = Vec<Mod>;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -46,6 +48,12 @@ pub struct Mod {
     pub upgrade_entries: Vec<UpgradeEntry>,
     pub buff_set: Option<bool>,
     pub mod_set_values: Option<Vec<f64>>,
+}
+
+impl ProductCategory for Mod {
+    fn get_product_categories(&self) -> Vec<String> {
+        vec!["Upgrades".to_string(), "RawUpgrades".to_string()]
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

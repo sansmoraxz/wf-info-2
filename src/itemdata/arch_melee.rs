@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
+
 pub type Root = Vec<ArchMelee>;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -56,6 +58,12 @@ pub struct ArchMelee {
     pub wikia_url: String,
     #[serde(default)]
     pub patchlogs: Vec<Patchlog>,
+}
+
+impl ProductCategory for ArchMelee {
+    fn get_product_categories(&self) -> Vec<String> {
+        vec![self.product_category.clone()]
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
