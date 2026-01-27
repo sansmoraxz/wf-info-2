@@ -8,11 +8,11 @@ use tokio::sync::mpsc;
 use tokio::time::sleep;
 
 use crate::account::AccountInfo;
-use crate::logs::{self, LogEvent};
-use crate::{api, control};
 use crate::inventory_refresh;
+use crate::logs::{self, LogEvent};
 use crate::process;
 use crate::storage;
+use crate::{api, control};
 
 pub async fn observe_warframe_activity(
     app_config_path: PathBuf,
@@ -198,10 +198,7 @@ pub async fn observe_warframe_activity(
                                                 if let Err(e) =
                                                     storage::save_inventory(&result.inventory)
                                                 {
-                                                    log::error!(
-                                                        "Failed to save inventory: {}",
-                                                        e
-                                                    );
+                                                    log::error!("Failed to save inventory: {}", e);
                                                 } else if let Err(e) =
                                                     storage::touch_inventory_updated(Some("auto"))
                                                 {

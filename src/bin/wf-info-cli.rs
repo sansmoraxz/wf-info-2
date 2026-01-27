@@ -318,7 +318,9 @@ fn parse_command(args: Vec<String>) -> anyhow::Result<Command> {
                         }
                     }
                     flag if flag.starts_with("--account") => {
-                        eprintln!("warning: --account-id no longer needed; daemon uses current login");
+                        eprintln!(
+                            "warning: --account-id no longer needed; daemon uses current login"
+                        );
                     }
                     _ => {}
                 }

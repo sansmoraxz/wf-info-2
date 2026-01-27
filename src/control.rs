@@ -2,21 +2,29 @@ use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::time::Duration;
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{OnceLock, RwLock};
+use std::time::Duration;
+use tantivy::collector::{Count, TopDocs};
+use tantivy::doc;
+use tantivy::query::{AllQuery, BooleanQuery, Occur, QueryParser, TermQuery};
+use tantivy::schema::{
+    Field, IndexRecordOption, STORED, STRING, SchemaBuilder, TextFieldIndexing, TextOptions,
+};
+use tantivy::tokenizer::NgramTokenizer;
+use tantivy::{Index, Term};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
 
+use crate::control_ops::ControlOp;
 use crate::inventory::Inventory;
-use crate::storage;
 use crate::inventory_refresh;
 use crate::process;
-use crate::control_ops::ControlOp;
+use crate::storage;
 
 #[cfg(unix)]
 use tokio::net::UnixListener;
@@ -352,37 +360,87 @@ async fn handle_inventory_filter(params: Option<Value>) -> Result<Value> {
     }
     let include_details = params.include_details.unwrap_or(false);
 
-    let mut items = collect_inventory_items(&inventory, category, include_details);
+    // Build search index (in-RAM) and execute query via tantivy
+    let items = collect_inventory_items(&inventory, category, false);
     let total = items.len();
 
+    let search_index = build_tantivy_index(&items)?;
+    let reader = search_index.index.reader()?;
+    let searcher = reader.searcher();
+
+    let mut clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
+
+    if let Some(cat) = category {
+        let term = Term::from_field_text(search_index.category, cat);
+        clauses.push((
+            Occur::Must,
+            Box::new(TermQuery::new(term, IndexRecordOption::Basic)),
+        ));
+    }
+
     if let Some(exact) = params.item_type.as_deref() {
-        items.retain(|item| item.item_type == exact);
+        let term = Term::from_field_text(search_index.item_type_exact, exact);
+        clauses.push((
+            Occur::Must,
+            Box::new(TermQuery::new(term, IndexRecordOption::Basic)),
+        ));
     }
 
-    if let Some(needle) = params.contains.as_deref() {
-        let needle = needle.to_lowercase();
-        items.retain(|item| {
-            let hay = item.item_type.to_lowercase();
-            if hay.contains(&needle) {
-                return true;
-            }
-            if let Some(name) = &item.details_name {
-                return name.to_lowercase().contains(&needle);
-            }
-            false
-        });
+    if let Some(text) = params.contains.as_deref() {
+        let parser = QueryParser::for_index(
+            &search_index.index,
+            vec![search_index.item_type_text, search_index.details_name],
+        );
+        let query = parser.parse_query(text)?;
+        clauses.push((Occur::Must, query));
     }
 
-    let filtered = items.len();
+    let query: Box<dyn tantivy::query::Query> = if clauses.is_empty() {
+        Box::new(AllQuery)
+    } else {
+        Box::new(BooleanQuery::new(clauses))
+    };
+
+    let filtered = searcher.search(&query, &Count)? as usize;
     let offset = params.offset.unwrap_or(0);
     let limit = params.limit.unwrap_or(usize::MAX);
+    let fetch = offset.saturating_add(limit).min(filtered.max(offset));
 
-    let results: Vec<Value> = items
-        .into_iter()
-        .skip(offset)
-        .take(limit)
-        .map(|item| item.value)
-        .collect();
+    let top_docs = if fetch == 0 {
+        Vec::new()
+    } else {
+        searcher.search(&query, &TopDocs::with_limit(fetch))?
+    };
+
+    let mut results = Vec::new();
+    for (_score, addr) in top_docs.into_iter().skip(offset) {
+        let raw = match searcher
+            .doc::<tantivy::TantivyDocument>(addr)?
+            .get_first(search_index.raw_json)
+        {
+            Some(tantivy::schema::OwnedValue::Str(s)) => s.to_string(),
+            _ => String::new(),
+        };
+        let mut value: Value = serde_json::from_str(&raw).unwrap_or(Value::Null);
+
+        if include_details {
+            if let Value::Object(ref mut map) = value {
+                if let Some(item_type) = map.get("item_type").and_then(Value::as_str) {
+                    if let Some(details) = lookup_item_info(item_type) {
+                        map.insert(
+                            "details".to_string(),
+                            serde_json::to_value(details).unwrap_or(Value::Null),
+                        );
+                    }
+                }
+            }
+        }
+
+        results.push(value);
+        if results.len() >= limit {
+            break;
+        }
+    }
 
     let meta = storage::read_inventory_meta().unwrap_or_default();
 
@@ -420,15 +478,11 @@ async fn handle_inventory_refresh(params: Option<Value>) -> Result<Value> {
     let scan_retries = params.scan_retries.unwrap_or(5);
     let scan_delay = Duration::from_millis(params.scan_delay_ms.unwrap_or(1500));
 
-    let inventory = inventory_refresh::fetch_inventory_from_process(
-        &account_id,
-        pid,
-        scan_retries,
-        scan_delay,
-    )
-    .await?
-    .ok_or_else(|| anyhow!("Could not locate auth data in Warframe memory"))?
-    .inventory;
+    let inventory =
+        inventory_refresh::fetch_inventory_from_process(&account_id, pid, scan_retries, scan_delay)
+            .await?
+            .ok_or_else(|| anyhow!("Could not locate auth data in Warframe memory"))?
+            .inventory;
 
     let save = params.save.unwrap_or(true);
     if save {
@@ -527,6 +581,15 @@ struct ItemView {
     item_type: String,
     details_name: Option<String>,
     value: Value,
+}
+
+struct InventorySearchIndex {
+    index: Index,
+    item_type_exact: Field,
+    item_type_text: Field,
+    details_name: Field,
+    category: Field,
+    raw_json: Field,
 }
 
 fn collect_inventory_items(
@@ -682,6 +745,60 @@ fn collect_inventory_items(
     }
 
     items
+}
+
+fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchIndex> {
+    let mut schema_builder = SchemaBuilder::default();
+
+    let item_type_exact = schema_builder.add_text_field("item_type_exact", STRING | STORED);
+    let category = schema_builder.add_text_field("category", STRING | STORED);
+
+    let ngram_indexing = TextFieldIndexing::default()
+        .set_tokenizer("ngram3")
+        .set_index_option(IndexRecordOption::WithFreqsAndPositions);
+    let ngram_opts = TextOptions::default()
+        .set_indexing_options(ngram_indexing)
+        .set_stored();
+
+    let item_type_text = schema_builder.add_text_field("item_type", ngram_opts.clone());
+    let details_name = schema_builder.add_text_field("details_name", ngram_opts);
+
+    let raw_json = schema_builder.add_text_field("raw_json", STORED);
+
+    let schema = schema_builder.build();
+    let index = Index::create_in_ram(schema);
+    index
+        .tokenizers()
+        .register("ngram3", NgramTokenizer::new(2, 6, true).unwrap());
+
+    let mut writer = index.writer(20_000_000)?; // ~20MB buffer, tiny dataset
+
+    for item in items {
+        let raw = serde_json::to_string(&item.value)?;
+        let mut doc = doc! {
+            item_type_exact => item.item_type.clone(),
+            category => item.value.get("category").and_then(Value::as_str).unwrap_or("").to_string(),
+            item_type_text => item.item_type.clone(),
+            raw_json => raw,
+        };
+
+        if let Some(name) = &item.details_name {
+            doc.add_text(details_name, name);
+        }
+
+        writer.add_document(doc)?;
+    }
+
+    writer.commit()?;
+
+    Ok(InventorySearchIndex {
+        index,
+        item_type_exact,
+        item_type_text,
+        details_name,
+        category,
+        raw_json,
+    })
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -26,6 +26,7 @@ sha2 = "0.10"
 rustc-hash = "2.1.1"
 serde_repr = "0.1.20"
 serde_with = { version = "3.16.1", features = ["chrono"] }
+tantivy = { version = "0.22", default-features = false, features = ["mmap"] }
 
 [features]
 test_with_wf_items = [] # used to test deserialization with downloaded wf-items from https://github.com/WFCD/warframe-items/
