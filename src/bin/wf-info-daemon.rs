@@ -11,6 +11,14 @@ async fn main() {
 
     let args: Vec<String> = env::args().collect();
 
+    let _control_server = match control::start_control_server_from_env().await {
+        Ok(server) => server,
+        Err(e) => {
+            log::error!("Failed to start control API: {}", e);
+            control::ControlServer::empty()
+        }
+    };
+
     // Check if we should launch Warframe as a child process
     // Format: wf-info-2 -- /path/to/warframe args...
     let warframe_cmd = if args.len() > 2 && args[1] == "--" {

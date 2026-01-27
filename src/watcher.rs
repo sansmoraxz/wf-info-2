@@ -10,6 +10,7 @@ use tokio::time::sleep;
 use crate::account::AccountInfo;
 use crate::api;
 use crate::logs::{self, LogEvent};
+use crate::control;
 use crate::process;
 use crate::storage;
 
@@ -136,6 +137,7 @@ pub async fn observe_warframe_activity(
                                 }
 
                                 current_account_id = Some(account_id.clone());
+                                control::set_current_account(Some(account_id.clone()));
                                 log::info!(
                                     "User logged in: username={}, account_id={}",
                                     username,
@@ -202,6 +204,15 @@ pub async fn observe_warframe_activity(
                                                                 "Failed to save inventory: {}",
                                                                 e
                                                             );
+                                                        } else if let Err(e) =
+                                                            storage::touch_inventory_updated(Some(
+                                                                "auto",
+                                                            ))
+                                                        {
+                                                            log::warn!(
+                                                                "Failed to update inventory metadata: {}",
+                                                                e
+                                                            );
                                                         }
                                                     }
                                                     Err(e) => {
@@ -236,6 +247,7 @@ pub async fn observe_warframe_activity(
                             }
                             Some(LogEvent::Logout) => {
                                 current_account_id = None;
+                                control::set_current_account(None);
                                 log::info!("User logged out");
                                 if let Err(e) = storage::delete_profile() {
                                     log::error!("Failed to delete profile: {}", e);
