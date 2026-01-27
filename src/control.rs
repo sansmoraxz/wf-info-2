@@ -23,6 +23,8 @@ use tokio::task::JoinHandle;
 use crate::control_ops::ControlOp;
 use crate::inventory::Inventory;
 use crate::inventory_refresh;
+use crate::itemdata;
+use crate::itemdata::ProductCategory;
 use crate::process;
 use crate::storage;
 
@@ -389,7 +391,11 @@ async fn handle_inventory_filter(params: Option<Value>) -> Result<Value> {
     if let Some(text) = params.contains.as_deref() {
         let parser = QueryParser::for_index(
             &search_index.index,
-            vec![search_index.item_type_text, search_index.details_name],
+            vec![
+                search_index.item_type_text,
+                search_index.details_name,
+                search_index.details_desc,
+            ],
         );
         let query = parser.parse_query(text)?;
         clauses.push((Occur::Must, query));
@@ -426,11 +432,9 @@ async fn handle_inventory_filter(params: Option<Value>) -> Result<Value> {
         if include_details {
             if let Value::Object(ref mut map) = value {
                 if let Some(item_type) = map.get("item_type").and_then(Value::as_str) {
-                    if let Some(details) = lookup_item_info(item_type) {
-                        map.insert(
-                            "details".to_string(),
-                            serde_json::to_value(details).unwrap_or(Value::Null),
-                        );
+                    let category = map.get("category").and_then(Value::as_str);
+                    if let Some(details) = lookup_item_info(item_type, category) {
+                        map.insert("details".to_string(), details.details.clone());
                     }
                 }
             }
@@ -580,6 +584,7 @@ fn normalize_category(category: &str) -> Option<&'static str> {
 struct ItemView {
     item_type: String,
     details_name: Option<String>,
+    details_desc: Option<String>,
     value: Value,
 }
 
@@ -588,6 +593,7 @@ struct InventorySearchIndex {
     item_type_exact: Field,
     item_type_text: Field,
     details_name: Field,
+    details_desc: Field,
     category: Field,
     raw_json: Field,
 }
@@ -603,6 +609,7 @@ fn collect_inventory_items(
         |category_name: &str, item_type: &str, item_id: Option<&str>, item_value: Value| {
             let mut value = item_value;
             let mut details_name = None;
+            let mut details_desc = None;
 
             if let Value::Object(ref mut map) = value {
                 map.insert(
@@ -617,14 +624,12 @@ fn collect_inventory_items(
                     map.insert("item_id".to_string(), Value::String(id.to_string()));
                 }
 
-                let info = lookup_item_info(item_type);
+                let info = lookup_item_info(item_type, Some(category_name));
                 details_name = info.as_ref().and_then(|item| item.name.clone());
+                details_desc = info.as_ref().and_then(|item| item.description.clone());
                 if include_details {
                     if let Some(info) = info {
-                        map.insert(
-                            "details".to_string(),
-                            serde_json::to_value(info).unwrap_or(Value::Null),
-                        );
+                        map.insert("details".to_string(), info.details.clone());
                     }
                 }
             }
@@ -632,6 +637,7 @@ fn collect_inventory_items(
             items.push(ItemView {
                 item_type: item_type.to_string(),
                 details_name,
+                details_desc,
                 value,
             });
         };
@@ -761,7 +767,8 @@ fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchIndex> {
         .set_stored();
 
     let item_type_text = schema_builder.add_text_field("item_type", ngram_opts.clone());
-    let details_name = schema_builder.add_text_field("details_name", ngram_opts);
+    let details_name = schema_builder.add_text_field("details_name", ngram_opts.clone());
+    let details_desc = schema_builder.add_text_field("details_desc", ngram_opts);
 
     let raw_json = schema_builder.add_text_field("raw_json", STORED);
 
@@ -785,6 +792,9 @@ fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchIndex> {
         if let Some(name) = &item.details_name {
             doc.add_text(details_name, name);
         }
+        if let Some(desc) = &item.details_desc {
+            doc.add_text(details_desc, desc);
+        }
 
         writer.add_document(doc)?;
     }
@@ -796,6 +806,7 @@ fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchIndex> {
         item_type_exact,
         item_type_text,
         details_name,
+        details_desc,
         category,
         raw_json,
     })
@@ -805,13 +816,13 @@ fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchIndex> {
 struct ItemInfo {
     name: Option<String>,
     unique_name: String,
-    category: Option<String>,
     product_category: Option<String>,
-    type_field: Option<String>,
-    image_name: Option<String>,
+    description: Option<String>,
+    details: Value,
 }
 
-static ITEM_INDEX: OnceLock<HashMap<String, ItemInfo>> = OnceLock::new();
+// Maps uniqueName/item_type -> all matching ItemInfo variants (multiple productCategory variants may exist)
+static ITEM_INDEX: OnceLock<HashMap<String, Vec<ItemInfo>>> = OnceLock::new();
 
 #[derive(Debug)]
 struct UnixSocketGuard {
@@ -839,93 +850,145 @@ fn default_unix_socket_path() -> Option<PathBuf> {
     Some(base.join("wf-info-2").join("control.sock"))
 }
 
-fn lookup_item_info(item_type: &str) -> Option<ItemInfo> {
-    let index = ITEM_INDEX.get_or_init(build_item_index);
-    index.get(item_type).cloned()
+fn category_to_product_category(cat: &str) -> Option<&'static str> {
+    match cat {
+        "suits" => Some("Suits"),
+        "long_guns" => Some("LongGuns"),
+        "pistols" => Some("Pistols"),
+        "melee" => Some("Melee"),
+        "space_suits" => Some("SpaceSuits"),
+        "space_guns" => Some("SpaceGuns"),
+        "space_melee" => Some("SpaceMelee"),
+        "raw_upgrades" => Some("RawUpgrades"),
+        "upgrades" => Some("Upgrades"),
+        "recipes" | "pending_recipes" => Some("Recipes"),
+        _ => None,
+    }
 }
 
-fn build_item_index() -> HashMap<String, ItemInfo> {
-    let mut index = HashMap::new();
+fn lookup_item_info(item_type: &str, category: Option<&str>) -> Option<ItemInfo> {
+    let index = ITEM_INDEX.get_or_init(build_item_index);
+    let entries = index.get(item_type)?;
+    if let Some(cat) = category.and_then(category_to_product_category) {
+        if let Some(found) = entries
+            .iter()
+            .find(|info| info.product_category.as_deref() == Some(cat))
+        {
+            return Some(found.clone());
+        }
+    }
+    // fallback: first entry
+    entries.first().cloned()
+}
+
+fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
+    let mut index: HashMap<String, Vec<ItemInfo>> = HashMap::new();
 
     let Some(data_dir) = find_itemdata_dir() else {
         log::warn!("Item data directory not found; item details disabled");
         return index;
     };
 
-    let entries = match fs::read_dir(&data_dir) {
-        Ok(entries) => entries,
-        Err(e) => {
-            log::warn!(
-                "Failed to read item data directory {}: {}",
-                data_dir.display(),
-                e
-            );
-            return index;
-        }
+    let mut push_info = |v: &Value, product_category: Option<String>| {
+        let Some(unique_name) = v.get("uniqueName").and_then(Value::as_str) else {
+            return;
+        };
+        let name = v.get("name").and_then(Value::as_str).map(|s| s.to_string());
+        let description = v
+            .get("description")
+            .or_else(|| v.get("desc"))
+            .and_then(Value::as_str)
+            .map(|s| s.to_string());
+        let details = v.clone();
+        let info = ItemInfo {
+            name,
+            unique_name: unique_name.to_string(),
+            product_category,
+            description,
+            details,
+        };
+        index.entry(unique_name.to_string()).or_default().push(info);
     };
 
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
-            continue;
+    // Warframes
+    if let Ok(raw) = fs::read_to_string(data_dir.join("Warframes.json")) {
+        if let Ok(arr) = serde_json::from_str::<itemdata::warframe::Root>(&raw) {
+            for item in arr {
+                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
+                push_info(&v, Some("Suits".to_string()));
+            }
         }
-
-        let raw = match fs::read_to_string(&path) {
-            Ok(raw) => raw,
-            Err(e) => {
-                log::warn!("Failed to read item data file {}: {}", path.display(), e);
-                continue;
+    }
+    // Primary
+    if let Ok(raw) = fs::read_to_string(data_dir.join("Primary.json")) {
+        if let Ok(arr) = serde_json::from_str::<itemdata::primary::Root>(&raw) {
+            for item in arr {
+                let pc = Some(item.product_category.clone());
+                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
+                push_info(&v, pc);
             }
-        };
-
-        let parsed: Value = match serde_json::from_str(&raw) {
-            Ok(parsed) => parsed,
-            Err(e) => {
-                log::warn!("Failed to parse item data file {}: {}", path.display(), e);
-                continue;
+        }
+    }
+    // Secondary
+    if let Ok(raw) = fs::read_to_string(data_dir.join("Secondary.json")) {
+        if let Ok(arr) = serde_json::from_str::<itemdata::secondary::Root>(&raw) {
+            for item in arr {
+                let pc = Some(item.product_category.clone());
+                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
+                push_info(&v, pc);
             }
-        };
-
-        let items = match parsed.as_array() {
-            Some(items) => items,
-            None => continue,
-        };
-
-        for item in items {
-            let unique_name = item.get("uniqueName").and_then(Value::as_str);
-            let Some(unique_name) = unique_name else {
-                continue;
-            };
-
-            if index.contains_key(unique_name) {
-                continue;
+        }
+    }
+    // Melee
+    if let Ok(raw) = fs::read_to_string(data_dir.join("Melee.json")) {
+        if let Ok(arr) = serde_json::from_str::<itemdata::melee::Root>(&raw) {
+            for item in arr {
+                let pc = Some(item.product_category.clone());
+                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
+                push_info(&v, pc);
             }
-
-            let info = ItemInfo {
-                name: item
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .map(|v| v.to_string()),
-                unique_name: unique_name.to_string(),
-                category: item
-                    .get("category")
-                    .and_then(Value::as_str)
-                    .map(|v| v.to_string()),
-                product_category: item
-                    .get("productCategory")
-                    .and_then(Value::as_str)
-                    .map(|v| v.to_string()),
-                type_field: item
-                    .get("type")
-                    .and_then(Value::as_str)
-                    .map(|v| v.to_string()),
-                image_name: item
-                    .get("imageName")
-                    .and_then(Value::as_str)
-                    .map(|v| v.to_string()),
-            };
-
-            index.insert(unique_name.to_string(), info);
+        }
+    }
+    // Archwing suits
+    if let Ok(raw) = fs::read_to_string(data_dir.join("Archwing.json")) {
+        if let Ok(arr) = serde_json::from_str::<itemdata::archwing::Root>(&raw) {
+            for item in arr {
+                let pc = Some(item.product_category.clone());
+                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
+                push_info(&v, pc);
+            }
+        }
+    }
+    // Arch-guns
+    if let Ok(raw) = fs::read_to_string(data_dir.join("Arch-Gun.json")) {
+        if let Ok(arr) = serde_json::from_str::<itemdata::arch_gun::Root>(&raw) {
+            for item in arr {
+                let pc = Some(item.product_category.clone());
+                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
+                push_info(&v, pc);
+            }
+        }
+    }
+    // Arch-melee
+    if let Ok(raw) = fs::read_to_string(data_dir.join("Arch-Melee.json")) {
+        if let Ok(arr) = serde_json::from_str::<itemdata::arch_melee::Root>(&raw) {
+            for item in arr {
+                let pc = Some(item.product_category.clone());
+                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
+                push_info(&v, pc);
+            }
+        }
+    }
+    // Mods (covers Upgrades/RawUpgrades)
+    if let Ok(raw) = fs::read_to_string(data_dir.join("Mods.json")) {
+        if let Ok(arr) = serde_json::from_str::<itemdata::mods::Root>(&raw) {
+            for item in arr {
+                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
+                // Mods can map to Upgrades or RawUpgrades
+                for pc in item.get_product_categories() {
+                    push_info(&v, Some(pc));
+                }
+            }
         }
     }
 
