@@ -14,7 +14,8 @@ use tokio::task::JoinHandle;
 
 use crate::inventory::Inventory;
 use crate::storage;
-use crate::{api, process};
+use crate::inventory_refresh;
+use crate::process;
 use crate::control_ops::ControlOp;
 
 #[cfg(unix)]
@@ -419,11 +420,15 @@ async fn handle_inventory_refresh(params: Option<Value>) -> Result<Value> {
     let scan_retries = params.scan_retries.unwrap_or(5);
     let scan_delay = Duration::from_millis(params.scan_delay_ms.unwrap_or(1500));
 
-    let auth = process::scan_memory_for_auth_with_retry(pid, &account_id, scan_retries, scan_delay)
-        .await?
-        .ok_or_else(|| anyhow!("Could not locate auth data in Warframe memory"))?;
-
-    let inventory = fetch_inventory_with_nonce_retry(&account_id, pid, auth, scan_retries, scan_delay).await?;
+    let inventory = inventory_refresh::fetch_inventory_from_process(
+        &account_id,
+        pid,
+        scan_retries,
+        scan_delay,
+    )
+    .await?
+    .ok_or_else(|| anyhow!("Could not locate auth data in Warframe memory"))?
+    .inventory;
 
     let save = params.save.unwrap_or(true);
     if save {
@@ -439,25 +444,6 @@ async fn handle_inventory_refresh(params: Option<Value>) -> Result<Value> {
         "summary": inventory_summary(&inventory),
         "meta": meta,
     }))
-}
-
-async fn fetch_inventory_with_nonce_retry(
-    account_id: &str,
-    pid: u32,
-    auth: process::AuthQuery,
-    scan_retries: u32,
-    scan_delay: Duration,
-) -> Result<Inventory> {
-    match api::fetch_inventory(&auth).await {
-        Ok(inv) => Ok(inv),
-        Err(e) => {
-            log::warn!("Fetch inventory failed (will retry with new nonce): {}", e);
-            let new_auth = process::scan_memory_for_auth_with_retry(pid, account_id, scan_retries, scan_delay)
-                .await?
-                .ok_or_else(|| anyhow!("Retry failed: still could not locate auth data"))?;
-            api::fetch_inventory(&new_auth).await
-        }
-    }
 }
 
 #[derive(Debug, Deserialize, Default)]

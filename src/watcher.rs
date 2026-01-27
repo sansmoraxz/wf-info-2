@@ -8,9 +8,9 @@ use tokio::sync::mpsc;
 use tokio::time::sleep;
 
 use crate::account::AccountInfo;
-use crate::api;
 use crate::logs::{self, LogEvent};
-use crate::control;
+use crate::{api, control};
+use crate::inventory_refresh;
 use crate::process;
 use crate::storage;
 
@@ -181,46 +181,34 @@ pub async fn observe_warframe_activity(
                                             pid
                                         );
 
-                                        match process::scan_memory_for_auth_with_retry(
-                                            pid,
+                                        match inventory_refresh::fetch_inventory_from_process(
                                             &acc_id,
+                                            pid,
                                             5,
                                             Duration::from_secs(3),
                                         )
                                         .await
                                         {
-                                            Ok(Some(auth)) => {
+                                            Ok(Some(result)) => {
                                                 log::info!(
                                                     "Successfully extracted auth: {}",
-                                                    auth.to_query_string()
+                                                    result.auth.to_query_string()
                                                 );
 
-                                                match api::fetch_inventory(&auth).await {
-                                                    Ok(inventory) => {
-                                                        if let Err(e) =
-                                                            storage::save_inventory(&inventory)
-                                                        {
-                                                            log::error!(
-                                                                "Failed to save inventory: {}",
-                                                                e
-                                                            );
-                                                        } else if let Err(e) =
-                                                            storage::touch_inventory_updated(Some(
-                                                                "auto",
-                                                            ))
-                                                        {
-                                                            log::warn!(
-                                                                "Failed to update inventory metadata: {}",
-                                                                e
-                                                            );
-                                                        }
-                                                    }
-                                                    Err(e) => {
-                                                        log::error!(
-                                                            "Failed to fetch inventory: {}",
-                                                            e
-                                                        );
-                                                    }
+                                                if let Err(e) =
+                                                    storage::save_inventory(&result.inventory)
+                                                {
+                                                    log::error!(
+                                                        "Failed to save inventory: {}",
+                                                        e
+                                                    );
+                                                } else if let Err(e) =
+                                                    storage::touch_inventory_updated(Some("auto"))
+                                                {
+                                                    log::warn!(
+                                                        "Failed to update inventory metadata: {}",
+                                                        e
+                                                    );
                                                 }
                                             }
                                             Ok(None) => {

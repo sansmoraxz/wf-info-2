@@ -79,7 +79,8 @@ impl AuthQuery {
 
 /// Scans process memory for authorization data (accountId + nonce).
 /// This reads /proc/{pid}/maps and /proc/{pid}/mem on Linux.
-/// Requires appropriate permissions (typically root/sudo).
+/// Requires appropriate permissions
+#[cfg(target_os = "linux")]
 pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQuery>> {
     log::info!(
         "Scanning memory for auth data (PID: {}, accountId: {})",

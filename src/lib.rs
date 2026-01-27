@@ -3,6 +3,7 @@ pub mod api;
 pub mod control;
 pub mod control_ops;
 pub mod inventory;
+pub mod inventory_refresh;
 pub mod itemdata;
 pub mod logs;
 pub mod process;
