@@ -194,6 +194,159 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
     Ok(None)
 }
 
+/// Scans process memory for authorization data (accountId + nonce) on Windows.
+/// Uses Windows API to enumerate and read process memory regions.
+/// Requires appropriate process access rights (PROCESS_VM_READ | PROCESS_QUERY_INFORMATION)
+#[cfg(target_os = "windows")]
+pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQuery>> {
+    use std::ptr;
+    use winapi::shared::minwindef::{FALSE, LPVOID};
+    use winapi::um::handleapi::CloseHandle;
+    use winapi::um::memoryapi::ReadProcessMemory;
+    use winapi::um::processthreadsapi::OpenProcess;
+    use winapi::um::winnt::{
+        MEMORY_BASIC_INFORMATION, MEM_COMMIT, MEM_FREE, MEM_RESERVE,
+        PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE, PAGE_READONLY, PAGE_READWRITE,
+        PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
+    };
+    use winapi::um::memoryapi::VirtualQueryEx;
+
+    log::info!(
+        "Scanning Windows memory for auth data (PID: {}, accountId: {})",
+        pid,
+        account_id
+    );
+
+    // Pattern: ?accountId=<24 chars>&nonce=<digits>
+    let pattern_str = format!(r"\?accountId={}&nonce=([0-9]+)", regex::escape(account_id));
+    let re = Regex::new(&pattern_str).context("Failed to build regex pattern")?;
+
+    // Open process with read permissions
+    let process_handle = unsafe {
+        OpenProcess(
+            PROCESS_VM_READ | PROCESS_QUERY_INFORMATION,
+            FALSE,
+            pid,
+        )
+    };
+
+    if process_handle.is_null() {
+        anyhow::bail!("Failed to open process (try running as Administrator)");
+    }
+
+    // Ensure handle is closed when we exit
+    let _handle_guard = scopeguard::guard(process_handle, |handle| unsafe {
+        CloseHandle(handle);
+    });
+
+    // Track candidates and their occurrence count
+    let mut candidates: HashMap<String, u32> = HashMap::new();
+    const REQUIRED_MATCHES: u32 = 3;
+
+    // 4MB buffer for reading memory regions
+    let mut buffer = vec![0u8; 4 * 1024 * 1024];
+    let mut address: usize = 0;
+    let mut mbi: MEMORY_BASIC_INFORMATION = unsafe { std::mem::zeroed() };
+
+    // Enumerate memory regions
+    loop {
+        let result = unsafe {
+            VirtualQueryEx(
+                process_handle,
+                address as LPVOID,
+                &mut mbi,
+                std::mem::size_of::<MEMORY_BASIC_INFORMATION>(),
+            )
+        };
+
+        if result == 0 {
+            break; // No more memory regions
+        }
+
+        // Check if region is committed and readable
+        let is_committed = mbi.State == MEM_COMMIT;
+        let is_readable = matches!(
+            mbi.Protect,
+            PAGE_READONLY | PAGE_READWRITE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE
+        );
+
+        if is_committed && is_readable {
+            let region_size = mbi.RegionSize;
+            let region_base = mbi.BaseAddress as usize;
+
+            // Skip empty or excessively large regions
+            if region_size > 0 && region_size <= 500 * 1024 * 1024 {
+                // Read region in chunks
+                let mut offset = 0usize;
+                while offset < region_size {
+                    let chunk_size = std::cmp::min(buffer.len(), region_size - offset);
+                    let read_addr = (region_base + offset) as LPVOID;
+                    let mut bytes_read: usize = 0;
+
+                    let success = unsafe {
+                        ReadProcessMemory(
+                            process_handle,
+                            read_addr,
+                            buffer.as_mut_ptr() as LPVOID,
+                            chunk_size,
+                            &mut bytes_read,
+                        )
+                    };
+
+                    if success != FALSE && bytes_read > 0 {
+                        // Search for all matches in this chunk
+                        for captures in re.captures_iter(&buffer[..bytes_read]) {
+                            if let Some(nonce_match) = captures.get(1) {
+                                let nonce = String::from_utf8_lossy(nonce_match.as_bytes()).to_string();
+                                let auth_str = format!("{}:{}", account_id, nonce);
+
+                                let count = candidates.entry(auth_str.clone()).or_insert(0);
+                                *count += 1;
+
+                                log::debug!("Found candidate auth (count={}): {}", count, auth_str);
+
+                                if *count >= REQUIRED_MATCHES {
+                                    log::info!("Confirmed auth data after {} matches", count);
+                                    log::debug!("Auth data: accountId={}, nonce={}", account_id, nonce);
+                                    return Ok(Some(AuthQuery {
+                                        account_id: account_id.to_string(),
+                                        nonce,
+                                    }));
+                                }
+                            }
+                        }
+                    } else {
+                        break; // Failed to read, move to next region
+                    }
+
+                    offset += chunk_size;
+                }
+            }
+        }
+
+        // Move to next region
+        address = (mbi.BaseAddress as usize) + mbi.RegionSize;
+    }
+
+    if candidates.is_empty() {
+        log::warn!("No auth data found in process memory");
+    } else {
+        log::warn!(
+            "Found {} candidate(s) but none confirmed (need {} matches)",
+            candidates.len(),
+            REQUIRED_MATCHES
+        );
+    }
+
+    Ok(None)
+}
+
+/// Scans process memory for authorization data - stub for unsupported platforms
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+pub fn scan_memory_for_auth(_pid: u32, _account_id: &str) -> Result<Option<AuthQuery>> {
+    anyhow::bail!("Memory scanning is not supported on this platform")
+}
+
 /// Attempts to extract auth data with retries, waiting for it to appear in memory
 pub async fn scan_memory_for_auth_with_retry(
     pid: u32,

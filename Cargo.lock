@@ -2922,6 +2922,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rustc-hash 2.1.1",
+ "scopeguard",
  "serde",
  "serde_json",
  "serde_repr",
@@ -2930,6 +2931,7 @@ dependencies = [
  "sysinfo",
  "tantivy",
  "tokio",
+ "winapi",
 ]
 
 [[package]]
