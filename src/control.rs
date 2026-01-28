@@ -43,6 +43,7 @@ pub struct ControlConfig {
 }
 
 static CURRENT_ACCOUNT_ID: OnceLock<RwLock<Option<String>>> = OnceLock::new();
+static INVENTORY_INDEX_CACHE: OnceLock<RwLock<Option<CachedInventoryIndex>>> = OnceLock::new();
 
 fn account_id_store() -> &'static RwLock<Option<String>> {
     CURRENT_ACCOUNT_ID.get_or_init(|| RwLock::new(None))
@@ -56,6 +57,10 @@ pub fn set_current_account(account_id: Option<String>) {
 
 fn current_account() -> Option<String> {
     account_id_store().read().ok().and_then(|g| g.clone())
+}
+
+fn inventory_index_cache() -> &'static RwLock<Option<CachedInventoryIndex>> {
+    INVENTORY_INDEX_CACHE.get_or_init(|| RwLock::new(None))
 }
 
 impl ControlConfig {
@@ -363,13 +368,16 @@ struct CountFilter {
 async fn handle_inventory_filter(params: Option<Value>) -> Result<Value> {
     let params: FilterParams = parse_params(params)?;
 
-    let inventory = if let Some(path) = params.path {
+    let (inventory, used_custom_path) = if let Some(path) = params.path.clone() {
         let raw = tokio::fs::read_to_string(&path)
             .await
             .with_context(|| format!("Failed to read inventory file {}", path))?;
-        serde_json::from_str(&raw).context("Failed to parse inventory JSON")?
+        (
+            serde_json::from_str(&raw).context("Failed to parse inventory JSON")?,
+            true,
+        )
     } else {
-        storage::read_inventory()?
+        (storage::read_inventory()?, false)
     };
 
     let category = params.category.as_deref().and_then(normalize_category);
@@ -381,11 +389,19 @@ async fn handle_inventory_filter(params: Option<Value>) -> Result<Value> {
     }
     let include_details = params.include_details.unwrap_or(false);
 
-    // Build search index (in-RAM) and execute query via tantivy
-    let items = collect_inventory_items(&inventory, category, false);
-    let total = items.len();
+    let meta = storage::read_inventory_meta().unwrap_or_default();
 
-    let search_index = build_tantivy_index(&items)?;
+    // Count items in selected category for reporting; index uses full inventory for reuse
+    let items_for_counts = collect_inventory_items(&inventory, category, false);
+    let total = items_for_counts.len();
+
+    // Build or reuse cached index unless a custom inventory path was provided
+    let search_index = if used_custom_path {
+        let all_items = collect_inventory_items(&inventory, None, false);
+        build_tantivy_index(&all_items)?
+    } else {
+        get_or_build_inventory_index(&inventory, &meta)?
+    };
     let reader = search_index.index.reader()?;
     let searcher = reader.searcher();
 
@@ -503,8 +519,6 @@ async fn handle_inventory_filter(params: Option<Value>) -> Result<Value> {
         .skip(offset)
         .take(limit)
         .collect();
-
-    let meta = storage::read_inventory_meta().unwrap_or_default();
 
     Ok(json!({
         "total": total,
@@ -646,6 +660,7 @@ struct ItemView {
     value: Value,
 }
 
+#[derive(Clone)]
 struct InventorySearchIndex {
     index: Index,
     item_type_exact: Field,
@@ -654,6 +669,12 @@ struct InventorySearchIndex {
     details_desc: Field,
     category: Field,
     raw_json: Field,
+}
+
+#[derive(Clone)]
+struct CachedInventoryIndex {
+    meta_last_updated: Option<DateTime<Utc>>,
+    index: InventorySearchIndex,
 }
 
 fn collect_inventory_items(
@@ -809,6 +830,34 @@ fn collect_inventory_items(
     }
 
     items
+}
+
+fn get_or_build_inventory_index(
+    inventory: &Inventory,
+    meta: &storage::InventoryMeta,
+) -> Result<InventorySearchIndex> {
+    // Fast path: reuse cached index if metadata matches last update timestamp
+    if let Ok(guard) = inventory_index_cache().read() {
+        if let Some(cached) = guard.as_ref() {
+            if cached.meta_last_updated == meta.last_updated {
+                return Ok(cached.index.clone());
+            }
+        }
+    }
+
+    // Build fresh index over the entire inventory
+    let items = collect_inventory_items(inventory, None, false);
+    let index = build_tantivy_index(&items)?;
+
+    // Update cache (best effort; ignore lock poisoning)
+    if let Ok(mut guard) = inventory_index_cache().write() {
+        *guard = Some(CachedInventoryIndex {
+            meta_last_updated: meta.last_updated,
+            index: index.clone(),
+        });
+    }
+
+    Ok(index)
 }
 
 fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchIndex> {
