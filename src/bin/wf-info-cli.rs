@@ -1,5 +1,6 @@
 use serde_json::{Value, json};
 use std::env;
+#[cfg(unix)]
 use std::path::PathBuf;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
@@ -8,11 +9,16 @@ use wf_info_2::control_ops::ControlOp;
 
 #[cfg(unix)]
 use tokio::net::UnixStream;
+#[cfg(windows)]
+use tokio::net::windows::named_pipe::ClientOptions;
 
 #[derive(Debug)]
 struct CliConfig {
     tcp_addr: Option<String>,
+    #[cfg(unix)]
     unix_path: Option<PathBuf>,
+    #[cfg(windows)]
+    npipe: Option<String>,
     pretty: bool,
     id: Option<Value>,
 }
@@ -62,7 +68,10 @@ async fn main() -> anyhow::Result<()> {
 fn parse_args(args: &mut Vec<String>) -> anyhow::Result<(CliConfig, Command)> {
     let mut cfg = CliConfig {
         tcp_addr: None,
+        #[cfg(unix)]
         unix_path: None,
+        #[cfg(windows)]
+        npipe: None,
         pretty: false,
         id: None,
     };
@@ -74,9 +83,15 @@ fn parse_args(args: &mut Vec<String>) -> anyhow::Result<(CliConfig, Command)> {
                 idx += 1;
                 cfg.tcp_addr = args.get(idx).cloned();
             }
+            #[cfg(unix)]
             "--unix" => {
                 idx += 1;
                 cfg.unix_path = args.get(idx).map(|v| PathBuf::from(v));
+            }
+            #[cfg(windows)]
+            "--npipe" => {
+                idx += 1;
+                cfg.npipe = args.get(idx).cloned();
             }
             "--pretty" => {
                 cfg.pretty = true;
@@ -104,29 +119,84 @@ fn parse_args(args: &mut Vec<String>) -> anyhow::Result<(CliConfig, Command)> {
 
     let cmd = parse_command(cmd_args)?;
 
-    if cfg.tcp_addr.is_none() && cfg.unix_path.is_none() {
+    let should_load_defaults = {
+        #[cfg(windows)]
+        {
+            cfg.tcp_addr.is_none() && cfg.npipe.is_none()
+        }
+        #[cfg(unix)]
+        {
+            cfg.tcp_addr.is_none() && cfg.unix_path.is_none()
+        }
+        #[cfg(all(not(unix), not(windows)))]
+        {
+            cfg.tcp_addr.is_none()
+        }
+    };
+
+    if should_load_defaults {
         if let Some(default_cfg) = ControlConfig::from_env() {
             for endpoint in default_cfg.endpoints {
                 match endpoint {
                     ControlEndpoint::Tcp(addr) if cfg.tcp_addr.is_none() => {
                         cfg.tcp_addr = Some(addr);
                     }
+                    #[cfg(unix)]
                     ControlEndpoint::Unix(path) if cfg.unix_path.is_none() => {
                         cfg.unix_path = Some(path);
                     }
+                    #[cfg(windows)]
+                    ControlEndpoint::Npipe(pipe) if cfg.npipe.is_none() => {
+                        cfg.npipe = Some(pipe);
+                    }
                     _ => {}
                 }
-                if cfg.tcp_addr.is_some() && cfg.unix_path.is_some() {
-                    break;
+                #[cfg(windows)]
+                {
+                    if cfg.tcp_addr.is_some() && cfg.npipe.is_some() {
+                        break;
+                    }
+                }
+                #[cfg(unix)]
+                {
+                    if cfg.tcp_addr.is_some() && cfg.unix_path.is_some() {
+                        break;
+                    }
+                }
+                #[cfg(all(not(unix), not(windows)))]
+                {
+                    if cfg.tcp_addr.is_some() {
+                        break;
+                    }
                 }
             }
         }
     }
 
-    if cfg.tcp_addr.is_none() && cfg.unix_path.is_none() {
-        anyhow::bail!(
+    let missing_target = {
+        #[cfg(windows)]
+        {
+            cfg.tcp_addr.is_none() && cfg.npipe.is_none()
+        }
+        #[cfg(unix)]
+        {
+            cfg.tcp_addr.is_none() && cfg.unix_path.is_none()
+        }
+        #[cfg(all(not(unix), not(windows)))]
+        {
+            cfg.tcp_addr.is_none()
+        }
+    };
+
+    if missing_target {
+        let missing_msg = if cfg!(windows) {
+            "Missing connection target: set WF_INFO_API_TCP/WF_INFO_API_NPIPE or rely on defaults"
+        } else if cfg!(unix) {
             "Missing connection target: set WF_INFO_API_TCP/WF_INFO_API_UNIX or rely on defaults"
-        );
+        } else {
+            "Missing connection target: set WF_INFO_API_TCP or rely on defaults"
+        };
+        anyhow::bail!(missing_msg);
     }
 
     Ok((cfg, cmd))
@@ -403,6 +473,20 @@ async fn send_request(cfg: &CliConfig, cmd: Command) -> anyhow::Result<String> {
         return Ok(line);
     }
 
+    #[cfg(windows)]
+    {
+        if let Some(pipe) = cfg.npipe.as_ref() {
+            let pipe = normalize_npipe_path(pipe);
+            let mut stream = ClientOptions::new().open(&pipe)?;
+            stream.write_all(payload.as_bytes()).await?;
+            stream.write_all(b"\n").await?;
+            let mut reader = BufReader::new(stream);
+            let mut line = String::new();
+            reader.read_line(&mut line).await?;
+            return Ok(line);
+        }
+    }
+
     #[cfg(unix)]
     {
         if let Some(path) = cfg.unix_path.as_ref() {
@@ -432,8 +516,20 @@ fn parse_jsonish(raw: &str) -> Value {
 }
 
 fn print_usage() {
+    let unix_flag = if cfg!(unix) { " | --unix PATH" } else { "" };
+    let npipe_flag = if cfg!(windows) { " | --npipe NAME" } else { "" };
+    let unix_env = if cfg!(unix) {
+        " / WF_INFO_API_UNIX"
+    } else {
+        ""
+    };
+    let npipe_env = if cfg!(windows) {
+        " / WF_INFO_API_NPIPE"
+    } else {
+        ""
+    };
     eprintln!(
-        "Usage: wf-info-cli [--tcp ADDR | --unix PATH] [--pretty] [--id ID] <command> [options]\n\
+        "Usage: wf-info-cli [--tcp ADDR{unix_flag}{npipe_flag}] [--pretty] [--id ID] <command> [options]\n\
 Commands:\n\
   ping\n\
   inventory-load --path PATH | --raw JSON | --json JSON [--save true|false] [--source NAME]\n\
@@ -443,6 +539,21 @@ Commands:\n\
   screenshot [--action NAME] [--metadata JSON]\n\
   call OP [--params JSON]\n\
 \n\
-Connection defaults to WF_INFO_API_TCP / WF_INFO_API_UNIX or the built-in unix socket path if flags are omitted."
+Connection defaults to WF_INFO_API_TCP{unix_env}{npipe_env} or the built-in platform default if flags are omitted.",
+        unix_flag = unix_flag,
+        npipe_flag = npipe_flag,
+        unix_env = unix_env,
+        npipe_env = npipe_env,
     );
+}
+
+#[cfg(windows)]
+fn normalize_npipe_path(pipe: impl AsRef<str>) -> String {
+    let raw = pipe.as_ref();
+    let lower = raw.to_ascii_lowercase();
+    if lower.starts_with(r"\\.\pipe\") {
+        raw.to_string()
+    } else {
+        format!(r"\\.\pipe\{}", raw.trim_start_matches(['\\', '/']))
+    }
 }
