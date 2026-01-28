@@ -335,10 +335,29 @@ struct FilterParams {
     category: Option<String>,
     item_type: Option<String>,
     contains: Option<String>,
+    tradable: Option<bool>,
+    item_count: Option<CountFilter>,
     limit: Option<usize>,
     offset: Option<usize>,
     include_details: Option<bool>,
     path: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+enum CountOp {
+    Gt,
+    Gte,
+    Lt,
+    Lte,
+    Eq,
+    Ne,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy)]
+struct CountFilter {
+    op: CountOp,
+    value: i64,
 }
 
 async fn handle_inventory_filter(params: Option<Value>) -> Result<Value> {
@@ -407,19 +426,18 @@ async fn handle_inventory_filter(params: Option<Value>) -> Result<Value> {
         Box::new(BooleanQuery::new(clauses))
     };
 
-    let filtered = searcher.search(&query, &Count)? as usize;
+    let total_matches = searcher.search(&query, &Count)? as usize;
     let offset = params.offset.unwrap_or(0);
     let limit = params.limit.unwrap_or(usize::MAX);
-    let fetch = offset.saturating_add(limit).min(filtered.max(offset));
 
-    let top_docs = if fetch == 0 {
+    let top_docs = if total_matches == 0 {
         Vec::new()
     } else {
-        searcher.search(&query, &TopDocs::with_limit(fetch))?
+        searcher.search(&query, &TopDocs::with_limit(total_matches))?
     };
 
-    let mut results = Vec::new();
-    for (_score, addr) in top_docs.into_iter().skip(offset) {
+    let mut filtered_values = Vec::new();
+    for (_score, addr) in top_docs {
         let raw = match searcher
             .doc::<tantivy::TantivyDocument>(addr)?
             .get_first(search_index.raw_json)
@@ -428,6 +446,42 @@ async fn handle_inventory_filter(params: Option<Value>) -> Result<Value> {
             _ => String::new(),
         };
         let mut value: Value = serde_json::from_str(&raw).unwrap_or(Value::Null);
+
+        let mut matches = true;
+        if let Value::Object(ref map) = value {
+            if let Some(tradable) = params.tradable {
+                let item_type = map.get("item_type").and_then(Value::as_str);
+                let category = map.get("category").and_then(Value::as_str);
+                let details = item_type.and_then(|t| lookup_item_info(t, category));
+                let detail_tradable = details.as_ref().and_then(|d| {
+                    d.details
+                        .get("tradable")
+                        .or_else(|| d.details.get("Tradable"))
+                        .and_then(Value::as_bool)
+                });
+                matches = matches && detail_tradable == Some(tradable);
+            }
+
+            if let Some(filter) = params.item_count {
+                if let Some(count) = extract_item_count(map) {
+                    let ok = match filter.op {
+                        CountOp::Gt => count > filter.value,
+                        CountOp::Gte => count >= filter.value,
+                        CountOp::Lt => count < filter.value,
+                        CountOp::Lte => count <= filter.value,
+                        CountOp::Eq => count == filter.value,
+                        CountOp::Ne => count != filter.value,
+                    };
+                    matches = matches && ok;
+                } else {
+                    matches = false;
+                }
+            }
+        }
+
+        if !matches {
+            continue;
+        }
 
         if include_details {
             if let Value::Object(ref mut map) = value {
@@ -440,11 +494,15 @@ async fn handle_inventory_filter(params: Option<Value>) -> Result<Value> {
             }
         }
 
-        results.push(value);
-        if results.len() >= limit {
-            break;
-        }
+        filtered_values.push(value);
     }
+
+    let filtered = filtered_values.len();
+    let results: Vec<Value> = filtered_values
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .collect();
 
     let meta = storage::read_inventory_meta().unwrap_or_default();
 
@@ -1052,6 +1110,12 @@ fn epoch_to_datetime(value: i64) -> DateTime<Utc> {
     Utc.timestamp_opt(secs, nsec)
         .single()
         .unwrap_or_else(Utc::now)
+}
+
+fn extract_item_count(map: &serde_json::Map<String, Value>) -> Option<i64> {
+    map.get("ItemCount")
+        .or_else(|| map.get("item_count"))
+        .and_then(|v| v.as_i64())
 }
 
 #[derive(Debug, Serialize)]
