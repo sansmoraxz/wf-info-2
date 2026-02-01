@@ -203,13 +203,13 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
     use winapi::shared::minwindef::{FALSE, LPVOID};
     use winapi::um::handleapi::CloseHandle;
     use winapi::um::memoryapi::ReadProcessMemory;
+    use winapi::um::memoryapi::VirtualQueryEx;
     use winapi::um::processthreadsapi::OpenProcess;
     use winapi::um::winnt::{
-        MEMORY_BASIC_INFORMATION, MEM_COMMIT, MEM_FREE, MEM_RESERVE,
-        PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE, PAGE_READONLY, PAGE_READWRITE,
-        PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
+        MEM_COMMIT, MEM_FREE, MEM_RESERVE, MEMORY_BASIC_INFORMATION, PAGE_EXECUTE_READ,
+        PAGE_EXECUTE_READWRITE, PAGE_READONLY, PAGE_READWRITE, PROCESS_QUERY_INFORMATION,
+        PROCESS_VM_READ,
     };
-    use winapi::um::memoryapi::VirtualQueryEx;
 
     log::info!(
         "Scanning Windows memory for auth data (PID: {}, accountId: {})",
@@ -222,13 +222,8 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
     let re = Regex::new(&pattern_str).context("Failed to build regex pattern")?;
 
     // Open process with read permissions
-    let process_handle = unsafe {
-        OpenProcess(
-            PROCESS_VM_READ | PROCESS_QUERY_INFORMATION,
-            FALSE,
-            pid,
-        )
-    };
+    let process_handle =
+        unsafe { OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, FALSE, pid) };
 
     if process_handle.is_null() {
         anyhow::bail!("Failed to open process (try running as Administrator)");
@@ -297,7 +292,8 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
                         // Search for all matches in this chunk
                         for captures in re.captures_iter(&buffer[..bytes_read]) {
                             if let Some(nonce_match) = captures.get(1) {
-                                let nonce = String::from_utf8_lossy(nonce_match.as_bytes()).to_string();
+                                let nonce =
+                                    String::from_utf8_lossy(nonce_match.as_bytes()).to_string();
                                 let auth_str = format!("{}:{}", account_id, nonce);
 
                                 let count = candidates.entry(auth_str.clone()).or_insert(0);
@@ -307,7 +303,11 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
 
                                 if *count >= REQUIRED_MATCHES {
                                     log::info!("Confirmed auth data after {} matches", count);
-                                    log::debug!("Auth data: accountId={}, nonce={}", account_id, nonce);
+                                    log::debug!(
+                                        "Auth data: accountId={}, nonce={}",
+                                        account_id,
+                                        nonce
+                                    );
                                     return Ok(Some(AuthQuery {
                                         account_id: account_id.to_string(),
                                         nonce,

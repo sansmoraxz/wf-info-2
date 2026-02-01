@@ -241,8 +241,8 @@ where
         // Check if this is a subscribe response that transitions to subscription mode
         if let Some(filter) = response.subscription_filter.clone() {
             // Send the success response first
-            let payload =
-                serde_json::to_string(&response.response).context("Failed to serialize response")?;
+            let payload = serde_json::to_string(&response.response)
+                .context("Failed to serialize response")?;
             writer.write_all(payload.as_bytes()).await?;
             writer.write_all(b"\n").await?;
 

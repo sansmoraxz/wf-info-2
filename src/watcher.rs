@@ -220,9 +220,9 @@ pub async fn observe_warframe_activity(
                                                 {
                                                     log::error!("Failed to save inventory: {}", e);
                                                 } else {
-                                                    if let Err(e) =
-                                                        storage::touch_inventory_updated(Some("auto"))
-                                                    {
+                                                    if let Err(e) = storage::touch_inventory_updated(
+                                                        Some("auto"),
+                                                    ) {
                                                         log::warn!(
                                                             "Failed to update inventory metadata: {}",
                                                             e

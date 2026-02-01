@@ -280,7 +280,11 @@ pub(crate) async fn handle_inventory_refresh(params: Option<Value>) -> Result<Va
             .inventory;
 
     let save = params.save.unwrap_or(true);
-    let source = params.source.as_deref().unwrap_or("live-refresh").to_string();
+    let source = params
+        .source
+        .as_deref()
+        .unwrap_or("live-refresh")
+        .to_string();
     if save {
         storage::save_inventory(&inventory)?;
         let _ = storage::touch_inventory_updated(Some(&source));
