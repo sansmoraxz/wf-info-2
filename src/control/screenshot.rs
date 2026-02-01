@@ -42,6 +42,8 @@ async fn capture_screen() -> Result<(String, String)> {
     Ok((base64_content, "image/png".to_string()))
 }
 
+/// Capture the screen and return the screenshot content as a base64-encoded string
+/// TODO: need to test on windows
 #[cfg(windows)]
 async fn capture_screen() -> Result<(String, String)> {
     use image::{ImageBuffer, Rgb};
