@@ -9,6 +9,7 @@ use tantivy::doc;
 use tantivy::query::{AllQuery, BooleanQuery, Occur};
 use tantivy::schema::{
     Field, IndexRecordOption, STORED, STRING, SchemaBuilder, TextFieldIndexing, TextOptions,
+    Value as TantivyValue,
 };
 use tantivy::tokenizer::NgramTokenizer;
 
@@ -312,13 +313,12 @@ pub(crate) fn search_inventory(
 
     let mut results = Vec::new();
     for (_score, addr) in top_docs {
-        let raw = match searcher
+        let raw = searcher
             .doc::<tantivy::TantivyDocument>(addr)?
             .get_first(search_index.raw_json)
-        {
-            Some(tantivy::schema::OwnedValue::Str(s)) => s.to_string(),
-            _ => String::new(),
-        };
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_default();
         let value: Value = serde_json::from_str(&raw).unwrap_or(Value::Null);
         results.push(value);
     }
