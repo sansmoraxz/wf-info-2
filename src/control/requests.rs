@@ -8,6 +8,7 @@ use super::inventory::{
     handle_inventory_refresh, handle_inventory_stale_update,
 };
 use super::screenshot::handle_screenshot_trigger;
+use super::subscription::{self, EventFilter};
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
@@ -46,15 +47,39 @@ impl Response {
     }
 }
 
-pub(crate) async fn handle_line(line: &str) -> Response {
+/// Result of handling a request, including optional subscription filter.
+pub(crate) struct HandleResult {
+    pub response: Response,
+    /// If set, the connection should transition to subscription mode with this filter.
+    pub subscription_filter: Option<EventFilter>,
+}
+
+pub(crate) async fn handle_line(line: &str) -> HandleResult {
     match serde_json::from_str::<Request>(line) {
         Ok(req) => handle_request(req).await,
-        Err(e) => Response::error(None, format!("Invalid request: {}", e)),
+        Err(e) => HandleResult {
+            response: Response::error(None, format!("Invalid request: {}", e)),
+            subscription_filter: None,
+        },
     }
 }
 
-async fn handle_request(req: Request) -> Response {
+async fn handle_request(req: Request) -> HandleResult {
     let id = req.id.clone();
+
+    // Handle subscribe separately since it needs to return the filter
+    if let Ok(ControlOp::Subscribe) = ControlOp::parse(&req.op) {
+        return match subscription::handle_subscribe(req.params) {
+            Ok(result) => HandleResult {
+                response: Response::ok(id, result.response),
+                subscription_filter: Some(result.filter),
+            },
+            Err(e) => HandleResult {
+                response: Response::error(id, e.to_string()),
+                subscription_filter: None,
+            },
+        };
+    }
 
     let result = match ControlOp::parse(&req.op) {
         Ok(ControlOp::Ping) => Ok(json!({ "pong": true })),
@@ -64,11 +89,15 @@ async fn handle_request(req: Request) -> Response {
         Ok(ControlOp::InventoryStaleUpdate) => handle_inventory_stale_update(req.params),
         Ok(ControlOp::ScreenshotTrigger) => handle_screenshot_trigger(req.params),
         Ok(ControlOp::InventoryRefresh) => handle_inventory_refresh(req.params).await,
+        Ok(ControlOp::Subscribe) => unreachable!(), // Handled above
         Err(e) => Err(e),
     };
 
-    match result {
-        Ok(data) => Response::ok(id, data),
-        Err(e) => Response::error(id, e.to_string()),
+    HandleResult {
+        response: match result {
+            Ok(data) => Response::ok(id, data),
+            Err(e) => Response::error(id, e.to_string()),
+        },
+        subscription_filter: None,
     }
 }

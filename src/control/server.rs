@@ -13,7 +13,10 @@ use tokio::net::UnixListener;
 #[cfg(windows)]
 use tokio::net::windows::named_pipe::ServerOptions;
 
+use super::broadcaster;
+use super::events::EventMessage;
 use super::requests;
+use super::subscription::EventFilter;
 
 #[derive(Debug, Clone)]
 pub enum ControlEndpoint {
@@ -235,9 +238,90 @@ where
 
         let response = requests::handle_line(line).await;
 
-        let payload = serde_json::to_string(&response).context("Failed to serialize response")?;
+        // Check if this is a subscribe response that transitions to subscription mode
+        if let Some(filter) = response.subscription_filter.clone() {
+            // Send the success response first
+            let payload =
+                serde_json::to_string(&response.response).context("Failed to serialize response")?;
+            writer.write_all(payload.as_bytes()).await?;
+            writer.write_all(b"\n").await?;
+
+            // Enter subscription mode
+            handle_subscription_mode(&mut lines, &mut writer, filter).await?;
+            return Ok(());
+        }
+
+        let payload =
+            serde_json::to_string(&response.response).context("Failed to serialize response")?;
         writer.write_all(payload.as_bytes()).await?;
         writer.write_all(b"\n").await?;
+    }
+
+    Ok(())
+}
+
+async fn handle_subscription_mode<R, W>(
+    lines: &mut tokio::io::Lines<BufReader<R>>,
+    writer: &mut W,
+    filter: EventFilter,
+) -> Result<()>
+where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    let mut receiver = broadcaster::subscribe();
+
+    loop {
+        tokio::select! {
+            // Handle incoming events from broadcast channel
+            event_result = receiver.recv() => {
+                match event_result {
+                    Ok(event) => {
+                        if filter.matches(&event) {
+                            let msg = EventMessage::from_event(event);
+                            let payload = serde_json::to_string(&msg)
+                                .context("Failed to serialize event")?;
+                            writer.write_all(payload.as_bytes()).await?;
+                            writer.write_all(b"\n").await?;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {
+                        log::warn!("Subscription client lagged, missed {} events", count);
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        log::debug!("Broadcast channel closed");
+                        break;
+                    }
+                }
+            }
+
+            // Handle incoming client messages (ping, disconnect)
+            line_result = lines.next_line() => {
+                match line_result {
+                    Ok(Some(line)) => {
+                        let line = line.trim();
+                        if line.is_empty() {
+                            continue;
+                        }
+
+                        // Handle regular requests while subscribed (e.g., ping)
+                        let response = requests::handle_line(line).await;
+                        let payload = serde_json::to_string(&response.response)
+                            .context("Failed to serialize response")?;
+                        writer.write_all(payload.as_bytes()).await?;
+                        writer.write_all(b"\n").await?;
+                    }
+                    Ok(None) => {
+                        // Client disconnected
+                        log::debug!("Subscribed client disconnected");
+                        break;
+                    }
+                    Err(e) => {
+                        return Err(e.into());
+                    }
+                }
+            }
+        }
     }
 
     Ok(())

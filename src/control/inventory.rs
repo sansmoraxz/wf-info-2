@@ -11,6 +11,8 @@ use tantivy::schema::IndexRecordOption;
 use crate::inventory::Inventory;
 use crate::{inventory_refresh, process, storage};
 
+use super::broadcaster;
+use super::events::{DaemonEvent, InventoryFetchedEvent, InventoryStaleEvent};
 use super::item_data::lookup_item_info;
 use super::search::{
     build_tantivy_index, collect_inventory_items, get_or_build_inventory_index, search_inventory,
@@ -51,10 +53,17 @@ pub(crate) async fn handle_inventory_load(params: Option<Value>) -> Result<Value
     };
 
     let save = params.save.unwrap_or(true);
+    let source = params.source.as_deref().unwrap_or("manual").to_string();
     if save {
         storage::save_inventory(&inventory)?;
-        let source = params.source.as_deref().unwrap_or("manual");
-        let _ = storage::touch_inventory_updated(Some(source));
+        let _ = storage::touch_inventory_updated(Some(&source));
+
+        // Emit inventory fetched event
+        broadcaster::emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
+            timestamp: Utc::now(),
+            source: source.clone(),
+            summary: inventory_summary(&inventory),
+        }));
     }
 
     let meta = storage::read_inventory_meta().unwrap_or_default();
@@ -271,10 +280,17 @@ pub(crate) async fn handle_inventory_refresh(params: Option<Value>) -> Result<Va
             .inventory;
 
     let save = params.save.unwrap_or(true);
+    let source = params.source.as_deref().unwrap_or("live-refresh").to_string();
     if save {
         storage::save_inventory(&inventory)?;
-        let source = params.source.as_deref().unwrap_or("live-refresh");
-        let _ = storage::touch_inventory_updated(Some(source));
+        let _ = storage::touch_inventory_updated(Some(&source));
+
+        // Emit inventory fetched event
+        broadcaster::emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
+            timestamp: Utc::now(),
+            source: source.clone(),
+            summary: inventory_summary(&inventory),
+        }));
     }
 
     let meta = storage::read_inventory_meta().unwrap_or_default();
@@ -300,7 +316,16 @@ pub(crate) fn handle_inventory_stale_update(params: Option<Value>) -> Result<Val
         Utc::now()
     };
 
-    let meta = storage::mark_inventory_stale_at(timestamp, params.reason)?;
+    let reason = params.reason.clone();
+    let meta = storage::mark_inventory_stale_at(timestamp, reason.clone())?;
+
+    // Emit inventory stale event
+    broadcaster::emit(DaemonEvent::InventoryStale(InventoryStaleEvent {
+        timestamp: Utc::now(),
+        stale_since: timestamp,
+        reason,
+    }));
+
     Ok(serde_json::to_value(meta).context("Failed to serialize inventory metadata")?)
 }
 

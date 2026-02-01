@@ -11,6 +11,8 @@ use serde_json::Value;
 
 use crate::storage;
 
+use super::broadcaster;
+use super::events::{DaemonEvent, ScreenshotTriggeredEvent};
 use super::utils::parse_params;
 
 #[derive(Debug, Deserialize, Default)]
@@ -29,7 +31,15 @@ pub(crate) struct ScreenshotEvent {
 
 pub(crate) fn handle_screenshot_trigger(params: Option<Value>) -> Result<Value> {
     let params: ScreenshotParams = parse_params(params)?;
-    let event = record_screenshot_event(params.action, params.metadata)?;
+    let event = record_screenshot_event(params.action.clone(), params.metadata)?;
+
+    // Emit screenshot triggered event
+    broadcaster::emit(DaemonEvent::ScreenshotTriggered(ScreenshotTriggeredEvent {
+        timestamp: event.timestamp,
+        event_id: event.id.clone(),
+        action: params.action,
+    }));
+
     Ok(serde_json::to_value(event).context("Failed to serialize screenshot event")?)
 }
 

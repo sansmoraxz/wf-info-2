@@ -9,6 +9,7 @@ pub enum ControlOp {
     InventoryStaleUpdate,
     ScreenshotTrigger,
     InventoryRefresh,
+    Subscribe,
 }
 
 impl ControlOp {
@@ -21,6 +22,7 @@ impl ControlOp {
             Self::InventoryStaleUpdate => "inventory.stale.update",
             Self::ScreenshotTrigger => "screenshot.trigger",
             Self::InventoryRefresh => "inventory.refresh",
+            Self::Subscribe => "subscribe",
         }
     }
 
@@ -33,6 +35,7 @@ impl ControlOp {
             "inventory.stale.update" => Ok(Self::InventoryStaleUpdate),
             "screenshot.trigger" => Ok(Self::ScreenshotTrigger),
             "inventory.refresh" => Ok(Self::InventoryRefresh),
+            "subscribe" => Ok(Self::Subscribe),
             _ => Err(anyhow!("Unknown operation '{}'", op)),
         }
     }

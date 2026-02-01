@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 use std::env;
 #[cfg(unix)]
 use std::path::PathBuf;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use wf_info_2::control::{ControlConfig, ControlEndpoint};
 use wf_info_2::control_ops::ControlOp;
@@ -44,6 +44,17 @@ struct Command {
     params: Option<Value>,
 }
 
+#[derive(Debug)]
+struct WatchConfig {
+    events: Option<Vec<String>>,
+}
+
+#[derive(Debug)]
+enum CliMode {
+    Request(Command),
+    Watch(WatchConfig),
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let mut args = env::args().skip(1).collect::<Vec<_>>();
@@ -52,20 +63,28 @@ async fn main() -> anyhow::Result<()> {
         std::process::exit(2);
     }
 
-    let (cfg, cmd) = parse_args(&mut args)?;
-    let response = send_request(&cfg, cmd).await?;
+    let (cfg, mode) = parse_args(&mut args)?;
 
-    if cfg.pretty {
-        let value: Value = serde_json::from_str(&response)?;
-        println!("{}", serde_json::to_string_pretty(&value)?);
-    } else {
-        println!("{}", response.trim_end());
+    match mode {
+        CliMode::Request(cmd) => {
+            let response = send_request(&cfg, cmd).await?;
+
+            if cfg.pretty {
+                let value: Value = serde_json::from_str(&response)?;
+                println!("{}", serde_json::to_string_pretty(&value)?);
+            } else {
+                println!("{}", response.trim_end());
+            }
+        }
+        CliMode::Watch(watch_cfg) => {
+            run_watch(&cfg, watch_cfg).await?;
+        }
     }
 
     Ok(())
 }
 
-fn parse_args(args: &mut Vec<String>) -> anyhow::Result<(CliConfig, Command)> {
+fn parse_args(args: &mut Vec<String>) -> anyhow::Result<(CliConfig, CliMode)> {
     let mut cfg = CliConfig {
         tcp_addr: None,
         #[cfg(unix)]
@@ -117,7 +136,7 @@ fn parse_args(args: &mut Vec<String>) -> anyhow::Result<(CliConfig, Command)> {
         std::process::exit(2);
     }
 
-    let cmd = parse_command(cmd_args)?;
+    let mode = parse_mode(cmd_args)?;
 
     let should_load_defaults = {
         #[cfg(windows)]
@@ -199,7 +218,30 @@ fn parse_args(args: &mut Vec<String>) -> anyhow::Result<(CliConfig, Command)> {
         anyhow::bail!(missing_msg);
     }
 
-    Ok((cfg, cmd))
+    Ok((cfg, mode))
+}
+
+fn parse_mode(args: Vec<String>) -> anyhow::Result<CliMode> {
+    if args.first().map(|s| s.as_str()) == Some("watch") {
+        let mut events = None;
+        let rest: Vec<_> = args.into_iter().skip(1).collect();
+        let mut idx = 0;
+        while idx < rest.len() {
+            match rest[idx].as_str() {
+                "--events" => {
+                    idx += 1;
+                    if let Some(v) = rest.get(idx) {
+                        events = Some(v.split(',').map(|s| s.trim().to_string()).collect());
+                    }
+                }
+                _ => {}
+            }
+            idx += 1;
+        }
+        Ok(CliMode::Watch(WatchConfig { events }))
+    } else {
+        Ok(CliMode::Request(parse_command(args)?))
+    }
 }
 
 fn parse_command(args: Vec<String>) -> anyhow::Result<Command> {
@@ -503,6 +545,95 @@ async fn send_request(cfg: &CliConfig, cmd: Command) -> anyhow::Result<String> {
     anyhow::bail!("No valid connection target")
 }
 
+async fn run_watch(cfg: &CliConfig, watch_cfg: WatchConfig) -> anyhow::Result<()> {
+    let request = json!({
+        "op": "subscribe",
+        "params": {
+            "events": watch_cfg.events,
+        },
+    });
+    let payload = serde_json::to_string(&request)?;
+
+    if let Some(addr) = cfg.tcp_addr.as_ref() {
+        let stream = TcpStream::connect(&addr).await?;
+        return watch_stream(stream, &payload, cfg.pretty).await;
+    }
+
+    #[cfg(windows)]
+    {
+        if let Some(pipe) = cfg.npipe.as_ref() {
+            let pipe = normalize_npipe_path(pipe);
+            let stream = ClientOptions::new().open(&pipe)?;
+            return watch_stream(stream, &payload, cfg.pretty).await;
+        }
+    }
+
+    #[cfg(unix)]
+    {
+        if let Some(path) = cfg.unix_path.as_ref() {
+            let stream = UnixStream::connect(&path).await?;
+            return watch_stream(stream, &payload, cfg.pretty).await;
+        }
+    }
+
+    anyhow::bail!("No valid connection target")
+}
+
+async fn watch_stream<S>(mut stream: S, subscribe_payload: &str, pretty: bool) -> anyhow::Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    // Send subscribe request
+    stream.write_all(subscribe_payload.as_bytes()).await?;
+    stream.write_all(b"\n").await?;
+
+    let mut reader = BufReader::new(stream);
+    let mut line = String::new();
+
+    // Read subscribe response
+    reader.read_line(&mut line).await?;
+    let response: Value = serde_json::from_str(&line)?;
+
+    if response.get("ok") != Some(&Value::Bool(true)) {
+        let error = response
+            .get("error")
+            .and_then(|e| e.as_str())
+            .unwrap_or("Unknown error");
+        anyhow::bail!("Subscribe failed: {}", error);
+    }
+
+    if pretty {
+        eprintln!("Subscribed. Waiting for events... (Ctrl+C to exit)");
+    }
+
+    // Stream events
+    loop {
+        line.clear();
+        let bytes_read = reader.read_line(&mut line).await?;
+        if bytes_read == 0 {
+            // Connection closed
+            break;
+        }
+
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if pretty {
+            if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+                println!("{}", serde_json::to_string_pretty(&value)?);
+            } else {
+                println!("{}", trimmed);
+            }
+        } else {
+            println!("{}", trimmed);
+        }
+    }
+
+    Ok(())
+}
+
 fn parse_jsonish(raw: &str) -> Value {
     if let Ok(v) = serde_json::from_str(raw) {
         v
@@ -532,12 +663,16 @@ fn print_usage() {
         "Usage: wf-info-cli [--tcp ADDR{unix_flag}{npipe_flag}] [--pretty] [--id ID] <command> [options]\n\
 Commands:\n\
   ping\n\
+  watch [--events EVENT1,EVENT2,...]\n\
   inventory-load --path PATH | --raw JSON | --json JSON [--save true|false] [--source NAME]\n\
   inventory-filter [--category NAME] [--item-type TYPE] [--contains TEXT] [--limit N] [--offset N] [--include-details] [--path PATH]\n\
   inventory-meta\n\
   inventory-stale [--timestamp TS] [--reason TEXT]\n\
+  inventory-refresh [--scan-retries N] [--scan-delay-ms N] [--no-save] [--source NAME]\n\
   screenshot [--action NAME] [--metadata JSON]\n\
   call OP [--params JSON]\n\
+\n\
+Event types: account_login, account_logout, inventory_fetched, inventory_stale, profile_updated, screenshot_triggered\n\
 \n\
 Connection defaults to WF_INFO_API_TCP{unix_env}{npipe_env} or the built-in platform default if flags are omitted.",
         unix_flag = unix_flag,
