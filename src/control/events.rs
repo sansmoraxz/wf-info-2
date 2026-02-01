@@ -63,8 +63,6 @@ pub struct ProfileUpdatedEvent {
 pub struct ScreenshotTriggeredEvent {
     pub timestamp: DateTime<Utc>,
     pub event_id: String,
-    pub content: String,
-    pub content_type: String,
 }
 
 /// Wire format for pushing events to subscribed clients.

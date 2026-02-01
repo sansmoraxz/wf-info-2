@@ -70,21 +70,22 @@ pub(crate) struct ScreenshotEvent {
     pub id: String,
     pub timestamp: DateTime<Utc>,
     pub metadata: Option<Value>,
+    pub content: String,
+    pub content_type: String,
 }
 
 pub(crate) async fn handle_screenshot_trigger(params: Option<Value>) -> Result<Value> {
     let params: ScreenshotParams = parse_params(params)?;
-    let event = record_screenshot_event(params.metadata)?;
 
-    // Capture screenshot
+    // Capture screenshot first
     let (content, content_type) = capture_screen().await?;
 
-    // Emit screenshot triggered event with content
+    let event = record_screenshot_event(params.metadata, content, content_type)?;
+
+    // Emit screenshot triggered event
     broadcaster::emit(DaemonEvent::ScreenshotTriggered(ScreenshotTriggeredEvent {
         timestamp: event.timestamp,
         event_id: event.id.clone(),
-        content,
-        content_type,
     }));
 
     Ok(serde_json::to_value(event).context("Failed to serialize screenshot event")?)
@@ -92,11 +93,15 @@ pub(crate) async fn handle_screenshot_trigger(params: Option<Value>) -> Result<V
 
 fn record_screenshot_event(
     metadata: Option<Value>,
+    content: String,
+    content_type: String,
 ) -> Result<ScreenshotEvent> {
     let event = ScreenshotEvent {
         id: format!("{}-{}", Utc::now().timestamp_millis(), random::<u32>()),
         timestamp: Utc::now(),
         metadata,
+        content,
+        content_type,
     };
 
     let cache_dir = storage::app_cache_dir()?;
