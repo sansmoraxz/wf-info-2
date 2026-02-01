@@ -16,6 +16,9 @@ use super::broadcaster;
 use super::events::{DaemonEvent, ScreenshotTriggeredEvent};
 use super::utils::parse_params;
 
+/// Capture the screen and return the screenshot content as a base64-encoded string
+/// Note: this will do a fullscreen capture
+/// Please ensure that the game window is in focus
 #[cfg(unix)]
 async fn capture_screen() -> Result<(String, String)> {
     use ashpd::desktop::screenshot::Screenshot;
