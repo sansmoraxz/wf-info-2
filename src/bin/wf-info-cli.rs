@@ -182,10 +182,6 @@ struct InventoryRefreshArgs {
 
 #[derive(Args, Debug, Clone)]
 struct ScreenshotArgs {
-    /// Action name for screenshot
-    #[arg(long)]
-    action: Option<String>,
-
     /// Additional metadata (JSON)
     #[arg(long, value_parser = parse_jsonish_clap)]
     metadata: Option<Value>,
@@ -504,9 +500,6 @@ impl InventoryRefreshArgs {
 impl ScreenshotArgs {
     fn into_params(self) -> Value {
         let mut params = json!({});
-        if let Some(v) = self.action {
-            params["action"] = Value::String(v);
-        }
         if let Some(v) = self.metadata {
             params["metadata"] = v;
         }
