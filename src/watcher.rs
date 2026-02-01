@@ -1,5 +1,7 @@
+use chrono::Utc;
 use notify::RecursiveMode;
 use notify_debouncer_mini::{DebounceEventResult, new_debouncer};
+use serde_json::json;
 use std::fs::{File, metadata};
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::PathBuf;
@@ -8,10 +10,14 @@ use tokio::sync::mpsc;
 use tokio::time::sleep;
 
 use crate::account::AccountInfo;
-use crate::api;
+use crate::control::{
+    AccountLoginEvent, AccountLogoutEvent, DaemonEvent, InventoryFetchedEvent, ProfileUpdatedEvent,
+};
+use crate::inventory_refresh;
 use crate::logs::{self, LogEvent};
 use crate::process;
 use crate::storage;
+use crate::{api, control};
 
 pub async fn observe_warframe_activity(
     app_config_path: PathBuf,
@@ -136,11 +142,19 @@ pub async fn observe_warframe_activity(
                                 }
 
                                 current_account_id = Some(account_id.clone());
+                                control::set_current_account(Some(account_id.clone()));
                                 log::info!(
                                     "User logged in: username={}, account_id={}",
                                     username,
                                     account_id
                                 );
+
+                                // Emit account login event
+                                control::emit(DaemonEvent::AccountLogin(AccountLoginEvent {
+                                    timestamp: Utc::now(),
+                                    account_id: account_id.clone(),
+                                    username: username.clone(),
+                                }));
 
                                 let acc_id = account_id.clone();
                                 let user_name = username.clone();
@@ -161,6 +175,14 @@ pub async fn observe_warframe_activity(
                                                     user_name,
                                                     e
                                                 );
+                                            } else {
+                                                // Emit profile updated event
+                                                control::emit(DaemonEvent::ProfileUpdated(
+                                                    ProfileUpdatedEvent {
+                                                        timestamp: Utc::now(),
+                                                        account_id: acc_id.clone(),
+                                                    },
+                                                ));
                                             }
                                         }
                                         Err(e) => {
@@ -179,37 +201,48 @@ pub async fn observe_warframe_activity(
                                             pid
                                         );
 
-                                        match process::scan_memory_for_auth_with_retry(
-                                            pid,
+                                        match inventory_refresh::fetch_inventory_from_process(
                                             &acc_id,
+                                            pid,
                                             5,
                                             Duration::from_secs(3),
                                         )
                                         .await
                                         {
-                                            Ok(Some(auth)) => {
+                                            Ok(Some(result)) => {
                                                 log::info!(
                                                     "Successfully extracted auth: {}",
-                                                    auth.to_query_string()
+                                                    result.auth.to_query_string()
                                                 );
 
-                                                match api::fetch_inventory(&auth).await {
-                                                    Ok(inventory) => {
-                                                        if let Err(e) =
-                                                            storage::save_inventory(&inventory)
-                                                        {
-                                                            log::error!(
-                                                                "Failed to save inventory: {}",
-                                                                e
-                                                            );
-                                                        }
-                                                    }
-                                                    Err(e) => {
-                                                        log::error!(
-                                                            "Failed to fetch inventory: {}",
+                                                if let Err(e) =
+                                                    storage::save_inventory(&result.inventory)
+                                                {
+                                                    log::error!("Failed to save inventory: {}", e);
+                                                } else {
+                                                    if let Err(e) = storage::touch_inventory_updated(
+                                                        Some("auto"),
+                                                    ) {
+                                                        log::warn!(
+                                                            "Failed to update inventory metadata: {}",
                                                             e
                                                         );
                                                     }
+
+                                                    // Emit inventory fetched event
+                                                    let summary = json!({
+                                                        "suits": result.inventory.suits.len(),
+                                                        "long_guns": result.inventory.long_guns.len(),
+                                                        "pistols": result.inventory.pistols.len(),
+                                                        "melee": result.inventory.melee.len(),
+                                                    });
+                                                    control::emit(DaemonEvent::InventoryFetched(
+                                                        InventoryFetchedEvent {
+                                                            timestamp: Utc::now(),
+                                                            source: "auto".to_string(),
+                                                            summary,
+                                                        },
+                                                    ));
                                                 }
                                             }
                                             Ok(None) => {
@@ -236,7 +269,14 @@ pub async fn observe_warframe_activity(
                             }
                             Some(LogEvent::Logout) => {
                                 current_account_id = None;
+                                control::set_current_account(None);
                                 log::info!("User logged out");
+
+                                // Emit account logout event
+                                control::emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
+                                    timestamp: Utc::now(),
+                                }));
+
                                 if let Err(e) = storage::delete_profile() {
                                     log::error!("Failed to delete profile: {}", e);
                                 }

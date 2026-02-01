@@ -255,7 +255,7 @@ fn test_map_warframe_inventory() {
     struct Data {
         info: itemdata::warframe::Warframe,
         inventory: Option<inventory::suit::Suit>,
-    };
+    }
 
     let data: Vec<Data> = info_idx
         .iter()

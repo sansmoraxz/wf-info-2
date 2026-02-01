@@ -5,10 +5,13 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
 };
 use anyhow::Context;
+use chrono::{DateTime, Utc};
 use rand::{Rng, rng};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io::Write;
+use std::path::PathBuf;
 
 use crate::{inventory, profile::ProfileData};
 
@@ -50,15 +53,7 @@ pub fn save_encrypted_profile(profile: &ProfileData) -> anyhow::Result<()> {
     final_data.extend_from_slice(&nonce_bytes);
     final_data.extend_from_slice(&ciphertext);
 
-    let cache_dir =
-        dirs::cache_dir().ok_or_else(|| anyhow::anyhow!("Could not find cache directory"))?;
-    let app_cache_dir = cache_dir.join("wf-info-2");
-
-    if !app_cache_dir.exists() {
-        fs::create_dir_all(&app_cache_dir).context("Failed to create cache directory")?;
-    }
-
-    let file_path = app_cache_dir.join("userstats.dat");
+    let file_path = app_cache_dir()?.join("userstats.dat");
     let mut file = File::create(&file_path).context("Failed to create output file")?;
     file.write_all(&final_data)
         .context("Failed to write to file")?;
@@ -69,10 +64,7 @@ pub fn save_encrypted_profile(profile: &ProfileData) -> anyhow::Result<()> {
 }
 
 pub fn delete_profile() -> anyhow::Result<()> {
-    let cache_dir =
-        dirs::cache_dir().ok_or_else(|| anyhow::anyhow!("Could not find cache directory"))?;
-    let app_cache_dir = cache_dir.join("wf-info-2");
-    let file_path = app_cache_dir.join("userstats.dat");
+    let file_path = app_cache_dir()?.join("userstats.dat");
 
     if file_path.exists() {
         fs::remove_file(&file_path).context("Failed to delete profile file")?;
@@ -89,13 +81,7 @@ pub fn save_inventory(inventory: &inventory::Inventory) -> anyhow::Result<()> {
     use aes::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
     type Aes128CbcEnc = cbc::Encryptor<aes::Aes128>;
 
-    let cache_dir =
-        dirs::cache_dir().ok_or_else(|| anyhow::anyhow!("Could not find cache directory"))?;
-    let app_cache_dir = cache_dir.join("wf-info-2");
-
-    if !app_cache_dir.exists() {
-        fs::create_dir_all(&app_cache_dir).context("Failed to create cache directory")?;
-    }
+    let app_cache_dir = app_cache_dir()?;
 
     // Save pretty-printed JSON
     let json_path = app_cache_dir.join("inventory.json");
@@ -122,5 +108,93 @@ pub fn save_inventory(inventory: &inventory::Inventory) -> anyhow::Result<()> {
     fs::write(&dat_path, ciphertext).context("Failed to write lastData.dat")?;
     log::info!("Saved encrypted inventory to {}", dat_path.display());
 
+    if let Err(e) = touch_inventory_updated(None) {
+        log::warn!("Failed to update inventory metadata: {}", e);
+    }
+
     Ok(())
+}
+
+pub fn app_cache_dir() -> anyhow::Result<PathBuf> {
+    let cache_dir =
+        dirs::cache_dir().ok_or_else(|| anyhow::anyhow!("Could not find cache directory"))?;
+    let app_cache_dir = cache_dir.join("wf-info-2");
+
+    if !app_cache_dir.exists() {
+        fs::create_dir_all(&app_cache_dir).context("Failed to create cache directory")?;
+    }
+
+    Ok(app_cache_dir)
+}
+
+pub fn inventory_json_path() -> anyhow::Result<PathBuf> {
+    Ok(app_cache_dir()?.join("inventory.json"))
+}
+
+pub fn read_inventory() -> anyhow::Result<inventory::Inventory> {
+    let json_path = inventory_json_path()?;
+    let raw = fs::read_to_string(&json_path).context("Failed to read inventory.json")?;
+    let inventory = serde_json::from_str(&raw).context("Failed to parse inventory JSON")?;
+    Ok(inventory)
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct InventoryMeta {
+    pub last_updated: Option<DateTime<Utc>>,
+    pub last_source: Option<String>,
+    pub stale_at: Option<DateTime<Utc>>,
+    pub stale_reason: Option<String>,
+}
+
+fn inventory_meta_path() -> anyhow::Result<PathBuf> {
+    Ok(app_cache_dir()?.join("inventory_meta.json"))
+}
+
+pub fn read_inventory_meta() -> anyhow::Result<InventoryMeta> {
+    let path = inventory_meta_path()?;
+    if !path.exists() {
+        return Ok(InventoryMeta::default());
+    }
+    let raw = fs::read_to_string(&path).context("Failed to read inventory metadata")?;
+    let meta = serde_json::from_str(&raw).context("Failed to parse inventory metadata")?;
+    Ok(meta)
+}
+
+pub fn write_inventory_meta(meta: &InventoryMeta) -> anyhow::Result<()> {
+    let path = inventory_meta_path()?;
+    let raw =
+        serde_json::to_string_pretty(meta).context("Failed to serialize inventory metadata")?;
+    fs::write(&path, raw).context("Failed to write inventory metadata")?;
+    Ok(())
+}
+
+pub fn touch_inventory_updated(source: Option<&str>) -> anyhow::Result<InventoryMeta> {
+    let mut meta = read_inventory_meta()?;
+    meta.last_updated = Some(Utc::now());
+    meta.stale_at = None;
+    meta.stale_reason = None;
+    if let Some(src) = source {
+        meta.last_source = Some(src.to_string());
+    }
+    write_inventory_meta(&meta)?;
+    Ok(meta)
+}
+
+pub fn mark_inventory_stale_at(
+    stale_at: DateTime<Utc>,
+    reason: Option<String>,
+) -> anyhow::Result<InventoryMeta> {
+    let mut meta = read_inventory_meta()?;
+    meta.stale_at = Some(stale_at);
+    meta.stale_reason = reason;
+    write_inventory_meta(&meta)?;
+    Ok(meta)
+}
+
+pub fn clear_inventory_stale() -> anyhow::Result<InventoryMeta> {
+    let mut meta = read_inventory_meta()?;
+    meta.stale_at = None;
+    meta.stale_reason = None;
+    write_inventory_meta(&meta)?;
+    Ok(meta)
 }
