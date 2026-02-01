@@ -133,117 +133,10 @@ mod tests {
 
     #[test]
     fn test_deserialize_raw_mod() {
-        let json_data = r#"
-{
-  "baseDrain": 4,
-  "category": "Mods",
-  "compatName": "WARFRAME",
-  "drops": [
-    {
-      "chance": 0.0909,
-      "location": "Earth/Cetus (Level 50 - 70 Cetus Bounty), Rotation C",
-      "rarity": "Rare",
-      "type": "Amar's Hatred"
-    },
-    {
-      "chance": 0.0909,
-      "location": "Venus/Orb Vallis (Level 50 - 70 Orb Vallis Bounty), Rotation C",
-      "rarity": "Rare",
-      "type": "Amar's Hatred"
-    },
-    {
-      "chance": 0.125,
-      "location": "Earth/Cetus (Level 50 - 70 Cetus Bounty), Rotation C",
-      "rarity": "Uncommon",
-      "type": "Amar's Hatred"
-    },
-    {
-      "chance": 0.125,
-      "location": "Venus/Orb Vallis (Level 50 - 70 Orb Vallis Bounty), Rotation C",
-      "rarity": "Uncommon",
-      "type": "Amar's Hatred"
-    },
-    {
-      "chance": 0.1351,
-      "location": "Earth/Cetus (Level 50 - 70 Cetus Bounty), Rotation C",
-      "rarity": "Uncommon",
-      "type": "Amar's Hatred"
-    },
-    {
-      "chance": 0.1351,
-      "location": "Venus/Orb Vallis (Level 50 - 70 Orb Vallis Bounty), Rotation C",
-      "rarity": "Uncommon",
-      "type": "Amar's Hatred"
-    }
-  ],
-  "fusionLimit": 5,
-  "imageName": "amar's-hatred-c1e8cbf38a.jpg",
-  "introduced": {
-    "name": "Update 31.0",
-    "url": "https://wiki.warframe.com/w/Update_31%23Update_31.0",
-    "aliases": [
-      "31",
-      "31.0",
-      "The New War"
-    ],
-    "parent": "31.0",
-    "date": "2021-12-15"
-  },
-  "isAugment": true,
-  "isPrime": false,
-  "levelStats": [
-    {
-      "stats": [
-        "+4% Armor",
-        "+2.5% Ability Strength"
-      ]
-    },
-    {
-      "stats": [
-        "+8% Armor",
-        "+5% Ability Strength"
-      ]
-    },
-    {
-      "stats": [
-        "+13% Armor",
-        "+7.5% Ability Strength"
-      ]
-    },
-    {
-      "stats": [
-        "+17% Armor",
-        "+10% Ability Strength"
-      ]
-    },
-    {
-      "stats": [
-        "+21% Armor",
-        "+12.5% Ability Strength"
-      ]
-    },
-    {
-      "stats": [
-        "+25% Armor",
-        "+15% Ability Strength"
-      ]
-    }
-  ],
-  "masterable": false,
-  "modSet": "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod",
-  "name": "Amar's Hatred",
-  "polarity": "vazarin",
-  "rarity": "Uncommon",
-  "releaseDate": "2021-12-15",
-  "tradable": true,
-  "transmutable": false,
-  "type": "Warframe Mod",
-  "uniqueName": "/Lotus/Upgrades/Mods/Sets/Amar/AmarWarframeMod",
-  "wikiAvailable": true,
-  "wikiaThumbnail": "https://wiki.warframe.com/images/Amar%27sHatredMod.png?92f89",
-  "wikiaUrl": "https://wiki.warframe.com/w/Amar's_Hatred"
-}
-"#;
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/mods_test_1.json"
+        ));
 
         let m: Mod = from_str(json_data).unwrap();
 
@@ -259,24 +152,10 @@ mod tests {
 
     #[test]
     fn test_deserialize_mod_set() {
-        let json_data = r#"
-{
-  "category": "Mods",
-  "imageName": "amarsetmod-c1bb91549f.png",
-  "isPrime": false,
-  "masterable": false,
-  "name": "Amarsetmod",
-  "numUpgradesInSet": 3,
-  "stats": [
-    "Teleport to a target within 10m on using a Heavy Attack.",
-    "Teleport to a target within 20m on using a Heavy Attack.",
-    "Teleport to a target within 30m on using a Heavy Attack."
-  ],
-  "tradable": false,
-  "type": "Mod Set Mod",
-  "uniqueName": "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod"
-}
-"#;
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/mods_test_2.json"
+        ));
 
         let m: Mod = from_str(json_data).unwrap();
 

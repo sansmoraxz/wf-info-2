@@ -40,49 +40,10 @@ mod tests {
 
     #[test]
     fn test_deserialize_long_gun() {
-        let json_data = r#"
-{
-  "Configs": [
-    {
-      "Skins": [
-        "",
-        "",
-        "/Lotus/Upgrades/Skins/HolsterCustomizations/RifleUpperBack"
-      ],
-      "Upgrades": [
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "5bf2b2c1a38e4a0d6a3aaf32",
-        "5bfbd4c93f8d4a31036fc6fd"
-      ]
-    },
-    {
-      "Skins": [
-        "",
-        "",
-        "/Lotus/Upgrades/Skins/HolsterCustomizations/RifleUpperBack"
-      ]
-    },
-    {
-      "Skins": [
-        "",
-        "",
-        "/Lotus/Upgrades/Skins/HolsterCustomizations/RifleUpperBack"
-      ]
-    }
-  ],
-  "ItemId": {
-    "$oid": "5be8327857904a1a1471982f"
-  },
-  "ItemType": "/Lotus/Weapons/Grineer/LongGuns/GrineerSniperRifle/GrnSniperRifle",
-  "UpgradeVer": 101,
-  "XP": 524343
-}
-  "#;
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/inventory_long_gun_test.json"
+        ));
 
         let long_gun: LongGun = from_str(json_data).unwrap();
 

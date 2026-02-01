@@ -92,33 +92,10 @@ mod tests {
 
     #[test]
     fn test_deserialize_resource() {
-        let json_data = r#"
-{
-  "category": "Resources",
-  "description": "Sinewy and metallic, possessed of great elastic strength.\n\nLocation: Cambion Drift (Deimos) from Yellow Mining Lesions, Spitia Infested Cysts, and Rolizor Infested Cysts.",
-  "imageName": "adramalium-03bd190fdb.png",
-  "itemCount": 20,
-  "masterable": false,
-  "name": "Adramalium",
-  "parents": [
-    "Adramal Alloy",
-    "Xaku Kintsu Helmet"
-  ],
-  "patchlogs": [
-    {
-      "name": "Heart of Deimos: Hotfix 29.0.2",
-      "date": "2020-08-26T19:56:10Z",
-      "url": "https://forums.warframe.com/topic/1217239-heart-of-deimos-hotfix-2902/",
-      "additions": "",
-      "changes": "",
-      "fixes": "Fixed Refined Bapholite Blueprint requiring Adramalium instead of raw Bapholite."
-    }
-  ],
-  "tradable": false,
-  "type": "Gem",
-  "uniqueName": "/Lotus/Types/Items/Gems/Deimos/DeimosCommonOreAItem"
-}
-"#;
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/resource_test.json"
+        ));
 
         let rec: Resource = from_str(json_data).unwrap();
 

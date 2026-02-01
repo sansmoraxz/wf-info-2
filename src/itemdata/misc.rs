@@ -257,19 +257,10 @@ mod tests {
 
     #[test]
     fn test_deserialize_misc() {
-        let json_data = r#"
-{
-  "category": "Misc",
-  "description": "A source of anti-entropic radiation ideal for empowering synthetic lifeforms, most notably Archons and Warframes.",
-  "excludeFromCodex": true,
-  "imageName": "shard_blue_simple-tauforged-azure-archon-shard-1daccb8a47.png",
-  "masterable": false,
-  "name": "<Shard_blue_simple> Tauforged Azure Archon Shard",
-  "tradable": false,
-  "type": "Misc",
-  "uniqueName": "/Lotus/Types/Gameplay/NarmerSorties/ArchonCrystalBorealMythic"
-}
-"#;
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/misc_test.json"
+        ));
 
         let rec: Misc = from_str(json_data).unwrap();
 
