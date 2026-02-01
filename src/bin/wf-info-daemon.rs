@@ -1,51 +1,101 @@
-use std::env;
+use clap::{Args, Parser};
+#[cfg(unix)]
+use std::path::PathBuf;
 use tokio::process::Command;
 use tokio::signal;
 
+use wf_info_2::control::{ControlConfig, ControlEndpoint};
 use wf_info_2::*;
+
+/// Warframe Account Info Scanner daemon
+#[derive(Parser, Debug)]
+#[command(name = "wf-info-daemon")]
+#[command(about = "Warframe Account Info Scanner daemon")]
+#[command(after_help = "Examples:\n  \
+    wf-info-daemon -- %command%                        Launch Warframe as child process\n  \
+    wf-info-daemon --tcp 127.0.0.1:9999 -- %command%   With custom API endpoint\n  \
+    wf-info-daemon                                     Monitor existing Warframe process")]
+struct Cli {
+    #[command(flatten)]
+    server: ServerArgs,
+
+    /// Warframe command and arguments to launch as child process.
+    /// Use -- separator before the command.
+    /// If not provided, scans for an existing Warframe process.
+    #[arg(last = true)]
+    warframe_cmd: Vec<String>,
+}
+
+#[derive(Args, Debug, Clone)]
+struct ServerArgs {
+    /// TCP address to listen on
+    #[arg(long, env = "WF_INFO_API_TCP")]
+    tcp: Option<String>,
+
+    /// Unix socket path to listen on
+    #[cfg(unix)]
+    #[arg(long, env = "WF_INFO_API_UNIX")]
+    unix: Option<PathBuf>,
+
+    /// Named pipe name to listen on
+    #[cfg(windows)]
+    #[arg(long, env = "WF_INFO_API_NPIPE")]
+    npipe: Option<String>,
+}
+
+impl ServerArgs {
+    fn into_control_config(self) -> Option<ControlConfig> {
+        let mut endpoints = Vec::new();
+
+        if let Some(addr) = self.tcp {
+            endpoints.push(ControlEndpoint::Tcp(addr));
+        }
+
+        #[cfg(unix)]
+        if let Some(path) = self.unix {
+            endpoints.push(ControlEndpoint::Unix(path));
+        }
+
+        #[cfg(windows)]
+        if let Some(pipe) = self.npipe {
+            endpoints.push(ControlEndpoint::Npipe(pipe));
+        }
+
+        // If no CLI args or env vars provided, use defaults
+        if endpoints.is_empty() {
+            return ControlConfig::from_env();
+        }
+
+        Some(ControlConfig { endpoints })
+    }
+}
 
 #[tokio::main]
 async fn main() {
     env_logger::init();
     log::info!("Warframe Account Info Scanner started");
 
-    let args: Vec<String> = env::args().collect();
+    let cli = Cli::parse();
 
-    let _control_server = match control::start_control_server_from_env().await {
-        Ok(server) => server,
-        Err(e) => {
-            log::error!("Failed to start control API: {}", e);
+    let _control_server = match cli.server.into_control_config() {
+        Some(cfg) => match control::start_control_server(cfg).await {
+            Ok(server) => server,
+            Err(e) => {
+                log::error!("Failed to start control API: {}", e);
+                control::ControlServer::empty()
+            }
+        },
+        None => {
+            log::warn!("No control API endpoints configured");
             control::ControlServer::empty()
         }
     };
 
     // Check if we should launch Warframe as a child process
-    // Format: wf-info-2 -- /path/to/warframe args...
-    let warframe_cmd = if args.len() > 2 && args[1] == "--" {
-        Some(&args[2..])
-    } else if args.len() > 1 && args[1] == "--help" {
-        println!("Usage:");
-        println!(
-            "  {} -- <warframe_command> [args...]   Launch Warframe as child process",
-            args[0]
-        );
-        println!(
-            "  {}                                   Monitor existing Warframe process",
-            args[0]
-        );
-        println!();
-        println!("Example:");
-        println!(
-            "  {} -- /path/to/Warframe.x64.exe -log:Preprocess.log",
-            args[0]
-        );
-        std::process::exit(0);
-    } else if args.len() > 1 {
-        eprintln!("Error: Invalid arguments. Use '--' separator before Warframe command.");
-        eprintln!("Usage: {} -- <warframe_command> [args...]", args[0]);
-        std::process::exit(1);
-    } else {
+    let warframe_cmd = if cli.warframe_cmd.is_empty() {
         None
+    } else {
+        Some(cli.warframe_cmd)
     };
 
     // Find warframe config folder

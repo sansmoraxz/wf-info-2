@@ -1,5 +1,5 @@
-use serde_json::{Value, json};
-use std::env;
+use clap::{Args, Parser, Subcommand};
+use serde_json::{json, Value};
 #[cfg(unix)]
 use std::path::PathBuf;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
@@ -12,6 +12,197 @@ use tokio::net::UnixStream;
 #[cfg(windows)]
 use tokio::net::windows::named_pipe::ClientOptions;
 
+/// CLI client for the wf-info-2 daemon
+#[derive(Parser, Debug)]
+#[command(name = "wf-info-cli")]
+#[command(about = "CLI client for the wf-info-2 daemon")]
+struct Cli {
+    #[command(flatten)]
+    connection: ConnectionArgs,
+
+    /// Pretty-print JSON output
+    #[arg(long, global = true)]
+    pretty: bool,
+
+    /// Request ID to use
+    #[arg(long, global = true)]
+    id: Option<String>,
+
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Args, Debug, Clone)]
+struct ConnectionArgs {
+    /// TCP address to connect to
+    #[arg(long, env = "WF_INFO_API_TCP")]
+    tcp: Option<String>,
+
+    /// Unix socket path
+    #[cfg(unix)]
+    #[arg(long, env = "WF_INFO_API_UNIX")]
+    unix: Option<PathBuf>,
+
+    /// Named pipe name
+    #[cfg(windows)]
+    #[arg(long, env = "WF_INFO_API_NPIPE")]
+    npipe: Option<String>,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum Commands {
+    /// Ping the daemon
+    Ping,
+
+    /// Subscribe to events (streaming mode)
+    Watch(WatchArgs),
+
+    /// Load inventory data
+    #[command(name = "inventory-load")]
+    InventoryLoad(InventoryLoadArgs),
+
+    /// Filter inventory items
+    #[command(name = "inventory-filter")]
+    InventoryFilter(InventoryFilterArgs),
+
+    /// Get inventory metadata
+    #[command(name = "inventory-meta")]
+    InventoryMeta,
+
+    /// Update inventory stale status
+    #[command(name = "inventory-stale")]
+    InventoryStale(InventoryStaleArgs),
+
+    /// Refresh inventory from game
+    #[command(name = "inventory-refresh")]
+    InventoryRefresh(InventoryRefreshArgs),
+
+    /// Trigger a screenshot capture
+    Screenshot(ScreenshotArgs),
+
+    /// Call a generic operation by name
+    Call(CallArgs),
+}
+
+#[derive(Args, Debug, Clone)]
+struct WatchArgs {
+    /// Comma-separated list of events to subscribe to
+    /// (account_login, account_logout, inventory_fetched, inventory_stale, profile_updated, screenshot_triggered)
+    #[arg(long, value_delimiter = ',')]
+    events: Option<Vec<String>>,
+}
+
+#[derive(Args, Debug, Clone)]
+struct InventoryLoadArgs {
+    /// Path to inventory JSON file
+    #[arg(long)]
+    path: Option<String>,
+
+    /// Raw JSON string
+    #[arg(long)]
+    raw: Option<String>,
+
+    /// JSON value to load
+    #[arg(long, value_parser = parse_json_value)]
+    json: Option<Value>,
+
+    /// Save inventory to disk
+    #[arg(long)]
+    save: Option<bool>,
+
+    /// Source identifier
+    #[arg(long)]
+    source: Option<String>,
+}
+
+#[derive(Args, Debug, Clone)]
+struct InventoryFilterArgs {
+    /// Filter by category
+    #[arg(long)]
+    category: Option<String>,
+
+    /// Filter by item type
+    #[arg(long)]
+    item_type: Option<String>,
+
+    /// Filter items containing text
+    #[arg(long)]
+    contains: Option<String>,
+
+    /// Limit number of results
+    #[arg(long)]
+    limit: Option<u64>,
+
+    /// Offset for pagination
+    #[arg(long)]
+    offset: Option<u64>,
+
+    /// Include detailed item information
+    #[arg(long)]
+    include_details: bool,
+
+    /// Path filter
+    #[arg(long)]
+    path: Option<String>,
+}
+
+#[derive(Args, Debug, Clone)]
+struct InventoryStaleArgs {
+    /// Timestamp for stale marker
+    #[arg(long, value_parser = parse_jsonish_clap)]
+    timestamp: Option<Value>,
+
+    /// Reason for marking stale
+    #[arg(long)]
+    reason: Option<String>,
+}
+
+#[derive(Args, Debug, Clone)]
+struct InventoryRefreshArgs {
+    /// Number of scan retries
+    #[arg(long)]
+    scan_retries: Option<u64>,
+
+    /// Delay between scans in milliseconds
+    #[arg(long)]
+    scan_delay_ms: Option<u64>,
+
+    /// Disable saving after refresh
+    #[arg(long)]
+    no_save: bool,
+
+    /// Source identifier
+    #[arg(long)]
+    source: Option<String>,
+
+    /// Deprecated: daemon uses current login
+    #[arg(long, hide = true)]
+    account_id: Option<String>,
+}
+
+#[derive(Args, Debug, Clone)]
+struct ScreenshotArgs {
+    /// Action name for screenshot
+    #[arg(long)]
+    action: Option<String>,
+
+    /// Additional metadata (JSON)
+    #[arg(long, value_parser = parse_jsonish_clap)]
+    metadata: Option<Value>,
+}
+
+#[derive(Args, Debug, Clone)]
+struct CallArgs {
+    /// Operation name to call
+    op: String,
+
+    /// Parameters as JSON
+    #[arg(long, value_parser = parse_jsonish_clap)]
+    params: Option<Value>,
+}
+
+// Internal types for request handling
+
 #[derive(Debug)]
 struct CliConfig {
     tcp_addr: Option<String>,
@@ -20,7 +211,7 @@ struct CliConfig {
     #[cfg(windows)]
     npipe: Option<String>,
     pretty: bool,
-    id: Option<Value>,
+    id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -55,15 +246,282 @@ enum CliMode {
     Watch(WatchConfig),
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let mut args = env::args().skip(1).collect::<Vec<_>>();
-    if args.is_empty() {
-        print_usage();
-        std::process::exit(2);
+// Value parsers for clap
+
+fn parse_jsonish_clap(raw: &str) -> Result<Value, String> {
+    Ok(parse_jsonish(raw))
+}
+
+fn parse_json_value(raw: &str) -> Result<Value, String> {
+    serde_json::from_str(raw).map_err(|e| format!("Invalid JSON: {}", e))
+}
+
+fn parse_jsonish(raw: &str) -> Value {
+    if let Ok(v) = serde_json::from_str(raw) {
+        v
+    } else if let Ok(num) = raw.parse::<i64>() {
+        Value::Number(num.into())
+    } else if let Ok(b) = raw.parse::<bool>() {
+        Value::Bool(b)
+    } else {
+        Value::String(raw.to_string())
+    }
+}
+
+// Conversion implementations
+
+impl ConnectionArgs {
+    fn into_cli_config(self, pretty: bool, id: Option<String>) -> anyhow::Result<CliConfig> {
+        let mut cfg = CliConfig {
+            tcp_addr: self.tcp,
+            #[cfg(unix)]
+            unix_path: self.unix,
+            #[cfg(windows)]
+            npipe: self.npipe,
+            pretty,
+            id,
+        };
+
+        let should_load_defaults = {
+            #[cfg(windows)]
+            {
+                cfg.tcp_addr.is_none() && cfg.npipe.is_none()
+            }
+            #[cfg(unix)]
+            {
+                cfg.tcp_addr.is_none() && cfg.unix_path.is_none()
+            }
+            #[cfg(all(not(unix), not(windows)))]
+            {
+                cfg.tcp_addr.is_none()
+            }
+        };
+
+        if should_load_defaults {
+            if let Some(default_cfg) = ControlConfig::from_env() {
+                for endpoint in default_cfg.endpoints {
+                    match endpoint {
+                        ControlEndpoint::Tcp(addr) if cfg.tcp_addr.is_none() => {
+                            cfg.tcp_addr = Some(addr);
+                        }
+                        #[cfg(unix)]
+                        ControlEndpoint::Unix(path) if cfg.unix_path.is_none() => {
+                            cfg.unix_path = Some(path);
+                        }
+                        #[cfg(windows)]
+                        ControlEndpoint::Npipe(pipe) if cfg.npipe.is_none() => {
+                            cfg.npipe = Some(pipe);
+                        }
+                        _ => {}
+                    }
+                    #[cfg(windows)]
+                    {
+                        if cfg.tcp_addr.is_some() && cfg.npipe.is_some() {
+                            break;
+                        }
+                    }
+                    #[cfg(unix)]
+                    {
+                        if cfg.tcp_addr.is_some() && cfg.unix_path.is_some() {
+                            break;
+                        }
+                    }
+                    #[cfg(all(not(unix), not(windows)))]
+                    {
+                        if cfg.tcp_addr.is_some() {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        let missing_target = {
+            #[cfg(windows)]
+            {
+                cfg.tcp_addr.is_none() && cfg.npipe.is_none()
+            }
+            #[cfg(unix)]
+            {
+                cfg.tcp_addr.is_none() && cfg.unix_path.is_none()
+            }
+            #[cfg(all(not(unix), not(windows)))]
+            {
+                cfg.tcp_addr.is_none()
+            }
+        };
+
+        if missing_target {
+            let missing_msg = if cfg!(windows) {
+                "Missing connection target: set WF_INFO_API_TCP/WF_INFO_API_NPIPE or rely on defaults"
+            } else if cfg!(unix) {
+                "Missing connection target: set WF_INFO_API_TCP/WF_INFO_API_UNIX or rely on defaults"
+            } else {
+                "Missing connection target: set WF_INFO_API_TCP or rely on defaults"
+            };
+            anyhow::bail!(missing_msg);
+        }
+
+        Ok(cfg)
+    }
+}
+
+impl Commands {
+    fn into_cli_mode(self) -> CliMode {
+        match self {
+            Commands::Watch(args) => CliMode::Watch(WatchConfig {
+                events: args.events,
+            }),
+            _ => CliMode::Request(self.into_command()),
+        }
     }
 
-    let (cfg, mode) = parse_args(&mut args)?;
+    fn into_command(self) -> Command {
+        match self {
+            Commands::Ping => Command {
+                op: CliOp::Known(ControlOp::Ping),
+                params: None,
+            },
+            Commands::InventoryLoad(args) => Command {
+                op: CliOp::Known(ControlOp::InventoryLoad),
+                params: Some(args.into_params()),
+            },
+            Commands::InventoryFilter(args) => Command {
+                op: CliOp::Known(ControlOp::InventoryFilter),
+                params: Some(args.into_params()),
+            },
+            Commands::InventoryMeta => Command {
+                op: CliOp::Known(ControlOp::InventoryMetaGet),
+                params: None,
+            },
+            Commands::InventoryStale(args) => Command {
+                op: CliOp::Known(ControlOp::InventoryStaleUpdate),
+                params: Some(args.into_params()),
+            },
+            Commands::InventoryRefresh(args) => Command {
+                op: CliOp::Known(ControlOp::InventoryRefresh),
+                params: Some(args.into_params()),
+            },
+            Commands::Screenshot(args) => Command {
+                op: CliOp::Known(ControlOp::ScreenshotTrigger),
+                params: Some(args.into_params()),
+            },
+            Commands::Call(args) => Command {
+                op: CliOp::Call(args.op),
+                params: Some(args.params.unwrap_or_else(|| json!({}))),
+            },
+            Commands::Watch(_) => unreachable!("Watch handled separately in into_cli_mode"),
+        }
+    }
+}
+
+impl InventoryLoadArgs {
+    fn into_params(self) -> Value {
+        let mut params = json!({});
+        if let Some(v) = self.path {
+            params["path"] = Value::String(v);
+        }
+        if let Some(v) = self.raw {
+            params["raw"] = Value::String(v);
+        }
+        if let Some(v) = self.json {
+            params["json"] = v;
+        }
+        if let Some(v) = self.save {
+            params["save"] = Value::Bool(v);
+        }
+        if let Some(v) = self.source {
+            params["source"] = Value::String(v);
+        }
+        params
+    }
+}
+
+impl InventoryFilterArgs {
+    fn into_params(self) -> Value {
+        let mut params = json!({});
+        if let Some(v) = self.category {
+            params["category"] = Value::String(v);
+        }
+        if let Some(v) = self.item_type {
+            params["item_type"] = Value::String(v);
+        }
+        if let Some(v) = self.contains {
+            params["contains"] = Value::String(v);
+        }
+        if let Some(v) = self.limit {
+            params["limit"] = Value::Number(v.into());
+        }
+        if let Some(v) = self.offset {
+            params["offset"] = Value::Number(v.into());
+        }
+        if self.include_details {
+            params["include_details"] = Value::Bool(true);
+        }
+        if let Some(v) = self.path {
+            params["path"] = Value::String(v);
+        }
+        params
+    }
+}
+
+impl InventoryStaleArgs {
+    fn into_params(self) -> Value {
+        let mut params = json!({});
+        if let Some(v) = self.timestamp {
+            params["timestamp"] = v;
+        }
+        if let Some(v) = self.reason {
+            params["reason"] = Value::String(v);
+        }
+        params
+    }
+}
+
+impl InventoryRefreshArgs {
+    fn into_params(self) -> Value {
+        if self.account_id.is_some() {
+            eprintln!("warning: --account-id no longer needed; daemon uses current login");
+        }
+
+        let mut params = json!({});
+        if let Some(v) = self.scan_retries {
+            params["scan_retries"] = Value::Number(v.into());
+        }
+        if let Some(v) = self.scan_delay_ms {
+            params["scan_delay_ms"] = Value::Number(v.into());
+        }
+        if self.no_save {
+            params["save"] = Value::Bool(false);
+        }
+        if let Some(v) = self.source {
+            params["source"] = Value::String(v);
+        }
+        params
+    }
+}
+
+impl ScreenshotArgs {
+    fn into_params(self) -> Value {
+        let mut params = json!({});
+        if let Some(v) = self.action {
+            params["action"] = Value::String(v);
+        }
+        if let Some(v) = self.metadata {
+            params["metadata"] = v;
+        }
+        params
+    }
+}
+
+// Main
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let cli = Cli::parse();
+
+    let cfg = cli.connection.into_cli_config(cli.pretty, cli.id)?;
+    let mode = cli.command.into_cli_mode();
 
     match mode {
         CliMode::Request(cmd) => {
@@ -84,418 +542,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn parse_args(args: &mut Vec<String>) -> anyhow::Result<(CliConfig, CliMode)> {
-    let mut cfg = CliConfig {
-        tcp_addr: None,
-        #[cfg(unix)]
-        unix_path: None,
-        #[cfg(windows)]
-        npipe: None,
-        pretty: false,
-        id: None,
-    };
-
-    let mut idx = 0;
-    while idx < args.len() {
-        match args[idx].as_str() {
-            "--tcp" => {
-                idx += 1;
-                cfg.tcp_addr = args.get(idx).cloned();
-            }
-            #[cfg(unix)]
-            "--unix" => {
-                idx += 1;
-                cfg.unix_path = args.get(idx).map(|v| PathBuf::from(v));
-            }
-            #[cfg(windows)]
-            "--npipe" => {
-                idx += 1;
-                cfg.npipe = args.get(idx).cloned();
-            }
-            "--pretty" => {
-                cfg.pretty = true;
-            }
-            "--id" => {
-                idx += 1;
-                if let Some(raw) = args.get(idx) {
-                    cfg.id = Some(parse_jsonish(raw));
-                }
-            }
-            "--help" | "-h" => {
-                print_usage();
-                std::process::exit(0);
-            }
-            _ => break,
-        }
-        idx += 1;
-    }
-
-    let cmd_args = args[idx..].to_vec();
-    if cmd_args.is_empty() {
-        print_usage();
-        std::process::exit(2);
-    }
-
-    let mode = parse_mode(cmd_args)?;
-
-    let should_load_defaults = {
-        #[cfg(windows)]
-        {
-            cfg.tcp_addr.is_none() && cfg.npipe.is_none()
-        }
-        #[cfg(unix)]
-        {
-            cfg.tcp_addr.is_none() && cfg.unix_path.is_none()
-        }
-        #[cfg(all(not(unix), not(windows)))]
-        {
-            cfg.tcp_addr.is_none()
-        }
-    };
-
-    if should_load_defaults {
-        if let Some(default_cfg) = ControlConfig::from_env() {
-            for endpoint in default_cfg.endpoints {
-                match endpoint {
-                    ControlEndpoint::Tcp(addr) if cfg.tcp_addr.is_none() => {
-                        cfg.tcp_addr = Some(addr);
-                    }
-                    #[cfg(unix)]
-                    ControlEndpoint::Unix(path) if cfg.unix_path.is_none() => {
-                        cfg.unix_path = Some(path);
-                    }
-                    #[cfg(windows)]
-                    ControlEndpoint::Npipe(pipe) if cfg.npipe.is_none() => {
-                        cfg.npipe = Some(pipe);
-                    }
-                    _ => {}
-                }
-                #[cfg(windows)]
-                {
-                    if cfg.tcp_addr.is_some() && cfg.npipe.is_some() {
-                        break;
-                    }
-                }
-                #[cfg(unix)]
-                {
-                    if cfg.tcp_addr.is_some() && cfg.unix_path.is_some() {
-                        break;
-                    }
-                }
-                #[cfg(all(not(unix), not(windows)))]
-                {
-                    if cfg.tcp_addr.is_some() {
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    let missing_target = {
-        #[cfg(windows)]
-        {
-            cfg.tcp_addr.is_none() && cfg.npipe.is_none()
-        }
-        #[cfg(unix)]
-        {
-            cfg.tcp_addr.is_none() && cfg.unix_path.is_none()
-        }
-        #[cfg(all(not(unix), not(windows)))]
-        {
-            cfg.tcp_addr.is_none()
-        }
-    };
-
-    if missing_target {
-        let missing_msg = if cfg!(windows) {
-            "Missing connection target: set WF_INFO_API_TCP/WF_INFO_API_NPIPE or rely on defaults"
-        } else if cfg!(unix) {
-            "Missing connection target: set WF_INFO_API_TCP/WF_INFO_API_UNIX or rely on defaults"
-        } else {
-            "Missing connection target: set WF_INFO_API_TCP or rely on defaults"
-        };
-        anyhow::bail!(missing_msg);
-    }
-
-    Ok((cfg, mode))
-}
-
-fn parse_mode(args: Vec<String>) -> anyhow::Result<CliMode> {
-    if args.first().map(|s| s.as_str()) == Some("watch") {
-        let mut events = None;
-        let rest: Vec<_> = args.into_iter().skip(1).collect();
-        let mut idx = 0;
-        while idx < rest.len() {
-            match rest[idx].as_str() {
-                "--events" => {
-                    idx += 1;
-                    if let Some(v) = rest.get(idx) {
-                        events = Some(v.split(',').map(|s| s.trim().to_string()).collect());
-                    }
-                }
-                _ => {}
-            }
-            idx += 1;
-        }
-        Ok(CliMode::Watch(WatchConfig { events }))
-    } else {
-        Ok(CliMode::Request(parse_command(args)?))
-    }
-}
-
-fn parse_command(args: Vec<String>) -> anyhow::Result<Command> {
-    let mut iter = args.into_iter();
-    let cmd = iter.next().unwrap();
-    let mut params = json!({});
-
-    match cmd.as_str() {
-        "ping" => Ok(Command {
-            op: CliOp::Known(ControlOp::Ping),
-            params: None,
-        }),
-        "inventory-load" => {
-            let mut path = None;
-            let mut raw = None;
-            let mut json_value = None;
-            let mut save = None;
-            let mut source = None;
-
-            let rest = iter.collect::<Vec<_>>();
-            let mut idx = 0;
-            while idx < rest.len() {
-                match rest[idx].as_str() {
-                    "--path" => {
-                        idx += 1;
-                        path = rest.get(idx).cloned();
-                    }
-                    "--raw" => {
-                        idx += 1;
-                        raw = rest.get(idx).cloned();
-                    }
-                    "--json" => {
-                        idx += 1;
-                        json_value = rest.get(idx).map(|v| parse_jsonish(v));
-                    }
-                    "--save" => {
-                        idx += 1;
-                        save = rest.get(idx).and_then(|v| v.parse::<bool>().ok());
-                    }
-                    "--source" => {
-                        idx += 1;
-                        source = rest.get(idx).cloned();
-                    }
-                    _ => {}
-                }
-                idx += 1;
-            }
-
-            if let Some(v) = path {
-                params["path"] = Value::String(v);
-            }
-            if let Some(v) = raw {
-                params["raw"] = Value::String(v);
-            }
-            if let Some(v) = json_value {
-                params["json"] = v;
-            }
-            if let Some(v) = save {
-                params["save"] = Value::Bool(v);
-            }
-            if let Some(v) = source {
-                params["source"] = Value::String(v);
-            }
-
-            Ok(Command {
-                op: CliOp::Known(ControlOp::InventoryLoad),
-                params: Some(params),
-            })
-        }
-        "inventory-filter" => {
-            let rest = iter.collect::<Vec<_>>();
-            let mut idx = 0;
-            while idx < rest.len() {
-                match rest[idx].as_str() {
-                    "--category" => {
-                        idx += 1;
-                        if let Some(v) = rest.get(idx) {
-                            params["category"] = Value::String(v.to_string());
-                        }
-                    }
-                    "--item-type" => {
-                        idx += 1;
-                        if let Some(v) = rest.get(idx) {
-                            params["item_type"] = Value::String(v.to_string());
-                        }
-                    }
-                    "--contains" => {
-                        idx += 1;
-                        if let Some(v) = rest.get(idx) {
-                            params["contains"] = Value::String(v.to_string());
-                        }
-                    }
-                    "--limit" => {
-                        idx += 1;
-                        if let Some(v) = rest.get(idx) {
-                            if let Ok(n) = v.parse::<u64>() {
-                                params["limit"] = Value::Number(n.into());
-                            }
-                        }
-                    }
-                    "--offset" => {
-                        idx += 1;
-                        if let Some(v) = rest.get(idx) {
-                            if let Ok(n) = v.parse::<u64>() {
-                                params["offset"] = Value::Number(n.into());
-                            }
-                        }
-                    }
-                    "--include-details" => {
-                        params["include_details"] = Value::Bool(true);
-                    }
-                    "--path" => {
-                        idx += 1;
-                        if let Some(v) = rest.get(idx) {
-                            params["path"] = Value::String(v.to_string());
-                        }
-                    }
-                    _ => {}
-                }
-                idx += 1;
-            }
-
-            Ok(Command {
-                op: CliOp::Known(ControlOp::InventoryFilter),
-                params: Some(params),
-            })
-        }
-        "inventory-meta" => Ok(Command {
-            op: CliOp::Known(ControlOp::InventoryMetaGet),
-            params: None,
-        }),
-        "inventory-stale" => {
-            let rest = iter.collect::<Vec<_>>();
-            let mut idx = 0;
-            while idx < rest.len() {
-                match rest[idx].as_str() {
-                    "--timestamp" => {
-                        idx += 1;
-                        if let Some(v) = rest.get(idx) {
-                            params["timestamp"] = parse_jsonish(v);
-                        }
-                    }
-                    "--reason" => {
-                        idx += 1;
-                        if let Some(v) = rest.get(idx) {
-                            params["reason"] = Value::String(v.to_string());
-                        }
-                    }
-                    _ => {}
-                }
-                idx += 1;
-            }
-            Ok(Command {
-                op: CliOp::Known(ControlOp::InventoryStaleUpdate),
-                params: Some(params),
-            })
-        }
-        "inventory-refresh" => {
-            let rest = iter.collect::<Vec<_>>();
-            let mut idx = 0;
-            while idx < rest.len() {
-                match rest[idx].as_str() {
-                    "--scan-retries" => {
-                        idx += 1;
-                        if let Some(v) = rest.get(idx) {
-                            if let Ok(n) = v.parse::<u64>() {
-                                params["scan_retries"] = Value::Number(n.into());
-                            }
-                        }
-                    }
-                    "--scan-delay-ms" => {
-                        idx += 1;
-                        if let Some(v) = rest.get(idx) {
-                            if let Ok(n) = v.parse::<u64>() {
-                                params["scan_delay_ms"] = Value::Number(n.into());
-                            }
-                        }
-                    }
-                    "--no-save" => {
-                        params["save"] = Value::Bool(false);
-                    }
-                    "--source" => {
-                        idx += 1;
-                        if let Some(v) = rest.get(idx) {
-                            params["source"] = Value::String(v.to_string());
-                        }
-                    }
-                    flag if flag.starts_with("--account") => {
-                        eprintln!(
-                            "warning: --account-id no longer needed; daemon uses current login"
-                        );
-                    }
-                    _ => {}
-                }
-                idx += 1;
-            }
-            Ok(Command {
-                op: CliOp::Known(ControlOp::InventoryRefresh),
-                params: Some(params),
-            })
-        }
-        "screenshot" => {
-            let rest = iter.collect::<Vec<_>>();
-            let mut idx = 0;
-            while idx < rest.len() {
-                match rest[idx].as_str() {
-                    "--action" => {
-                        idx += 1;
-                        if let Some(v) = rest.get(idx) {
-                            params["action"] = Value::String(v.to_string());
-                        }
-                    }
-                    "--metadata" => {
-                        idx += 1;
-                        if let Some(v) = rest.get(idx) {
-                            params["metadata"] = parse_jsonish(v);
-                        }
-                    }
-                    _ => {}
-                }
-                idx += 1;
-            }
-            Ok(Command {
-                op: CliOp::Known(ControlOp::ScreenshotTrigger),
-                params: Some(params),
-            })
-        }
-        "call" => {
-            let op = iter
-                .next()
-                .ok_or_else(|| anyhow::anyhow!("call requires op name"))?;
-            let rest = iter.collect::<Vec<_>>();
-            let mut idx = 0;
-            while idx < rest.len() {
-                match rest[idx].as_str() {
-                    "--params" => {
-                        idx += 1;
-                        if let Some(v) = rest.get(idx) {
-                            params = parse_jsonish(v);
-                        }
-                    }
-                    _ => {}
-                }
-                idx += 1;
-            }
-
-            Ok(Command {
-                op: CliOp::Call(op),
-                params: Some(params),
-            })
-        }
-        _ => anyhow::bail!("Unknown command '{}'", cmd),
-    }
-}
+// Network functions
 
 async fn send_request(cfg: &CliConfig, cmd: Command) -> anyhow::Result<String> {
     let request = json!({
@@ -632,54 +679,6 @@ where
     }
 
     Ok(())
-}
-
-fn parse_jsonish(raw: &str) -> Value {
-    if let Ok(v) = serde_json::from_str(raw) {
-        v
-    } else if let Ok(num) = raw.parse::<i64>() {
-        Value::Number(num.into())
-    } else if let Ok(b) = raw.parse::<bool>() {
-        Value::Bool(b)
-    } else {
-        Value::String(raw.to_string())
-    }
-}
-
-fn print_usage() {
-    let unix_flag = if cfg!(unix) { " | --unix PATH" } else { "" };
-    let npipe_flag = if cfg!(windows) { " | --npipe NAME" } else { "" };
-    let unix_env = if cfg!(unix) {
-        " / WF_INFO_API_UNIX"
-    } else {
-        ""
-    };
-    let npipe_env = if cfg!(windows) {
-        " / WF_INFO_API_NPIPE"
-    } else {
-        ""
-    };
-    eprintln!(
-        "Usage: wf-info-cli [--tcp ADDR{unix_flag}{npipe_flag}] [--pretty] [--id ID] <command> [options]\n\
-Commands:\n\
-  ping\n\
-  watch [--events EVENT1,EVENT2,...]\n\
-  inventory-load --path PATH | --raw JSON | --json JSON [--save true|false] [--source NAME]\n\
-  inventory-filter [--category NAME] [--item-type TYPE] [--contains TEXT] [--limit N] [--offset N] [--include-details] [--path PATH]\n\
-  inventory-meta\n\
-  inventory-stale [--timestamp TS] [--reason TEXT]\n\
-  inventory-refresh [--scan-retries N] [--scan-delay-ms N] [--no-save] [--source NAME]\n\
-  screenshot [--action NAME] [--metadata JSON]\n\
-  call OP [--params JSON]\n\
-\n\
-Event types: account_login, account_logout, inventory_fetched, inventory_stale, profile_updated, screenshot_triggered\n\
-\n\
-Connection defaults to WF_INFO_API_TCP{unix_env}{npipe_env} or the built-in platform default if flags are omitted.",
-        unix_flag = unix_flag,
-        npipe_flag = npipe_flag,
-        unix_env = unix_env,
-        npipe_env = npipe_env,
-    );
 }
 
 #[cfg(windows)]

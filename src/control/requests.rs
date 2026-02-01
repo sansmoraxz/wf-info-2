@@ -12,14 +12,14 @@ use super::subscription::{self, EventFilter};
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
-    pub id: Option<Value>,
+    pub id: Option<String>,
     pub op: String,
     pub params: Option<Value>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct Response {
-    pub id: Option<Value>,
+    pub id: Option<String>,
     pub ok: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<Value>,
@@ -28,7 +28,7 @@ pub struct Response {
 }
 
 impl Response {
-    fn ok(id: Option<Value>, data: Value) -> Self {
+    fn ok(id: Option<String>, data: Value) -> Self {
         Self {
             id,
             ok: true,
@@ -37,7 +37,7 @@ impl Response {
         }
     }
 
-    fn error(id: Option<Value>, message: String) -> Self {
+    fn error(id: Option<String>, message: String) -> Self {
         Self {
             id,
             ok: false,
