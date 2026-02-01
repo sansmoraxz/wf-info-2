@@ -3,6 +3,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 
 use anyhow::{Context, Result};
+use base64::Engine;
 use chrono::{DateTime, Utc};
 use rand::random;
 use serde::Deserialize;
@@ -15,9 +16,52 @@ use super::broadcaster;
 use super::events::{DaemonEvent, ScreenshotTriggeredEvent};
 use super::utils::parse_params;
 
+#[cfg(unix)]
+async fn capture_screen() -> Result<(String, String)> {
+    use ashpd::desktop::screenshot::Screenshot;
+
+    let response = Screenshot::request()
+        .interactive(false)
+        .modal(false)
+        .send()
+        .await
+        .context("Failed to request screenshot")?
+        .response()
+        .context("Screenshot request failed")?;
+
+    let path = response
+        .uri()
+        .to_file_path()
+        .map_err(|_| anyhow::anyhow!("Invalid screenshot URI"))?;
+    let png_bytes = fs::read(&path).context("Failed to read screenshot file")?;
+
+    let base64_content = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
+    Ok((base64_content, "image/png".to_string()))
+}
+
+#[cfg(windows)]
+async fn capture_screen() -> Result<(String, String)> {
+    use image::{ImageBuffer, Rgb};
+    use win_screenshot::prelude::*;
+
+    let buf = capture_display().context("Failed to capture display")?;
+
+    let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
+        ImageBuffer::from_raw(buf.width as u32, buf.height as u32, buf.pixels)
+            .context("Failed to create image buffer")?;
+
+    let mut png_bytes = Vec::new();
+    img.write_to(
+        &mut std::io::Cursor::new(&mut png_bytes),
+        image::ImageFormat::Png,
+    )?;
+
+    let base64_content = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
+    Ok((base64_content, "image/png".to_string()))
+}
+
 #[derive(Debug, Deserialize, Default)]
 pub(crate) struct ScreenshotParams {
-    pub action: Option<String>,
     pub metadata: Option<Value>,
 }
 
@@ -25,32 +69,33 @@ pub(crate) struct ScreenshotParams {
 pub(crate) struct ScreenshotEvent {
     pub id: String,
     pub timestamp: DateTime<Utc>,
-    pub action: Option<String>,
     pub metadata: Option<Value>,
 }
 
-pub(crate) fn handle_screenshot_trigger(params: Option<Value>) -> Result<Value> {
+pub(crate) async fn handle_screenshot_trigger(params: Option<Value>) -> Result<Value> {
     let params: ScreenshotParams = parse_params(params)?;
-    let event = record_screenshot_event(params.action.clone(), params.metadata)?;
+    let event = record_screenshot_event(params.metadata)?;
 
-    // Emit screenshot triggered event
+    // Capture screenshot
+    let (content, content_type) = capture_screen().await?;
+
+    // Emit screenshot triggered event with content
     broadcaster::emit(DaemonEvent::ScreenshotTriggered(ScreenshotTriggeredEvent {
         timestamp: event.timestamp,
         event_id: event.id.clone(),
-        action: params.action,
+        content,
+        content_type,
     }));
 
     Ok(serde_json::to_value(event).context("Failed to serialize screenshot event")?)
 }
 
 fn record_screenshot_event(
-    action: Option<String>,
     metadata: Option<Value>,
 ) -> Result<ScreenshotEvent> {
     let event = ScreenshotEvent {
         id: format!("{}-{}", Utc::now().timestamp_millis(), random::<u32>()),
         timestamp: Utc::now(),
-        action,
         metadata,
     };
 

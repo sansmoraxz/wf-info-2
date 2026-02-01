@@ -87,7 +87,7 @@ async fn handle_request(req: Request) -> HandleResult {
         Ok(ControlOp::InventoryFilter) => handle_inventory_filter(req.params).await,
         Ok(ControlOp::InventoryMetaGet) => handle_inventory_meta_get(),
         Ok(ControlOp::InventoryStaleUpdate) => handle_inventory_stale_update(req.params),
-        Ok(ControlOp::ScreenshotTrigger) => handle_screenshot_trigger(req.params),
+        Ok(ControlOp::ScreenshotTrigger) => handle_screenshot_trigger(req.params).await,
         Ok(ControlOp::InventoryRefresh) => handle_inventory_refresh(req.params).await,
         Ok(ControlOp::Subscribe) => unreachable!(), // Handled above
         Err(e) => Err(e),
