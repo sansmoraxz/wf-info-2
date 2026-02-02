@@ -228,7 +228,7 @@ mod tests {
     fn test_deserialize_raw_mod() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/mods_test_1.json"
+            "/testdata/itemdata/mods_test_1.json"
         ));
 
         let m: Mod = from_str(json_data).unwrap();
@@ -247,7 +247,7 @@ mod tests {
     fn test_deserialize_mod_set() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/mods_test_2.json"
+            "/testdata/itemdata/mods_test_2.json"
         ));
 
         let m: Mod = from_str(json_data).unwrap();

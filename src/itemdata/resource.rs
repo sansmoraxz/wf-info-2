@@ -125,7 +125,7 @@ mod tests {
     fn test_deserialize_resource() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/resource_test.json"
+            "/testdata/itemdata/resource_test.json"
         ));
 
         let rec: Resource = from_str(json_data).unwrap();

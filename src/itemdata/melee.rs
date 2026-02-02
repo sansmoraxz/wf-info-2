@@ -285,7 +285,7 @@ mod tests {
     fn test_deserialize_archmelee() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/melee_test.json"
+            "/testdata/itemdata/melee_test.json"
         ));
 
         let rec: Melee = from_str(json_data).unwrap();

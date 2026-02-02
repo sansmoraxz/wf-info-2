@@ -1,0 +1,69 @@
+{
+  "ItemType": "/Lotus/Weapons/Tenno/Melee/Swords/HeatSword/HeatLongSword",
+  "Configs": [
+    {
+      "Skins": [
+        "",
+        "",
+        "5bc1e15ea38e4a657c7c5b88"
+      ],
+      "pricol": {
+        "t0": -12709852,
+        "t1": -3050458,
+        "t2": -12631221,
+        "t3": -6009570,
+        "m0": -30454,
+        "m1": -30454,
+        "en": -30454
+      },
+      "attcol": {
+        "t0": -12709852,
+        "t1": -3050458,
+        "t2": -12631221,
+        "t3": -6009570,
+        "en": -30454
+      },
+      "Upgrades": [
+        "",
+        "61545a56aefaa36dcf46aed5",
+        "",
+        "5fb6d88efecd9c72bf1fdbe0",
+        "5fb6d7dc4322bd521b732e40",
+        "5c1e4f6aa38e4a6d736772e0",
+        "61504f0c9e4af526560395cb",
+        "5be873b357904ab85104e164",
+        "5df37ada3f8d4aa82048b45d"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/SwordUpperBack"
+      ],
+      "pricol": {
+        "t0": -10399439,
+        "t1": -1253968,
+        "t2": -13422030,
+        "t3": -1260454,
+        "m0": -40703,
+        "m1": -40703,
+        "en": -32000
+      }
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/SwordUpperBack"
+      ]
+    }
+  ],
+  "UpgradeVer": 101,
+  "XP": 4940862,
+  "Features": 1,
+  "FocusLens": "/Lotus/Upgrades/Focus/TacticLensGreater",
+  "ItemId": {
+    "$oid": "5bc2e4053f8d4a8e6e177369"
+  }
+}

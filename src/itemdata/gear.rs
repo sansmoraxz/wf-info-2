@@ -123,7 +123,7 @@ mod tests {
     fn test_deserialize_gear() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/gear_test.json"
+            "/testdata/itemdata/gear_test.json"
         ));
 
         let rec: Gear = from_str(json_data).unwrap();

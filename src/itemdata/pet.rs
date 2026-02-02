@@ -178,7 +178,7 @@ mod tests {
     fn test_deserialize_pet() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/pet_test.json"
+            "/testdata/itemdata/pet_test.json"
         ));
 
         let rec: Pet = from_str(json_data).unwrap();

@@ -42,7 +42,7 @@ mod tests {
     fn test_deserialize_pistol() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/inventory_pistol_test.json"
+            "/testdata/inventory/inventory_pistol_test.json"
         ));
 
         let pistol: Pistol = from_str(json_data).unwrap();

@@ -1,0 +1,41 @@
+{
+  "ItemType": "/Lotus/Weapons/Tenno/Archwing/Melee/GrnArchHand/GrnArchHandWeapon",
+  "Configs": [
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/Archwing/MeleeDefault"
+      ],
+      "Upgrades": [
+        "6130509a71c13c29032f073b",
+        "",
+        "",
+        "/Lotus/Upgrades/Mods/Archwing/Melee/ArchwingMeleeFireRateMod",
+        "",
+        "",
+        "62a480df53ff9d73c80abaf9",
+        "5bf97e4757904aa99a66e23f"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/Archwing/MeleeDefault"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/Archwing/MeleeDefault"
+      ]
+    }
+  ],
+  "UpgradeVer": 101,
+  "XP": 561680,
+  "ItemId": {
+    "$oid": "612b16d13fa21959e627cae2"
+  }
+}

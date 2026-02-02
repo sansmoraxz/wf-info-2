@@ -1,0 +1,64 @@
+{
+  "ItemType": "/Lotus/Powersuits/Archwing/SupportJetPack/SupportJetPack",
+  "Configs": [
+    {
+      "Skins": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Archwing/SupportDefaultArchwingSkin"
+      ],
+      "Upgrades": [
+        "60dc4c8cf5048f68aa720177",
+        "",
+        "",
+        "5be9e886a38e4a0d79778c69",
+        "",
+        "5beb41bea38e4a4a163683b1",
+        "60dc4d61a653fe0ded794697",
+        "5bc1ffb6a38e4a36b339f21e"
+      ],
+      "pricol": {
+        "t0": -5647131,
+        "t1": -13946282,
+        "t2": -14868958,
+        "t3": -4312710,
+        "m0": -11286148,
+        "en": -10376566
+      }
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Archwing/SupportDefaultArchwingSkin"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Archwing/SupportDefaultArchwingSkin"
+      ]
+    }
+  ],
+  "UpgradeVer": 101,
+  "XP": 4376023,
+  "ItemId": {
+    "$oid": "5c249f8fa38e4a97da6932d9"
+  }
+}

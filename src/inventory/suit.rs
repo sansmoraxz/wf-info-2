@@ -61,10 +61,10 @@ mod test {
     use serde_json::from_str;
 
     #[test]
-    fn test_deserialize_inventory_suite() {
+    fn test_deserialize_inventory_suit() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/inventory_suit_test.json"
+            "/testdata/inventory/inventory_suit_test.json"
         ));
 
         let suit: Suit = from_str(json_data).unwrap();

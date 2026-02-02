@@ -218,7 +218,7 @@ mod tests {
     fn test_deserialize_archwing() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/archwing_test.json"
+            "/testdata/itemdata/archwing_test.json"
         ));
 
         let rec: Archwing = from_str(json_data).unwrap();

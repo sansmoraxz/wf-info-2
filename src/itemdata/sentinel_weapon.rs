@@ -289,7 +289,7 @@ mod tests {
     fn test_deserialize_sentinel_weapon() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/sentinel_weapon_test.json"
+            "/testdata/itemdata/sentinel_weapon_test.json"
         ));
 
         let rec: SentinelWeapon = from_str(json_data).unwrap();

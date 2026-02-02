@@ -96,7 +96,7 @@ mod tests {
     fn test_deserialize_arcane() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/arcane_test.json"
+            "/testdata/itemdata/arcane_test.json"
         ));
 
         let rec: Arcane = from_str(json_data).unwrap();

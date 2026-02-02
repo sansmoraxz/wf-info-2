@@ -32,3 +32,22 @@ pub struct SpaceSuit {
     #[serde(flatten)]
     pub other: Option<Value>,
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use serde_json::from_str;
+
+    #[test]
+    fn test_deserialize_inventory_space_suit() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/inventory/inventory_space_suit_test.json"
+        ));
+
+        let space_suit: SpaceSuit = from_str(json_data).unwrap();
+
+        assert_eq!(space_suit.item_type, "/Lotus/Powersuits/Archwing/SupportJetPack/SupportJetPack");
+        assert_eq!(space_suit.xp.unwrap(), 4376023);
+    }
+}

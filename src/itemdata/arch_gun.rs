@@ -258,7 +258,7 @@ mod tests {
     fn test_deserialize_archgun() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/arch_gun_test.json"
+            "/testdata/itemdata/arch_gun_test.json"
         ));
 
         let rec: ArchGun = from_str(json_data).unwrap();

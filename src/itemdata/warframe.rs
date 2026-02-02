@@ -238,7 +238,7 @@ mod tests {
     fn test_deserialize_warframe() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/warframe_test.json"
+            "/testdata/itemdata/warframe_test.json"
         ));
 
         let rec: Warframe = from_str(json_data).unwrap();
