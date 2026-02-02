@@ -281,7 +281,7 @@ mod tests {
     fn test_deserialize_misc() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/misc_test.json"
+            "/testdata/itemdata/misc_test.json"
         ));
 
         let rec: Misc = from_str(json_data).unwrap();

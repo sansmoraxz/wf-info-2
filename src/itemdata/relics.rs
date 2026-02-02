@@ -87,7 +87,7 @@ mod tests {
     fn test_deserialize_relic() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/relics_test.json"
+            "/testdata/itemdata/relics_test.json"
         ));
 
         let rec: Relic = from_str(json_data).unwrap();

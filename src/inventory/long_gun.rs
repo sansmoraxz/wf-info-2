@@ -42,7 +42,7 @@ mod tests {
     fn test_deserialize_long_gun() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/inventory_long_gun_test.json"
+            "/testdata/inventory/inventory_long_gun_test.json"
         ));
 
         let long_gun: LongGun = from_str(json_data).unwrap();

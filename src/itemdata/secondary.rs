@@ -274,7 +274,7 @@ mod tests {
     fn test_deserialize_primary() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/secondary_test.json"
+            "/testdata/itemdata/secondary_test.json"
         ));
 
         let rec: Secondary = from_str(json_data).unwrap();

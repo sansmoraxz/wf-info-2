@@ -1,0 +1,42 @@
+{
+  "ItemType": "/Lotus/Weapons/Tenno/Archwing/Primary/FoldingMachineGun/ArchMachineGun",
+  "Configs": [
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/Archwing/RifleDefault"
+      ],
+      "Upgrades": [
+        "5beb41fc3f8d4a7cf373c60f",
+        "646f0bcbfffcd312f10a61e5",
+        "62813a31131a5340df0fe7f9",
+        "",
+        "",
+        "60df63ee1bf9904ccc1a4121",
+        "60dc4bb39b1679485a47d26f",
+        "5be9e801a38e4a0d067a7e56"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/Archwing/RifleDefault"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/Archwing/RifleDefault"
+      ]
+    }
+  ],
+  "UpgradeVer": 101,
+  "XP": 2284379,
+  "Features": 5,
+  "ItemId": {
+    "$oid": "5bc1e5e957904a4c431ff1e2"
+  }
+}

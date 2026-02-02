@@ -125,7 +125,7 @@ pub mod tests {
     pub fn load_test_inventory() -> Inventory {
         let inventory_str = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/testdata/sample_inventory.json"
+            "/testdata/inventory/sample_inventory.json"
         ));
         from_str(inventory_str).unwrap()
     }
