@@ -238,6 +238,81 @@ impl Disposition {
     }
 }
 
+/// Mod category classification.
+///
+/// This is a computed enum derived from mod field presence.
+/// Mods can be categorized as:
+/// - Riven: has challenge/upgrade data for unveiling
+/// - SetMember: belongs to a mod set (has modSet reference)
+/// - SetDefinition: defines a mod set's bonuses (has numUpgradesInSet)
+/// - Regular: standard mod with level stats
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub enum ModCategory {
+    /// Riven mod with unveiling challenges
+    Riven,
+    /// Member of a mod set (references a set definition)
+    SetMember {
+        /// Reference to the set definition's unique name
+        mod_set: String,
+    },
+    /// Mod set definition (describes set bonuses)
+    SetDefinition {
+        /// Number of mods in the set
+        num_upgrades_in_set: i64,
+    },
+    /// Regular mod with level-based stats
+    #[default]
+    Regular,
+}
+
+impl ModCategory {
+    /// Check if this is a Riven mod
+    pub fn is_riven(&self) -> bool {
+        matches!(self, ModCategory::Riven)
+    }
+
+    /// Check if this is part of a set (either member or definition)
+    pub fn is_set(&self) -> bool {
+        matches!(
+            self,
+            ModCategory::SetMember { .. } | ModCategory::SetDefinition { .. }
+        )
+    }
+
+    /// Check if this is a set member
+    pub fn is_set_member(&self) -> bool {
+        matches!(self, ModCategory::SetMember { .. })
+    }
+
+    /// Check if this is a set definition
+    pub fn is_set_definition(&self) -> bool {
+        matches!(self, ModCategory::SetDefinition { .. })
+    }
+
+    /// Check if this is a regular mod
+    pub fn is_regular(&self) -> bool {
+        matches!(self, ModCategory::Regular)
+    }
+
+    /// Get the mod set reference if this is a set member
+    pub fn mod_set(&self) -> Option<&str> {
+        match self {
+            ModCategory::SetMember { mod_set } => Some(mod_set),
+            _ => None,
+        }
+    }
+
+    /// Get the number of upgrades if this is a set definition
+    pub fn num_upgrades_in_set(&self) -> Option<i64> {
+        match self {
+            ModCategory::SetDefinition {
+                num_upgrades_in_set,
+            } => Some(*num_upgrades_in_set),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,5 +390,50 @@ mod tests {
         assert!(!status.is_vaulted());
         assert!(status.is_accessible());
         assert_eq!(status.estimated_vault_date(), Some("2023-03-14"));
+    }
+
+    #[test]
+    fn test_mod_category_regular() {
+        let cat = ModCategory::Regular;
+        assert!(cat.is_regular());
+        assert!(!cat.is_riven());
+        assert!(!cat.is_set());
+        assert!(cat.mod_set().is_none());
+        assert!(cat.num_upgrades_in_set().is_none());
+    }
+
+    #[test]
+    fn test_mod_category_riven() {
+        let cat = ModCategory::Riven;
+        assert!(cat.is_riven());
+        assert!(!cat.is_regular());
+        assert!(!cat.is_set());
+    }
+
+    #[test]
+    fn test_mod_category_set_member() {
+        let cat = ModCategory::SetMember {
+            mod_set: "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod".to_string(),
+        };
+        assert!(cat.is_set());
+        assert!(cat.is_set_member());
+        assert!(!cat.is_set_definition());
+        assert!(!cat.is_regular());
+        assert_eq!(
+            cat.mod_set(),
+            Some("/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod")
+        );
+    }
+
+    #[test]
+    fn test_mod_category_set_definition() {
+        let cat = ModCategory::SetDefinition {
+            num_upgrades_in_set: 3,
+        };
+        assert!(cat.is_set());
+        assert!(cat.is_set_definition());
+        assert!(!cat.is_set_member());
+        assert!(!cat.is_regular());
+        assert_eq!(cat.num_upgrades_in_set(), Some(3));
     }
 }

@@ -6,6 +6,7 @@ use crate::itemdata::common::{Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{Noise, Polarity, Trigger};
+use crate::itemdata::props::WeaponTypeStats;
 use crate::itemdata::traits::{Buildable, Equippable, Item, Prime, Weapon, WikiaLinked};
 use crate::itemdata::ProductCategory;
 
@@ -97,6 +98,50 @@ pub struct SentinelWeapon {
 impl ProductCategory for SentinelWeapon {
     fn get_product_categories(&self) -> Vec<String> {
         vec![self.product_category.clone()]
+    }
+}
+
+impl SentinelWeapon {
+    /// Get the computed weapon type classification.
+    ///
+    /// Sentinel weapons can be either ranged (guns) or melee.
+    /// Returns `WeaponTypeStats::Ranged` for gun-type sentinel weapons,
+    /// `WeaponTypeStats::Melee` for melee-type sentinel weapons.
+    pub fn weapon_type_stats(&self) -> WeaponTypeStats {
+        WeaponTypeStats::detect(
+            self.accuracy,
+            self.magazine_size,
+            self.reload_time,
+            self.multishot,
+            self.noise.clone(),
+            self.trigger.clone(),
+            None, // projectile
+            None, // flight
+            self.blocking_angle,
+            None, // combo_duration
+            None, // follow_through
+            None, // range
+            None, // stance_polarity
+            None, // slam_attack
+            None, // slam_radial_damage
+            None, // slam_radius
+            None, // slide_attack
+            None, // heavy_attack_damage
+            None, // heavy_slam_attack
+            None, // heavy_slam_radial_damage
+            None, // heavy_slam_radius
+            None, // wind_up
+        )
+    }
+
+    /// Check if this is a ranged sentinel weapon
+    pub fn is_ranged(&self) -> bool {
+        self.weapon_type_stats().is_ranged()
+    }
+
+    /// Check if this is a melee sentinel weapon
+    pub fn is_melee(&self) -> bool {
+        self.weapon_type_stats().is_melee()
     }
 }
 

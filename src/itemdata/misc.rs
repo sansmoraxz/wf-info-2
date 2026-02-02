@@ -7,6 +7,7 @@ use crate::itemdata::common::{Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{Noise, Polarity, Trigger};
+use crate::itemdata::props::WeaponTypeStats;
 use crate::itemdata::traits::{Buildable, Droppable, Item, WikiaLinked};
 use crate::itemdata::ProductCategory;
 
@@ -77,7 +78,8 @@ pub struct Misc {
     pub heavy_slam_attack: Option<i64>,
     pub heavy_slam_radial_damage: Option<i64>,
     pub heavy_slam_radius: Option<i64>,
-    pub stance_polarity: Option<String>,
+    #[serde(default)]
+    pub stance_polarity: Option<Polarity>,
     pub wind_up: Option<f64>,
 
     // Disposition
@@ -137,6 +139,55 @@ impl ProductCategory for Misc {
             None => "MiscItems",
         };
         vec![s.into()]
+    }
+}
+
+impl Misc {
+    /// Get the computed weapon type classification.
+    ///
+    /// Returns `WeaponTypeStats::Ranged` for gun-like misc items,
+    /// `WeaponTypeStats::Melee` for melee-like misc items,
+    /// or `WeaponTypeStats::None` for non-weapon items.
+    pub fn weapon_type_stats(&self) -> WeaponTypeStats {
+        WeaponTypeStats::detect(
+            self.accuracy,
+            self.magazine_size,
+            self.reload_time,
+            self.multishot,
+            self.noise.clone(),
+            self.trigger.clone(),
+            None, // projectile
+            None, // flight
+            self.blocking_angle,
+            self.combo_duration,
+            self.follow_through,
+            self.range,
+            self.stance_polarity.clone(),
+            self.slam_attack,
+            self.slam_radial_damage,
+            self.slam_radius,
+            self.slide_attack,
+            self.heavy_attack_damage,
+            self.heavy_slam_attack,
+            self.heavy_slam_radial_damage,
+            self.heavy_slam_radius,
+            self.wind_up,
+        )
+    }
+
+    /// Check if this misc item is a weapon (has weapon-specific stats)
+    pub fn is_weapon(&self) -> bool {
+        !matches!(self.weapon_type_stats(), WeaponTypeStats::None)
+    }
+
+    /// Check if this misc item is a ranged weapon
+    pub fn is_ranged_weapon(&self) -> bool {
+        self.weapon_type_stats().is_ranged()
+    }
+
+    /// Check if this misc item is a melee weapon
+    pub fn is_melee_weapon(&self) -> bool {
+        self.weapon_type_stats().is_melee()
     }
 }
 

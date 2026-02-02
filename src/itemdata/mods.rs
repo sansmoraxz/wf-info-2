@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::itemdata::common::{Drop, Introduced, LevelStat, Patchlog};
-use crate::itemdata::enums::{Polarity, Rarity};
+use crate::itemdata::enums::{ModCategory, Polarity, Rarity};
 use crate::itemdata::traits::{Droppable, Item, WikiaLinked};
 use crate::itemdata::ProductCategory;
 
@@ -76,6 +76,56 @@ pub struct Mod {
 impl ProductCategory for Mod {
     fn get_product_categories(&self) -> Vec<String> {
         vec!["Upgrades".to_string(), "RawUpgrades".to_string()]
+    }
+}
+
+impl Mod {
+    /// Get the computed mod category classification.
+    ///
+    /// Detection logic:
+    /// - Has available_challenges (non-empty) → Riven
+    /// - Has mod_set → SetMember
+    /// - Has num_upgrades_in_set → SetDefinition
+    /// - Otherwise → Regular
+    pub fn mod_category(&self) -> ModCategory {
+        if !self.available_challenges.is_empty() {
+            ModCategory::Riven
+        } else if let Some(mod_set) = &self.mod_set {
+            ModCategory::SetMember {
+                mod_set: mod_set.clone(),
+            }
+        } else if let Some(num) = self.num_upgrades_in_set {
+            ModCategory::SetDefinition {
+                num_upgrades_in_set: num,
+            }
+        } else {
+            ModCategory::Regular
+        }
+    }
+
+    /// Check if this is a Riven mod
+    pub fn is_riven(&self) -> bool {
+        self.mod_category().is_riven()
+    }
+
+    /// Check if this is part of a mod set (either member or definition)
+    pub fn is_set(&self) -> bool {
+        self.mod_category().is_set()
+    }
+
+    /// Check if this is a set member
+    pub fn is_set_member(&self) -> bool {
+        self.mod_category().is_set_member()
+    }
+
+    /// Check if this is a set definition
+    pub fn is_set_definition(&self) -> bool {
+        self.mod_category().is_set_definition()
+    }
+
+    /// Check if this is a regular mod
+    pub fn is_regular(&self) -> bool {
+        self.mod_category().is_regular()
     }
 }
 
@@ -204,5 +254,78 @@ mod tests {
 
         assert_eq!(m.unique_name, "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod");
         assert_eq!(m.num_upgrades_in_set, Some(3));
+    }
+
+    #[test]
+    fn test_mod_category_regular() {
+        let m = Mod {
+            name: "Serration".to_string(),
+            level_stats: vec![],
+            ..Default::default()
+        };
+
+        assert!(m.is_regular());
+        assert!(!m.is_riven());
+        assert!(!m.is_set());
+        assert!(!m.is_set_member());
+        assert!(!m.is_set_definition());
+    }
+
+    #[test]
+    fn test_mod_category_set_member() {
+        let m = Mod {
+            name: "Amar's Anguish".to_string(),
+            mod_set: Some("/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod".to_string()),
+            ..Default::default()
+        };
+
+        assert!(m.is_set());
+        assert!(m.is_set_member());
+        assert!(!m.is_set_definition());
+        assert!(!m.is_riven());
+        assert!(!m.is_regular());
+
+        let cat = m.mod_category();
+        assert_eq!(
+            cat.mod_set(),
+            Some("/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod")
+        );
+    }
+
+    #[test]
+    fn test_mod_category_set_definition() {
+        let m = Mod {
+            name: "Amarsetmod".to_string(),
+            num_upgrades_in_set: Some(3),
+            stats: vec!["Bonus 1".to_string(), "Bonus 2".to_string()],
+            ..Default::default()
+        };
+
+        assert!(m.is_set());
+        assert!(m.is_set_definition());
+        assert!(!m.is_set_member());
+        assert!(!m.is_riven());
+        assert!(!m.is_regular());
+
+        let cat = m.mod_category();
+        assert_eq!(cat.num_upgrades_in_set(), Some(3));
+    }
+
+    #[test]
+    fn test_mod_category_riven() {
+        let m = Mod {
+            name: "Rifle Riven Mod".to_string(),
+            available_challenges: vec![AvailableChallenge {
+                full_name: "Test Challenge".to_string(),
+                description: "Complete test".to_string(),
+                complications: vec![],
+            }],
+            upgrade_entries: vec![],
+            ..Default::default()
+        };
+
+        assert!(m.is_riven());
+        assert!(!m.is_set());
+        assert!(!m.is_regular());
     }
 }

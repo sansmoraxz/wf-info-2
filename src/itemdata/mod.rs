@@ -12,6 +12,10 @@ pub use traits::{
     RangedWeapon, Weapon, WikiaLinked,
 };
 
+// Re-export important enums for easier access
+pub use enums::{ModCategory, Noise, Polarity, Rarity, Trigger, VaultStatus};
+pub use props::{MeleeWeaponData, RangedWeaponData, WeaponTypeStats};
+
 // Category-specific modules
 pub mod melee;
 pub mod primary;

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::common::{deserialize_option_number_to_f64, Drop, Introduced};
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{Noise, Polarity, Trigger};
+use crate::itemdata::props::WeaponTypeStats;
 
 /// Crafting component for buildable items.
 ///
@@ -132,6 +133,55 @@ pub struct Component {
     pub vaulted: Option<bool>,
     pub estimated_vault_date: Option<String>,
     pub vault_date: Option<String>,
+}
+
+impl Component {
+    /// Get the computed weapon type classification.
+    ///
+    /// Returns `WeaponTypeStats::Ranged` for gun components,
+    /// `WeaponTypeStats::Melee` for melee weapon components,
+    /// or `WeaponTypeStats::None` for simple materials.
+    pub fn weapon_type_stats(&self) -> WeaponTypeStats {
+        WeaponTypeStats::detect(
+            self.accuracy,
+            self.magazine_size,
+            self.reload_time,
+            self.multishot,
+            self.noise.clone(),
+            self.trigger.clone(),
+            None, // projectile - not in Component
+            None, // flight - not in Component
+            self.blocking_angle,
+            self.combo_duration,
+            self.follow_through,
+            self.range,
+            self.stance_polarity.clone(),
+            self.slam_attack,
+            self.slam_radial_damage,
+            self.slam_radius,
+            self.slide_attack,
+            self.heavy_attack_damage,
+            self.heavy_slam_attack,
+            self.heavy_slam_radial_damage,
+            self.heavy_slam_radius,
+            self.wind_up,
+        )
+    }
+
+    /// Check if this component is a weapon (has weapon-specific stats)
+    pub fn is_weapon(&self) -> bool {
+        !matches!(self.weapon_type_stats(), WeaponTypeStats::None)
+    }
+
+    /// Check if this component is a ranged weapon
+    pub fn is_ranged_weapon(&self) -> bool {
+        self.weapon_type_stats().is_ranged()
+    }
+
+    /// Check if this component is a melee weapon
+    pub fn is_melee_weapon(&self) -> bool {
+        self.weapon_type_stats().is_melee()
+    }
 }
 
 #[cfg(test)]
