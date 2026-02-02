@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::common::{Introduced, Patchlog};
 use crate::itemdata::components::Component;
+use crate::itemdata::enums::Polarity;
 use crate::itemdata::traits::{Buildable, Character, Equippable, Item, Prime, WikiaLinked};
 use crate::itemdata::ProductCategory;
 
@@ -44,7 +45,7 @@ pub struct Sentinel {
 
     // Equippable
     #[serde(default)]
-    pub polarities: Vec<String>,
+    pub polarities: Vec<Polarity>,
 
     // Prime/vault
     #[serde(default)]
@@ -184,7 +185,7 @@ impl Character for Sentinel {
 }
 
 impl Equippable for Sentinel {
-    fn polarities(&self) -> &[String] {
+    fn polarities(&self) -> &[Polarity] {
         &self.polarities
     }
     fn slot(&self) -> Option<i64> {

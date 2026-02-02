@@ -95,6 +95,54 @@ pub enum Disposition {
     Unknown,
 }
 
+impl Trigger {
+    /// Convert to string representation for trait implementations
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Trigger::Active => "Active",
+            Trigger::Auto => "Auto",
+            Trigger::AutoBurst => "Auto Burst",
+            Trigger::Burst => "Burst",
+            Trigger::Charge => "Charge",
+            Trigger::Duplex => "Duplex",
+            Trigger::Held => "Held",
+            Trigger::Melee => "Melee",
+            Trigger::Semi => "Semi",
+            Trigger::Unknown => "Unknown",
+        }
+    }
+}
+
+impl Noise {
+    /// Convert to string representation for trait implementations
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Noise::Alarming => "Alarming",
+            Noise::Silent => "Silent",
+            Noise::Unknown => "Unknown",
+        }
+    }
+}
+
+impl Polarity {
+    /// Convert to lowercase string representation (matches JSON format)
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Polarity::Aura => "aura",
+            Polarity::Madurai => "madurai",
+            Polarity::Naramon => "naramon",
+            Polarity::Penjaga => "penjaga",
+            Polarity::Umbra => "umbra",
+            Polarity::Unairu => "unairu",
+            Polarity::Universal => "universal",
+            Polarity::Vazarin => "vazarin",
+            Polarity::Zenurik => "zenurik",
+            Polarity::Any => "any",
+            Polarity::Unknown => "unknown",
+        }
+    }
+}
+
 impl Disposition {
     /// Convert disposition to numeric value (1-5), returns 0 for Unknown
     pub fn as_u8(&self) -> u8 {

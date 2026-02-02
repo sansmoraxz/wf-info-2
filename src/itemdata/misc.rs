@@ -6,6 +6,7 @@ use serde_json::Value;
 use crate::itemdata::common::{Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
+use crate::itemdata::enums::{Noise, Polarity, Trigger};
 use crate::itemdata::traits::{Buildable, Droppable, Item, WikiaLinked};
 use crate::itemdata::ProductCategory;
 
@@ -58,8 +59,10 @@ pub struct Misc {
     pub magazine_size: Option<i64>,
     pub reload_time: Option<f64>,
     pub multishot: Option<i64>,
-    pub trigger: Option<String>,
-    pub noise: Option<String>,
+    #[serde(default)]
+    pub trigger: Option<Trigger>,
+    #[serde(default)]
+    pub noise: Option<Noise>,
 
     // Melee-specific
     pub blocking_angle: Option<i64>,
@@ -85,7 +88,7 @@ pub struct Misc {
     // Equippable
     pub slot: Option<i64>,
     #[serde(default)]
-    pub polarities: Vec<String>,
+    pub polarities: Vec<Polarity>,
     pub mastery_req: Option<i64>,
 
     // Buildable

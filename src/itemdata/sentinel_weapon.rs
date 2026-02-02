@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::common::{Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
+use crate::itemdata::enums::{Noise, Polarity, Trigger};
 use crate::itemdata::traits::{Buildable, Equippable, Item, Prime, Weapon, WikiaLinked};
 use crate::itemdata::ProductCategory;
 
@@ -43,8 +44,10 @@ pub struct SentinelWeapon {
     pub magazine_size: Option<i64>,
     pub reload_time: Option<f64>,
     pub multishot: Option<i64>,
-    pub trigger: Option<String>,
-    pub noise: Option<String>,
+    #[serde(default)]
+    pub trigger: Option<Trigger>,
+    #[serde(default)]
+    pub noise: Option<Noise>,
 
     // Melee-specific (optional)
     pub blocking_angle: Option<i64>,
@@ -59,7 +62,7 @@ pub struct SentinelWeapon {
     // Equippable
     pub slot: i64,
     #[serde(default)]
-    pub polarities: Vec<String>,
+    pub polarities: Vec<Polarity>,
     pub mastery_req: i64,
 
     // Buildable
@@ -224,7 +227,7 @@ impl Weapon for SentinelWeapon {
 }
 
 impl Equippable for SentinelWeapon {
-    fn polarities(&self) -> &[String] {
+    fn polarities(&self) -> &[Polarity] {
         &self.polarities
     }
     fn slot(&self) -> Option<i64> {

@@ -5,6 +5,7 @@ use serde_with::{formats, serde_as, OneOrMany};
 
 use crate::itemdata::common::{Ability, Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
+use crate::itemdata::enums::Polarity;
 use crate::itemdata::traits::{
     Buildable, Character, Droppable, Equippable, HasAbilities, Item, Prime, WikiaLinked,
 };
@@ -64,7 +65,7 @@ pub struct Warframe {
 
     // Equippable
     #[serde(default)]
-    pub polarities: Vec<String>,
+    pub polarities: Vec<Polarity>,
 
     // Prime/vault
     #[serde(default)]
@@ -220,7 +221,7 @@ impl HasAbilities for Warframe {
 }
 
 impl Equippable for Warframe {
-    fn polarities(&self) -> &[String] {
+    fn polarities(&self) -> &[Polarity] {
         &self.polarities
     }
     fn slot(&self) -> Option<i64> {

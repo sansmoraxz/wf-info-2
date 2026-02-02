@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::common::{Ability, Introduced, Patchlog};
 use crate::itemdata::components::Component;
+use crate::itemdata::enums::Polarity;
 use crate::itemdata::traits::{Buildable, Character, Equippable, HasAbilities, Item, Prime, WikiaLinked};
 use crate::itemdata::ProductCategory;
 
@@ -51,7 +52,7 @@ pub struct Archwing {
     pub components: Vec<Component>,
 
     // Equippable
-    pub polarities: Option<Vec<String>>,
+    pub polarities: Option<Vec<Polarity>>,
 
     // Prime/vault
     #[serde(default)]
@@ -197,7 +198,7 @@ impl HasAbilities for Archwing {
 }
 
 impl Equippable for Archwing {
-    fn polarities(&self) -> &[String] {
+    fn polarities(&self) -> &[Polarity] {
         match &self.polarities {
             Some(p) => p,
             None => &[],

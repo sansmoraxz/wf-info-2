@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::common::{Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
+use crate::itemdata::enums::Polarity;
 use crate::itemdata::traits::{Buildable, Droppable, Equippable, Item, WikiaLinked};
 use crate::itemdata::ProductCategory;
 
@@ -54,7 +55,7 @@ pub struct Pet {
 
     // Equippable
     #[serde(default)]
-    pub polarities: Vec<String>,
+    pub polarities: Vec<Polarity>,
 
     // Wikia
     pub wiki_available: Option<bool>,
@@ -160,7 +161,7 @@ impl WikiaLinked for Pet {
 }
 
 impl Equippable for Pet {
-    fn polarities(&self) -> &[String] {
+    fn polarities(&self) -> &[Polarity] {
         &self.polarities
     }
     fn slot(&self) -> Option<i64> {

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::common::{Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
+use crate::itemdata::enums::Polarity;
 use crate::itemdata::traits::{
     Buildable, Droppable, Equippable, Item, MeleeWeapon, Prime, Weapon, WikiaLinked,
 };
@@ -47,7 +48,8 @@ pub struct Melee {
     pub combo_duration: Option<i64>,
     pub follow_through: Option<f64>,
     pub range: Option<f64>,
-    pub stance_polarity: Option<String>,
+    #[serde(default)]
+    pub stance_polarity: Option<Polarity>,
     pub slam_attack: Option<i64>,
     pub slam_radial_damage: Option<i64>,
     pub slam_radius: Option<i64>,
@@ -72,7 +74,7 @@ pub struct Melee {
 
     // Equippable
     #[serde(default)]
-    pub polarities: Vec<String>,
+    pub polarities: Vec<Polarity>,
     pub slot: i64,
     #[serde(default)]
     pub tags: Vec<String>,
@@ -255,7 +257,7 @@ impl MeleeWeapon for Melee {
         self.range
     }
     fn stance_polarity(&self) -> Option<&str> {
-        self.stance_polarity.as_deref()
+        self.stance_polarity.as_ref().map(|p| p.as_str())
     }
     fn slam_attack(&self) -> Option<i64> {
         self.slam_attack
@@ -266,7 +268,7 @@ impl MeleeWeapon for Melee {
 }
 
 impl Equippable for Melee {
-    fn polarities(&self) -> &[String] {
+    fn polarities(&self) -> &[Polarity] {
         &self.polarities
     }
     fn slot(&self) -> Option<i64> {

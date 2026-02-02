@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::common::{Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
+use crate::itemdata::enums::{Noise, Polarity, Trigger};
 use crate::itemdata::traits::{Buildable, Equippable, Item, Prime, RangedWeapon, Weapon, WikiaLinked};
 use crate::itemdata::ProductCategory;
 
@@ -36,11 +37,13 @@ pub struct ArchGun {
     pub disposition: Option<i64>,
     pub fire_rate: f64,
     pub multishot: i64,
-    pub noise: String,
+    #[serde(default)]
+    pub noise: Noise,
     pub omega_attenuation: f64,
     pub proc_chance: f64,
     pub total_damage: i64,
-    pub trigger: String,
+    #[serde(default)]
+    pub trigger: Trigger,
     #[serde(default)]
     pub attacks: Vec<Attack>,
 
@@ -62,7 +65,7 @@ pub struct ArchGun {
 
     // Equippable
     #[serde(default)]
-    pub polarities: Vec<String>,
+    pub polarities: Vec<Polarity>,
     pub slot: i64,
     #[serde(default)]
     pub tags: Vec<String>,
@@ -224,10 +227,10 @@ impl RangedWeapon for ArchGun {
         self.multishot
     }
     fn noise(&self) -> &str {
-        &self.noise
+        self.noise.as_str()
     }
     fn trigger(&self) -> &str {
-        &self.trigger
+        self.trigger.as_str()
     }
     fn magazine_size(&self) -> Option<i64> {
         Some(self.magazine_size)
@@ -238,7 +241,7 @@ impl RangedWeapon for ArchGun {
 }
 
 impl Equippable for ArchGun {
-    fn polarities(&self) -> &[String] {
+    fn polarities(&self) -> &[Polarity] {
         &self.polarities
     }
     fn slot(&self) -> Option<i64> {
