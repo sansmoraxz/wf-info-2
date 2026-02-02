@@ -95,6 +95,87 @@ pub enum Disposition {
     Unknown,
 }
 
+/// Vault status for Prime items - represents the lifecycle state.
+///
+/// This is a computed enum derived from the combination of `is_prime`,
+/// `vaulted`, `vault_date`, and `estimated_vault_date` fields.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub enum VaultStatus {
+    /// Not a Prime item (is_prime = false)
+    #[default]
+    NotPrime,
+    /// Prime item currently available (vaulted = false, no estimated date)
+    Active,
+    /// Prime item with predicted vault date (vaulted = false, has estimated date)
+    EstimatedVault {
+        estimated_date: String,
+    },
+    /// Prime item currently vaulted (vaulted = true)
+    Vaulted {
+        date: String,
+    },
+}
+
+impl VaultStatus {
+    /// Compute vault status from individual fields.
+    ///
+    /// This is the canonical way to derive VaultStatus from the raw JSON fields.
+    pub fn from_fields(
+        is_prime: bool,
+        vaulted: Option<bool>,
+        vault_date: Option<&str>,
+        estimated_vault_date: Option<&str>,
+    ) -> Self {
+        if !is_prime {
+            return VaultStatus::NotPrime;
+        }
+
+        match (vaulted, vault_date, estimated_vault_date) {
+            (Some(true), Some(date), _) => VaultStatus::Vaulted {
+                date: date.to_string(),
+            },
+            (Some(true), None, _) => VaultStatus::Vaulted {
+                date: String::new(),
+            },
+            (_, _, Some(est_date)) if !vaulted.unwrap_or(false) => VaultStatus::EstimatedVault {
+                estimated_date: est_date.to_string(),
+            },
+            _ => VaultStatus::Active,
+        }
+    }
+
+    /// Check if this is a Prime item (any status except NotPrime)
+    pub fn is_prime(&self) -> bool {
+        !matches!(self, VaultStatus::NotPrime)
+    }
+
+    /// Check if the item is currently vaulted
+    pub fn is_vaulted(&self) -> bool {
+        matches!(self, VaultStatus::Vaulted { .. })
+    }
+
+    /// Check if the item is accessible (not vaulted)
+    pub fn is_accessible(&self) -> bool {
+        !self.is_vaulted()
+    }
+
+    /// Get the vault date if vaulted
+    pub fn vault_date(&self) -> Option<&str> {
+        match self {
+            VaultStatus::Vaulted { date } if !date.is_empty() => Some(date),
+            _ => None,
+        }
+    }
+
+    /// Get the estimated vault date if applicable
+    pub fn estimated_vault_date(&self) -> Option<&str> {
+        match self {
+            VaultStatus::EstimatedVault { estimated_date } => Some(estimated_date),
+            _ => None,
+        }
+    }
+}
+
 impl Trigger {
     /// Convert to string representation for trait implementations
     pub fn as_str(&self) -> &'static str {
@@ -196,5 +277,43 @@ mod tests {
     fn test_disposition_as_u8() {
         assert_eq!(Disposition::Three.as_u8(), 3);
         assert_eq!(Disposition::Unknown.as_u8(), 0);
+    }
+
+    #[test]
+    fn test_vault_status_not_prime() {
+        let status = VaultStatus::from_fields(false, None, None, None);
+        assert_eq!(status, VaultStatus::NotPrime);
+        assert!(!status.is_prime());
+        assert!(!status.is_vaulted());
+        assert!(status.is_accessible());
+    }
+
+    #[test]
+    fn test_vault_status_active_prime() {
+        let status = VaultStatus::from_fields(true, Some(false), None, None);
+        assert_eq!(status, VaultStatus::Active);
+        assert!(status.is_prime());
+        assert!(!status.is_vaulted());
+        assert!(status.is_accessible());
+    }
+
+    #[test]
+    fn test_vault_status_vaulted_prime() {
+        let status = VaultStatus::from_fields(true, Some(true), Some("2021-09-08"), None);
+        assert!(matches!(status, VaultStatus::Vaulted { .. }));
+        assert!(status.is_prime());
+        assert!(status.is_vaulted());
+        assert!(!status.is_accessible());
+        assert_eq!(status.vault_date(), Some("2021-09-08"));
+    }
+
+    #[test]
+    fn test_vault_status_estimated_vault() {
+        let status = VaultStatus::from_fields(true, Some(false), None, Some("2023-03-14"));
+        assert!(matches!(status, VaultStatus::EstimatedVault { .. }));
+        assert!(status.is_prime());
+        assert!(!status.is_vaulted());
+        assert!(status.is_accessible());
+        assert_eq!(status.estimated_vault_date(), Some("2023-03-14"));
     }
 }

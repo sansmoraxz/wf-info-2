@@ -3,7 +3,7 @@
 use crate::itemdata::common::{Ability, Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::Polarity;
+use crate::itemdata::enums::{Polarity, VaultStatus};
 
 // =============================================================================
 // Core Item Trait (Universal - ALL types implement this)
@@ -100,6 +100,18 @@ pub trait Prime: Item {
 
     /// Predicted future vault date
     fn estimated_vault_date(&self) -> Option<&str>;
+
+    /// Get the computed vault status as a type-safe enum.
+    ///
+    /// This provides a cleaner API than checking individual fields.
+    fn vault_status(&self) -> VaultStatus {
+        VaultStatus::from_fields(
+            self.is_prime(),
+            self.vaulted(),
+            self.vault_date(),
+            self.estimated_vault_date(),
+        )
+    }
 
     /// Check if item is currently accessible (not vaulted or not a Prime)
     fn is_accessible(&self) -> bool {
