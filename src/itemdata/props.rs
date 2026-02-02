@@ -1,0 +1,457 @@
+//! Composition structs for `#[serde(flatten)]` usage.
+//!
+//! These structs group related optional properties that can be embedded
+//! into item types using serde's flatten attribute, reducing boilerplate
+//! while maintaining clear property groupings.
+
+use serde::{Deserialize, Serialize};
+
+use crate::itemdata::common::{deserialize_option_number_to_f64, Introduced};
+use crate::itemdata::components::Component;
+use crate::itemdata::damage::DamageBreakdown;
+use crate::itemdata::enums::{Noise, Polarity, Trigger};
+
+/// Properties for buildable/craftable items.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildableProps {
+    pub build_price: Option<i64>,
+    pub build_quantity: Option<i64>,
+    pub build_time: Option<i64>,
+    pub skip_build_time_price: Option<i64>,
+    pub consume_on_build: Option<bool>,
+    pub mastery_req: Option<i64>,
+    pub market_cost: Option<i64>,
+    pub bp_cost: Option<i64>,
+    #[serde(default)]
+    pub components: Vec<Component>,
+}
+
+/// Properties for wiki/external resource integration.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WikiaProps {
+    pub wiki_available: Option<bool>,
+    pub wikia_url: Option<String>,
+    pub wikia_thumbnail: Option<String>,
+    pub introduced: Option<Introduced>,
+    pub release_date: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+/// Properties for Prime items and vault status.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrimeProps {
+    #[serde(default)]
+    pub is_prime: bool,
+    pub vaulted: Option<bool>,
+    pub vault_date: Option<String>,
+    pub estimated_vault_date: Option<String>,
+}
+
+/// Properties for equippable items (mod slots, polarities).
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EquippableProps {
+    #[serde(default)]
+    pub polarities: Vec<Polarity>,
+    pub slot: Option<i64>,
+}
+
+/// Base weapon attack properties.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeaponProps {
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub accuracy: Option<f64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub critical_chance: Option<f64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub critical_multiplier: Option<f64>,
+
+    pub damage: Option<DamageBreakdown>,
+
+    #[serde(default)]
+    pub damage_per_shot: Vec<f64>,
+
+    pub disposition: Option<i64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub fire_rate: Option<f64>,
+
+    pub multishot: Option<i64>,
+
+    #[serde(default)]
+    pub noise: Option<Noise>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub omega_attenuation: Option<f64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub proc_chance: Option<f64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub total_damage: Option<f64>,
+
+    #[serde(default)]
+    pub trigger: Option<Trigger>,
+}
+
+/// Properties specific to ranged weapons (guns).
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GunProps {
+    pub magazine_size: Option<i64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub reload_time: Option<f64>,
+
+    pub projectile: Option<String>,
+    pub flight: Option<i64>,
+}
+
+/// Properties specific to melee weapons.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeleeProps {
+    pub blocking_angle: Option<i64>,
+    pub combo_duration: Option<i64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub follow_through: Option<f64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub range: Option<f64>,
+
+    #[serde(default)]
+    pub stance_polarity: Option<Polarity>,
+
+    pub slam_attack: Option<i64>,
+    pub slam_radial_damage: Option<i64>,
+    pub slam_radius: Option<i64>,
+    pub slide_attack: Option<i64>,
+    pub heavy_attack_damage: Option<i64>,
+    pub heavy_slam_attack: Option<i64>,
+    pub heavy_slam_radial_damage: Option<i64>,
+    pub heavy_slam_radius: Option<i64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub wind_up: Option<f64>,
+}
+
+/// Computed weapon type classification.
+///
+/// This enum represents whether an item has ranged (gun) or melee weapon stats.
+/// It's computed from the presence of type-specific fields, not directly deserialized.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum WeaponTypeStats {
+    /// Ranged weapon (gun) - has magazine, reload, trigger, noise
+    Ranged(RangedWeaponData),
+    /// Melee weapon - has blocking angle, combo, stance, slam attacks
+    Melee(MeleeWeaponData),
+    /// No weapon-type-specific stats (simple component or non-weapon)
+    #[default]
+    None,
+}
+
+/// Data specific to ranged weapons.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct RangedWeaponData {
+    pub accuracy: Option<f64>,
+    pub magazine_size: Option<i64>,
+    pub reload_time: Option<f64>,
+    pub multishot: Option<i64>,
+    pub noise: Option<Noise>,
+    pub trigger: Option<Trigger>,
+    pub projectile: Option<String>,
+    pub flight: Option<i64>,
+}
+
+/// Data specific to melee weapons.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MeleeWeaponData {
+    pub blocking_angle: Option<i64>,
+    pub combo_duration: Option<i64>,
+    pub follow_through: Option<f64>,
+    pub range: Option<f64>,
+    pub stance_polarity: Option<Polarity>,
+    pub slam_attack: Option<i64>,
+    pub slam_radial_damage: Option<i64>,
+    pub slam_radius: Option<i64>,
+    pub slide_attack: Option<i64>,
+    pub heavy_attack_damage: Option<i64>,
+    pub heavy_slam_attack: Option<i64>,
+    pub heavy_slam_radial_damage: Option<i64>,
+    pub heavy_slam_radius: Option<i64>,
+    pub wind_up: Option<f64>,
+}
+
+impl WeaponTypeStats {
+    /// Determine weapon type from the presence of type-specific fields.
+    ///
+    /// Detection logic:
+    /// - Has melee-specific fields (blocking_angle, stance_polarity, combo_duration) → Melee
+    /// - Has ranged-specific fields (magazine_size, reload_time) → Ranged
+    /// - Neither → None
+    #[allow(clippy::too_many_arguments)]
+    pub fn detect(
+        // Ranged-specific
+        accuracy: Option<f64>,
+        magazine_size: Option<i64>,
+        reload_time: Option<f64>,
+        multishot: Option<i64>,
+        noise: Option<Noise>,
+        trigger: Option<Trigger>,
+        projectile: Option<String>,
+        flight: Option<i64>,
+        // Melee-specific
+        blocking_angle: Option<i64>,
+        combo_duration: Option<i64>,
+        follow_through: Option<f64>,
+        range: Option<f64>,
+        stance_polarity: Option<Polarity>,
+        slam_attack: Option<i64>,
+        slam_radial_damage: Option<i64>,
+        slam_radius: Option<i64>,
+        slide_attack: Option<i64>,
+        heavy_attack_damage: Option<i64>,
+        heavy_slam_attack: Option<i64>,
+        heavy_slam_radial_damage: Option<i64>,
+        heavy_slam_radius: Option<i64>,
+        wind_up: Option<f64>,
+    ) -> Self {
+        // Check for melee-specific fields first (more distinctive)
+        let has_melee = blocking_angle.is_some()
+            || stance_polarity.is_some()
+            || combo_duration.is_some()
+            || slam_attack.is_some()
+            || heavy_attack_damage.is_some();
+
+        // Check for ranged-specific fields
+        let has_ranged = magazine_size.is_some() || reload_time.is_some();
+
+        if has_melee {
+            WeaponTypeStats::Melee(MeleeWeaponData {
+                blocking_angle,
+                combo_duration,
+                follow_through,
+                range,
+                stance_polarity,
+                slam_attack,
+                slam_radial_damage,
+                slam_radius,
+                slide_attack,
+                heavy_attack_damage,
+                heavy_slam_attack,
+                heavy_slam_radial_damage,
+                heavy_slam_radius,
+                wind_up,
+            })
+        } else if has_ranged {
+            WeaponTypeStats::Ranged(RangedWeaponData {
+                accuracy,
+                magazine_size,
+                reload_time,
+                multishot,
+                noise,
+                trigger,
+                projectile,
+                flight,
+            })
+        } else {
+            WeaponTypeStats::None
+        }
+    }
+
+    /// Check if this is a ranged weapon
+    pub fn is_ranged(&self) -> bool {
+        matches!(self, WeaponTypeStats::Ranged(_))
+    }
+
+    /// Check if this is a melee weapon
+    pub fn is_melee(&self) -> bool {
+        matches!(self, WeaponTypeStats::Melee(_))
+    }
+
+    /// Get ranged weapon data if available
+    pub fn as_ranged(&self) -> Option<&RangedWeaponData> {
+        match self {
+            WeaponTypeStats::Ranged(data) => Some(data),
+            _ => None,
+        }
+    }
+
+    /// Get melee weapon data if available
+    pub fn as_melee(&self) -> Option<&MeleeWeaponData> {
+        match self {
+            WeaponTypeStats::Melee(data) => Some(data),
+            _ => None,
+        }
+    }
+}
+
+/// Character/suit stats (Warframe, Archwing, companions).
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CharacterStats {
+    pub health: i64,
+    pub shield: i64,
+    pub armor: i64,
+    pub power: i64,
+    pub stamina: i64,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub sprint: Option<f64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub sprint_speed: Option<f64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_buildable_props() {
+        let json = r#"{
+            "buildPrice": 15000,
+            "buildTime": 86400,
+            "skipBuildTimePrice": 35,
+            "components": []
+        }"#;
+
+        let props: BuildableProps = serde_json::from_str(json).unwrap();
+        assert_eq!(props.build_price, Some(15000));
+        assert_eq!(props.build_time, Some(86400));
+    }
+
+    #[test]
+    fn test_prime_props() {
+        let json = r#"{
+            "isPrime": true,
+            "vaulted": true,
+            "vaultDate": "2021-05-25"
+        }"#;
+
+        let props: PrimeProps = serde_json::from_str(json).unwrap();
+        assert!(props.is_prime);
+        assert!(props.vaulted.unwrap());
+    }
+
+    #[test]
+    fn test_weapon_props() {
+        let json = r#"{
+            "accuracy": 28.6,
+            "criticalChance": 0.2,
+            "criticalMultiplier": 2.0,
+            "fireRate": 8.0,
+            "procChance": 0.14
+        }"#;
+
+        let props: WeaponProps = serde_json::from_str(json).unwrap();
+        assert!((props.accuracy.unwrap() - 28.6).abs() < f64::EPSILON);
+        assert!((props.critical_chance.unwrap() - 0.2).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_melee_props() {
+        let json = r#"{
+            "blockingAngle": 55,
+            "comboDuration": 5,
+            "followThrough": 0.6,
+            "range": 2.5,
+            "stancePolarity": "naramon"
+        }"#;
+
+        let props: MeleeProps = serde_json::from_str(json).unwrap();
+        assert_eq!(props.blocking_angle, Some(55));
+        assert_eq!(props.stance_polarity, Some(Polarity::Naramon));
+    }
+
+    #[test]
+    fn test_weapon_type_stats_ranged() {
+        let stats = WeaponTypeStats::detect(
+            Some(28.6),  // accuracy
+            Some(45),    // magazine_size
+            Some(2.0),   // reload_time
+            Some(1),     // multishot
+            Some(Noise::Alarming),
+            Some(Trigger::Auto),
+            Some("Hitscan".to_string()), // projectile
+            None,        // flight
+            None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+        );
+
+        assert!(stats.is_ranged());
+        assert!(!stats.is_melee());
+
+        let ranged_data = stats.as_ranged().unwrap();
+        assert_eq!(ranged_data.magazine_size, Some(45));
+        assert_eq!(ranged_data.reload_time, Some(2.0));
+        assert_eq!(ranged_data.noise, Some(Noise::Alarming));
+    }
+
+    #[test]
+    fn test_weapon_type_stats_melee() {
+        let stats = WeaponTypeStats::detect(
+            None, None, None, None, None, None, None, None,
+            Some(55),    // blocking_angle
+            Some(5),     // combo_duration
+            Some(0.6),   // follow_through
+            Some(2.5),   // range
+            Some(Polarity::Naramon), // stance_polarity
+            Some(150),   // slam_attack
+            Some(100),   // slam_radial_damage
+            Some(5),     // slam_radius
+            Some(120),   // slide_attack
+            Some(300),   // heavy_attack_damage
+            Some(450),   // heavy_slam_attack
+            Some(300),   // heavy_slam_radial_damage
+            Some(8),     // heavy_slam_radius
+            Some(0.8),   // wind_up
+        );
+
+        assert!(stats.is_melee());
+        assert!(!stats.is_ranged());
+
+        let melee_data = stats.as_melee().unwrap();
+        assert_eq!(melee_data.blocking_angle, Some(55));
+        assert_eq!(melee_data.stance_polarity, Some(Polarity::Naramon));
+        assert_eq!(melee_data.heavy_attack_damage, Some(300));
+    }
+
+    #[test]
+    fn test_weapon_type_stats_none() {
+        let stats = WeaponTypeStats::detect(
+            None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+        );
+
+        assert!(!stats.is_ranged());
+        assert!(!stats.is_melee());
+        assert!(stats.as_ranged().is_none());
+        assert!(stats.as_melee().is_none());
+    }
+
+    #[test]
+    fn test_weapon_type_stats_melee_priority() {
+        // When both ranged and melee fields present, melee takes priority
+        // (more distinctive fields)
+        let stats = WeaponTypeStats::detect(
+            Some(28.6),  // accuracy (ranged)
+            Some(45),    // magazine_size (ranged)
+            Some(2.0),   // reload_time (ranged)
+            None, None, None, None, None,
+            Some(55),    // blocking_angle (melee)
+            None, None, None, None, None, None, None, None, None, None, None, None, None,
+        );
+
+        // Melee should win because melee detection happens first
+        assert!(stats.is_melee());
+        assert!(!stats.is_ranged());
+    }
+}

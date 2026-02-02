@@ -1,5 +1,10 @@
+//! Consumable gear item data.
+
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::common::{Drop, Patchlog};
+use crate::itemdata::components::Component;
+use crate::itemdata::traits::{Buildable, Droppable, Item};
 use crate::itemdata::ProductCategory;
 
 pub type Root = Vec<Gear>;
@@ -7,28 +12,37 @@ pub type Root = Vec<Gear>;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Gear {
-    pub category: String,
-    pub description: String,
-    pub image_name: String,
-    pub masterable: bool,
+    // Core identity
+    pub unique_name: String,
     pub name: String,
-    pub tradable: bool,
+    pub category: String,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub unique_name: String,
+    pub image_name: String,
+    pub description: String,
+
+    // Tradable
+    pub tradable: bool,
+    pub masterable: bool,
+
+    // Buildable properties
     pub build_price: Option<i64>,
     pub build_quantity: Option<i64>,
     pub build_time: Option<i64>,
+    pub skip_build_time_price: Option<i64>,
+    pub consume_on_build: Option<bool>,
     #[serde(default)]
     pub components: Vec<Component>,
-    pub consume_on_build: Option<bool>,
-    pub skip_build_time_price: Option<i64>,
-    #[serde(default)]
-    pub patchlogs: Vec<Patchlog>,
-    #[serde(default)]
-    pub drops: Vec<Drop2>,
+
+    // Gear-specific
     pub item_count: Option<i64>,
     pub parents: Option<Vec<String>>,
+
+    // Droppable
+    #[serde(default)]
+    pub drops: Vec<Drop>,
+    #[serde(default)]
+    pub patchlogs: Vec<Patchlog>,
 }
 
 impl ProductCategory for Gear {
@@ -37,51 +51,67 @@ impl ProductCategory for Gear {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Component {
-    pub unique_name: String,
-    pub name: String,
-    pub description: String,
-    pub item_count: i64,
-    pub image_name: String,
-    pub tradable: bool,
-    pub masterable: bool,
-    #[serde(default)]
-    pub drops: Vec<Drop>,
-    #[serde(rename = "type")]
-    pub type_field: Option<String>,
+impl Item for Gear {
+    fn unique_name(&self) -> &str {
+        &self.unique_name
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn category(&self) -> &str {
+        &self.category
+    }
+    fn type_field(&self) -> &str {
+        &self.type_field
+    }
+    fn image_name(&self) -> Option<&str> {
+        Some(&self.image_name)
+    }
+    fn tradable(&self) -> bool {
+        self.tradable
+    }
+    fn masterable(&self) -> bool {
+        self.masterable
+    }
+    fn patchlogs(&self) -> &[Patchlog] {
+        &self.patchlogs
+    }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Drop {
-    pub chance: f64,
-    pub location: String,
-    pub rarity: String,
-    #[serde(rename = "type")]
-    pub type_field: String,
+impl Droppable for Gear {
+    fn drops(&self) -> &[Drop] {
+        &self.drops
+    }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Patchlog {
-    pub name: String,
-    pub date: String,
-    pub url: String,
-    pub additions: String,
-    pub changes: String,
-    pub fixes: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Drop2 {
-    pub chance: f64,
-    pub location: String,
-    pub rarity: String,
-    #[serde(rename = "type")]
-    pub type_field: String,
+impl Buildable for Gear {
+    fn build_price(&self) -> Option<i64> {
+        self.build_price
+    }
+    fn build_quantity(&self) -> Option<i64> {
+        self.build_quantity
+    }
+    fn build_time(&self) -> Option<i64> {
+        self.build_time
+    }
+    fn skip_build_time_price(&self) -> Option<i64> {
+        self.skip_build_time_price
+    }
+    fn consume_on_build(&self) -> Option<bool> {
+        self.consume_on_build
+    }
+    fn mastery_req(&self) -> Option<i64> {
+        None
+    }
+    fn market_cost(&self) -> Option<i64> {
+        None
+    }
+    fn bp_cost(&self) -> Option<i64> {
+        None
+    }
+    fn components(&self) -> &[Component] {
+        &self.components
+    }
 }
 
 #[cfg(test)]
@@ -91,66 +121,10 @@ mod tests {
 
     #[test]
     fn test_deserialize_gear() {
-        let json_data = r#"
-{
-  "buildPrice": 3500,
-  "buildQuantity": 1,
-  "buildTime": 3600,
-  "category": "Gear",
-  "components": [
-    {
-      "uniqueName": "/Lotus/Types/Recipes/EidolonRecipes/Prospecting/MiningLaserCBlueprint",
-      "name": "Blueprint",
-      "description": "Enhanced with cybernetics, this tool is able to locate nearby gems and ore veins and has chance to retrieve Rare Gems on any Landscape.\n\nTravel far from Hub settlements for the best chance of mining rare minerals.",
-      "itemCount": 1,
-      "imageName": "blueprint.png",
-      "tradable": false,
-      "masterable": false,
-      "drops": []
-    },
-    {
-      "uniqueName": "/Lotus/Types/Items/MiscItems/Circuits",
-      "name": "Circuits",
-      "description": "Various electronic components.\n\nLocation: Venus, Ceres, and the Kuva Fortress",
-      "itemCount": 500,
-      "imageName": "circuits-5e77d8b169.png",
-      "tradable": false,
-      "drops": [],
-      "masterable": false,
-      "type": "Resource"
-    },
-    {
-      "uniqueName": "/Lotus/Types/Items/Gems/Eidolon/UncommonOreAAlloyAItem",
-      "name": "Fersteel Alloy",
-      "description": "Ferros that has been forged into a stronger metal.\n\nBlueprint sold by Old Man Suumbaat in Cetus on Earth.",
-      "itemCount": 40,
-      "imageName": "fersteel-alloy-c11c0e2d3c.png",
-      "tradable": false,
-      "drops": [],
-      "masterable": false
-    },
-    {
-      "uniqueName": "/Lotus/Types/Items/Gems/Eidolon/UncommonGemACutAItem",
-      "name": "Marquise Veridos",
-      "description": "Polished and cut to perfection.\n\nBlueprint sold by Old Man Suumbaat in Cetus on Earth.",
-      "itemCount": 2,
-      "imageName": "marquise-veridos-217877dacf.png",
-      "tradable": false,
-      "drops": [],
-      "masterable": false
-    }
-  ],
-  "consumeOnBuild": true,
-  "description": "Enhanced with cybernetics, this tool is able to locate nearby gems and ore veins and has chance to retrieve Rare Gems on any Landscape.\n\nTravel far from Hub settlements for the best chance of mining rare minerals.",
-  "imageName": "advanced-nosam-cutter-e654a1fc03.png",
-  "masterable": false,
-  "name": "Advanced Nosam Cutter",
-  "skipBuildTimePrice": 10,
-  "tradable": false,
-  "type": "Gear",
-  "uniqueName": "/Lotus/Types/Restoratives/Consumable/MiningLaserC"
-}
-"#;
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/gear_test.json"
+        ));
 
         let rec: Gear = from_str(json_data).unwrap();
 

@@ -1,0 +1,16 @@
+{
+  "category": "Mods",
+  "imageName": "amarsetmod-c1bb91549f.png",
+  "isPrime": false,
+  "masterable": false,
+  "name": "Amarsetmod",
+  "numUpgradesInSet": 3,
+  "stats": [
+    "Teleport to a target within 10m on using a Heavy Attack.",
+    "Teleport to a target within 20m on using a Heavy Attack.",
+    "Teleport to a target within 30m on using a Heavy Attack."
+  ],
+  "tradable": false,
+  "type": "Mod Set Mod",
+  "uniqueName": "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod"
+}

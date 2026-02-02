@@ -1,5 +1,13 @@
+//! Sentinel weapon item data.
+
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::common::{Introduced, Patchlog};
+use crate::itemdata::components::Component;
+use crate::itemdata::damage::{Attack, DamageBreakdown};
+use crate::itemdata::enums::{Noise, Polarity, Trigger};
+use crate::itemdata::props::WeaponTypeStats;
+use crate::itemdata::traits::{Buildable, Equippable, Item, Prime, Weapon, WikiaLinked};
 use crate::itemdata::ProductCategory;
 
 pub type Root = Vec<SentinelWeapon>;
@@ -7,55 +15,84 @@ pub type Root = Vec<SentinelWeapon>;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SentinelWeapon {
-    pub attacks: Vec<Attack>,
-    pub blocking_angle: Option<i64>,
-    pub category: String,
-    pub critical_chance: f64,
-    pub critical_multiplier: f64,
-    pub damage: Damage2,
-    pub damage_per_shot: Vec<f64>,
-    pub description: String,
-    pub disposition: i64,
-    pub exclude_from_codex: Option<bool>,
-    pub fire_rate: f64,
-    pub image_name: String,
-    pub introduced: Introduced,
-    pub is_prime: bool,
-    pub masterable: bool,
-    pub mastery_req: i64,
+    // Core identity
+    pub unique_name: String,
     pub name: String,
-    pub omega_attenuation: f64,
-    pub proc_chance: f64,
-    pub product_category: String,
-    pub release_date: String,
-    pub sentinel: bool,
-    pub slot: i64,
-    pub tags: Vec<String>,
-    pub total_damage: f64,
-    pub tradable: bool,
+    pub category: String,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub unique_name: String,
-    pub wiki_available: bool,
-    pub wikia_thumbnail: String,
-    pub wikia_url: String,
+    pub image_name: String,
+    pub description: String,
+
+    // Tradable
+    pub tradable: bool,
+    pub masterable: bool,
+
+    // Weapon stats
+    pub damage: DamageBreakdown,
+    #[serde(default)]
+    pub damage_per_shot: Vec<f64>,
+    pub total_damage: f64,
+    pub critical_chance: f64,
+    pub critical_multiplier: f64,
+    pub proc_chance: f64,
+    pub fire_rate: f64,
+    #[serde(default)]
+    pub attacks: Vec<Attack>,
+
+    // Gun-specific (optional for melee sentinel weapons)
     pub accuracy: Option<f64>,
     pub magazine_size: Option<i64>,
-    pub multishot: Option<i64>,
-    pub noise: Option<String>,
-    #[serde(default)]
-    pub patchlogs: Vec<Patchlog>,
     pub reload_time: Option<f64>,
-    pub trigger: Option<String>,
-    pub vaulted: Option<bool>,
+    pub multishot: Option<i64>,
+    #[serde(default)]
+    pub trigger: Option<Trigger>,
+    #[serde(default)]
+    pub noise: Option<Noise>,
+
+    // Melee-specific (optional)
+    pub blocking_angle: Option<i64>,
+
+    // Sentinel-specific
+    pub sentinel: bool,
+
+    // Disposition
+    pub disposition: i64,
+    pub omega_attenuation: f64,
+
+    // Equippable
+    pub slot: i64,
+    #[serde(default)]
+    pub polarities: Vec<Polarity>,
+    pub mastery_req: i64,
+
+    // Buildable
     pub build_price: Option<i64>,
     pub build_quantity: Option<i64>,
     pub build_time: Option<i64>,
-    pub components: Option<Vec<Component>>,
-    pub consume_on_build: Option<bool>,
-    #[serde(default)]
-    pub polarities: Vec<String>,
     pub skip_build_time_price: Option<i64>,
+    pub consume_on_build: Option<bool>,
+    pub components: Option<Vec<Component>>,
+
+    // Prime/vault
+    #[serde(default)]
+    pub is_prime: bool,
+    pub vaulted: Option<bool>,
+
+    // Wikia
+    pub wiki_available: bool,
+    pub wikia_url: String,
+    pub wikia_thumbnail: String,
+    pub introduced: Introduced,
+    pub release_date: String,
+    pub product_category: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    pub exclude_from_codex: Option<bool>,
+
+    // Droppable
+    #[serde(default)]
+    pub patchlogs: Vec<Patchlog>,
 }
 
 impl ProductCategory for SentinelWeapon {
@@ -64,116 +101,183 @@ impl ProductCategory for SentinelWeapon {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Attack {
-    pub name: String,
-    pub speed: f64,
-    #[serde(rename = "crit_chance")]
-    pub crit_chance: f64,
-    #[serde(rename = "crit_mult")]
-    pub crit_mult: f64,
-    #[serde(rename = "status_chance")]
-    pub status_chance: f64,
-    pub damage: Damage,
-    #[serde(rename = "shot_type")]
-    pub shot_type: Option<String>,
-    #[serde(rename = "shot_speed")]
-    pub shot_speed: Option<i64>,
-    pub flight: Option<i64>,
-    pub falloff: Option<Falloff>,
+impl SentinelWeapon {
+    /// Get the computed weapon type classification.
+    ///
+    /// Sentinel weapons can be either ranged (guns) or melee.
+    /// Returns `WeaponTypeStats::Ranged` for gun-type sentinel weapons,
+    /// `WeaponTypeStats::Melee` for melee-type sentinel weapons.
+    pub fn weapon_type_stats(&self) -> WeaponTypeStats {
+        WeaponTypeStats::detect(
+            self.accuracy,
+            self.magazine_size,
+            self.reload_time,
+            self.multishot,
+            self.noise.clone(),
+            self.trigger.clone(),
+            None, // projectile
+            None, // flight
+            self.blocking_angle,
+            None, // combo_duration
+            None, // follow_through
+            None, // range
+            None, // stance_polarity
+            None, // slam_attack
+            None, // slam_radial_damage
+            None, // slam_radius
+            None, // slide_attack
+            None, // heavy_attack_damage
+            None, // heavy_slam_attack
+            None, // heavy_slam_radial_damage
+            None, // heavy_slam_radius
+            None, // wind_up
+        )
+    }
+
+    /// Check if this is a ranged sentinel weapon
+    pub fn is_ranged(&self) -> bool {
+        self.weapon_type_stats().is_ranged()
+    }
+
+    /// Check if this is a melee sentinel weapon
+    pub fn is_melee(&self) -> bool {
+        self.weapon_type_stats().is_melee()
+    }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Damage {
-    pub slash: Option<f64>,
-    pub puncture: Option<f64>,
-    pub cold: Option<i64>,
-    pub impact: Option<f64>,
-    pub heat: Option<i64>,
-    pub blast: Option<i64>,
-    pub toxin: Option<i64>,
-    pub electricity: Option<i64>,
+impl Item for SentinelWeapon {
+    fn unique_name(&self) -> &str {
+        &self.unique_name
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn category(&self) -> &str {
+        &self.category
+    }
+    fn type_field(&self) -> &str {
+        &self.type_field
+    }
+    fn image_name(&self) -> Option<&str> {
+        Some(&self.image_name)
+    }
+    fn tradable(&self) -> bool {
+        self.tradable
+    }
+    fn masterable(&self) -> bool {
+        self.masterable
+    }
+    fn patchlogs(&self) -> &[Patchlog] {
+        &self.patchlogs
+    }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Falloff {
-    pub start: i64,
-    pub end: f64,
-    pub reduction: f64,
+impl Buildable for SentinelWeapon {
+    fn build_price(&self) -> Option<i64> {
+        self.build_price
+    }
+    fn build_quantity(&self) -> Option<i64> {
+        self.build_quantity
+    }
+    fn build_time(&self) -> Option<i64> {
+        self.build_time
+    }
+    fn skip_build_time_price(&self) -> Option<i64> {
+        self.skip_build_time_price
+    }
+    fn consume_on_build(&self) -> Option<bool> {
+        self.consume_on_build
+    }
+    fn mastery_req(&self) -> Option<i64> {
+        Some(self.mastery_req)
+    }
+    fn market_cost(&self) -> Option<i64> {
+        None
+    }
+    fn bp_cost(&self) -> Option<i64> {
+        None
+    }
+    fn components(&self) -> &[Component] {
+        match &self.components {
+            Some(c) => c,
+            None => &[],
+        }
+    }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Damage2 {
-    pub total: f64,
-    pub impact: f64,
-    pub puncture: f64,
-    pub slash: f64,
-    pub heat: i64,
-    pub cold: i64,
-    pub electricity: i64,
-    pub toxin: i64,
-    pub blast: i64,
-    pub radiation: i64,
-    pub gas: i64,
-    pub magnetic: i64,
-    pub viral: i64,
-    pub corrosive: i64,
-    pub void: i64,
-    pub tau: i64,
-    pub cinematic: i64,
-    pub shield_drain: i64,
-    pub health_drain: i64,
-    pub energy_drain: i64,
-    #[serde(rename = "true")]
-    pub true_field: i64,
+impl Prime for SentinelWeapon {
+    fn is_prime(&self) -> bool {
+        self.is_prime
+    }
+    fn vaulted(&self) -> Option<bool> {
+        self.vaulted
+    }
+    fn vault_date(&self) -> Option<&str> {
+        None
+    }
+    fn estimated_vault_date(&self) -> Option<&str> {
+        None
+    }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Introduced {
-    pub name: String,
-    pub url: String,
-    pub aliases: Vec<String>,
-    pub parent: String,
-    pub date: String,
+impl WikiaLinked for SentinelWeapon {
+    fn wiki_available(&self) -> Option<bool> {
+        Some(self.wiki_available)
+    }
+    fn wikia_url(&self) -> Option<&str> {
+        Some(&self.wikia_url)
+    }
+    fn wikia_thumbnail(&self) -> Option<&str> {
+        Some(&self.wikia_thumbnail)
+    }
+    fn introduced(&self) -> Option<&Introduced> {
+        Some(&self.introduced)
+    }
+    fn release_date(&self) -> Option<&str> {
+        Some(&self.release_date)
+    }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Patchlog {
-    pub name: String,
-    pub date: String,
-    pub url: String,
-    pub additions: String,
-    pub changes: String,
-    pub fixes: String,
+impl Weapon for SentinelWeapon {
+    fn critical_chance(&self) -> f64 {
+        self.critical_chance
+    }
+    fn critical_multiplier(&self) -> f64 {
+        self.critical_multiplier
+    }
+    fn damage(&self) -> Option<&DamageBreakdown> {
+        Some(&self.damage)
+    }
+    fn damage_per_shot(&self) -> &[f64] {
+        &self.damage_per_shot
+    }
+    fn total_damage(&self) -> f64 {
+        self.total_damage
+    }
+    fn proc_chance(&self) -> f64 {
+        self.proc_chance
+    }
+    fn fire_rate(&self) -> f64 {
+        self.fire_rate
+    }
+    fn disposition(&self) -> Option<i64> {
+        Some(self.disposition)
+    }
+    fn omega_attenuation(&self) -> f64 {
+        self.omega_attenuation
+    }
+    fn attacks(&self) -> &[Attack] {
+        &self.attacks
+    }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Component {
-    pub unique_name: String,
-    pub name: String,
-    pub description: String,
-    pub item_count: i64,
-    pub image_name: String,
-    pub tradable: bool,
-    pub masterable: bool,
-    pub drops: Vec<Drop>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Drop {
-    pub chance: i64,
-    pub location: String,
-    pub rarity: String,
-    #[serde(rename = "type")]
-    pub type_field: String,
+impl Equippable for SentinelWeapon {
+    fn polarities(&self) -> &[Polarity] {
+        &self.polarities
+    }
+    fn slot(&self) -> Option<i64> {
+        Some(self.slot)
+    }
 }
 
 #[cfg(test)]
@@ -183,104 +287,10 @@ mod tests {
 
     #[test]
     fn test_deserialize_sentinel_weapon() {
-        let json_data = r#"
-{
-  "attacks": [
-    {
-      "name": "Normal Attack",
-      "speed": 1,
-      "crit_chance": 10,
-      "crit_mult": 3,
-      "status_chance": 15,
-      "damage": {
-        "impact": 150,
-        "puncture": 150
-      }
-    }
-  ],
-  "blockingAngle": 90,
-  "category": "Primary",
-  "criticalChance": 0.1,
-  "criticalMultiplier": 3,
-  "damage": {
-    "total": 300,
-    "impact": 150,
-    "puncture": 0,
-    "slash": 150,
-    "heat": 0,
-    "cold": 0,
-    "electricity": 0,
-    "toxin": 0,
-    "blast": 0,
-    "radiation": 0,
-    "gas": 0,
-    "magnetic": 0,
-    "viral": 0,
-    "corrosive": 0,
-    "void": 0,
-    "tau": 0,
-    "cinematic": 0,
-    "shieldDrain": 0,
-    "healthDrain": 0,
-    "energyDrain": 0,
-    "true": 0
-  },
-  "damagePerShot": [
-    150,
-    150,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0
-  ],
-  "description": "Hound melee attacks pierce hard with <DT_IMPACT_COLOR>Impact and <DT_PUNCTURE_COLOR>Puncture Damage.",
-  "disposition": 3,
-  "excludeFromCodex": true,
-  "fireRate": 1,
-  "imageName": "batoten-a5990aba68.png",
-  "introduced": {
-    "name": "Update 30.5",
-    "url": "https://wiki.warframe.com/w/Update_30%23Update_30.5",
-    "aliases": [
-      "30.5"
-    ],
-    "parent": "30.5",
-    "date": "2021-07-06"
-  },
-  "isPrime": false,
-  "masterable": true,
-  "masteryReq": 0,
-  "name": "Batoten",
-  "omegaAttenuation": 1,
-  "procChance": 0.14999998,
-  "productCategory": "SentinelWeapons",
-  "releaseDate": "2021-07-06",
-  "sentinel": true,
-  "slot": 1,
-  "tags": [],
-  "totalDamage": 300,
-  "tradable": false,
-  "type": "Companion Weapon",
-  "uniqueName": "/Lotus/Types/Friendly/Pets/ZanukaPets/ZanukaPetMeleeWeaponIP",
-  "wikiAvailable": true,
-  "wikiaThumbnail": "https://wiki.warframe.com/images/Batoten.png?8d059",
-  "wikiaUrl": "https://wiki.warframe.com/w/Batoten"
-}
-"#;
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/sentinel_weapon_test.json"
+        ));
 
         let rec: SentinelWeapon = from_str(json_data).unwrap();
 

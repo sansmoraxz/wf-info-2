@@ -1,5 +1,10 @@
+//! Mod upgrade item data.
+
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::common::{Drop, Introduced, LevelStat, Patchlog};
+use crate::itemdata::enums::{ModCategory, Polarity, Rarity};
+use crate::itemdata::traits::{Droppable, Item, WikiaLinked};
 use crate::itemdata::ProductCategory;
 
 pub type Root = Vec<Mod>;
@@ -7,47 +12,65 @@ pub type Root = Vec<Mod>;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Mod {
-    pub base_drain: Option<i64>,
-    pub category: String,
-    pub compat_name: Option<String>,
-    #[serde(default)]
-    pub drops: Vec<Drop>,
-    pub fusion_limit: Option<i64>,
-    pub image_name: String,
-    pub introduced: Option<Introduced>,
-    pub is_augment: Option<bool>,
-    pub is_prime: bool,
-    #[serde(default)]
-    pub level_stats: Vec<LevelStat>,
-    pub masterable: bool,
+    // Core identity
+    pub unique_name: String,
     pub name: String,
-    #[serde(default)]
-    pub patchlogs: Vec<Patchlog>,
-    pub polarity: Option<String>,
-    pub rarity: Option<String>,
-    pub release_date: Option<String>,
-    pub tradable: bool,
-    pub transmutable: Option<bool>,
+    pub category: String,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub unique_name: String,
-    pub wiki_available: Option<bool>,
-    pub wikia_thumbnail: Option<String>,
-    pub wikia_url: Option<String>,
-    pub is_utility: Option<bool>,
-    pub mod_set: Option<String>,
-    pub exclude_from_codex: Option<bool>,
-    pub is_exilus: Option<bool>,
+    pub image_name: String,
     pub description: Option<String>,
+
+    // Tradable
+    pub tradable: bool,
+    pub masterable: bool,
+
+    // Mod-specific
+    pub base_drain: Option<i64>,
+    pub fusion_limit: Option<i64>,
+    pub compat_name: Option<String>,
+    #[serde(default)]
+    pub polarity: Option<Polarity>,
+    #[serde(default)]
+    pub rarity: Option<Rarity>,
+    pub transmutable: Option<bool>,
+    pub is_augment: Option<bool>,
+    #[serde(default)]
+    pub is_prime: bool,
+    pub is_utility: Option<bool>,
+    pub is_exilus: Option<bool>,
+
+    // Level stats
+    #[serde(default)]
+    pub level_stats: Vec<LevelStat>,
+
+    // Mod sets
+    pub mod_set: Option<String>,
     pub num_upgrades_in_set: Option<i64>,
     #[serde(default)]
     pub stats: Vec<String>,
+    pub buff_set: Option<bool>,
+    pub mod_set_values: Option<Vec<f64>>,
+
+    // Riven-specific
     #[serde(default)]
     pub available_challenges: Vec<AvailableChallenge>,
     #[serde(default)]
     pub upgrade_entries: Vec<UpgradeEntry>,
-    pub buff_set: Option<bool>,
-    pub mod_set_values: Option<Vec<f64>>,
+
+    // Wikia
+    pub wiki_available: Option<bool>,
+    pub wikia_thumbnail: Option<String>,
+    pub wikia_url: Option<String>,
+    pub introduced: Option<Introduced>,
+    pub release_date: Option<String>,
+    pub exclude_from_codex: Option<bool>,
+
+    // Droppable
+    #[serde(default)]
+    pub drops: Vec<Drop>,
+    #[serde(default)]
+    pub patchlogs: Vec<Patchlog>,
 }
 
 impl ProductCategory for Mod {
@@ -56,51 +79,118 @@ impl ProductCategory for Mod {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Drop {
-    pub chance: Option<f64>,
-    pub location: String,
-    pub rarity: String,
-    #[serde(rename = "type")]
-    pub type_field: String,
+impl Mod {
+    /// Get the computed mod category classification.
+    ///
+    /// Detection logic:
+    /// - Has available_challenges (non-empty) → Riven
+    /// - Has mod_set → SetMember
+    /// - Has num_upgrades_in_set → SetDefinition
+    /// - Otherwise → Regular
+    pub fn mod_category(&self) -> ModCategory {
+        if !self.available_challenges.is_empty() {
+            ModCategory::Riven
+        } else if let Some(mod_set) = &self.mod_set {
+            ModCategory::SetMember {
+                mod_set: mod_set.clone(),
+            }
+        } else if let Some(num) = self.num_upgrades_in_set {
+            ModCategory::SetDefinition {
+                num_upgrades_in_set: num,
+            }
+        } else {
+            ModCategory::Regular
+        }
+    }
+
+    /// Check if this is a Riven mod
+    pub fn is_riven(&self) -> bool {
+        self.mod_category().is_riven()
+    }
+
+    /// Check if this is part of a mod set (either member or definition)
+    pub fn is_set(&self) -> bool {
+        self.mod_category().is_set()
+    }
+
+    /// Check if this is a set member
+    pub fn is_set_member(&self) -> bool {
+        self.mod_category().is_set_member()
+    }
+
+    /// Check if this is a set definition
+    pub fn is_set_definition(&self) -> bool {
+        self.mod_category().is_set_definition()
+    }
+
+    /// Check if this is a regular mod
+    pub fn is_regular(&self) -> bool {
+        self.mod_category().is_regular()
+    }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Introduced {
-    pub name: String,
-    pub url: String,
-    pub aliases: Vec<String>,
-    pub parent: String,
-    pub date: String,
+impl Item for Mod {
+    fn unique_name(&self) -> &str {
+        &self.unique_name
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn category(&self) -> &str {
+        &self.category
+    }
+    fn type_field(&self) -> &str {
+        &self.type_field
+    }
+    fn image_name(&self) -> Option<&str> {
+        Some(&self.image_name)
+    }
+    fn tradable(&self) -> bool {
+        self.tradable
+    }
+    fn masterable(&self) -> bool {
+        self.masterable
+    }
+    fn patchlogs(&self) -> &[Patchlog] {
+        &self.patchlogs
+    }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LevelStat {
-    pub stats: Vec<String>,
+impl Droppable for Mod {
+    fn drops(&self) -> &[Drop] {
+        &self.drops
+    }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Patchlog {
-    pub name: String,
-    pub date: String,
-    pub url: String,
-    pub additions: String,
-    pub changes: String,
-    pub fixes: String,
+impl WikiaLinked for Mod {
+    fn wiki_available(&self) -> Option<bool> {
+        self.wiki_available
+    }
+    fn wikia_url(&self) -> Option<&str> {
+        self.wikia_url.as_deref()
+    }
+    fn wikia_thumbnail(&self) -> Option<&str> {
+        self.wikia_thumbnail.as_deref()
+    }
+    fn introduced(&self) -> Option<&Introduced> {
+        self.introduced.as_ref()
+    }
+    fn release_date(&self) -> Option<&str> {
+        self.release_date.as_deref()
+    }
 }
 
+/// Riven challenge definition.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AvailableChallenge {
     pub full_name: String,
     pub description: String,
+    #[serde(default)]
     pub complications: Vec<Complication>,
 }
 
+/// Riven challenge complication modifier.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Complication {
@@ -109,15 +199,18 @@ pub struct Complication {
     pub override_tag: Option<String>,
 }
 
+/// Riven upgrade entry.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpgradeEntry {
     pub tag: String,
     pub prefix_tag: String,
     pub suffix_tag: String,
+    #[serde(default)]
     pub upgrade_values: Vec<UpgradeValue>,
 }
 
+/// Riven upgrade value.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpgradeValue {
@@ -133,117 +226,10 @@ mod tests {
 
     #[test]
     fn test_deserialize_raw_mod() {
-        let json_data = r#"
-{
-  "baseDrain": 4,
-  "category": "Mods",
-  "compatName": "WARFRAME",
-  "drops": [
-    {
-      "chance": 0.0909,
-      "location": "Earth/Cetus (Level 50 - 70 Cetus Bounty), Rotation C",
-      "rarity": "Rare",
-      "type": "Amar's Hatred"
-    },
-    {
-      "chance": 0.0909,
-      "location": "Venus/Orb Vallis (Level 50 - 70 Orb Vallis Bounty), Rotation C",
-      "rarity": "Rare",
-      "type": "Amar's Hatred"
-    },
-    {
-      "chance": 0.125,
-      "location": "Earth/Cetus (Level 50 - 70 Cetus Bounty), Rotation C",
-      "rarity": "Uncommon",
-      "type": "Amar's Hatred"
-    },
-    {
-      "chance": 0.125,
-      "location": "Venus/Orb Vallis (Level 50 - 70 Orb Vallis Bounty), Rotation C",
-      "rarity": "Uncommon",
-      "type": "Amar's Hatred"
-    },
-    {
-      "chance": 0.1351,
-      "location": "Earth/Cetus (Level 50 - 70 Cetus Bounty), Rotation C",
-      "rarity": "Uncommon",
-      "type": "Amar's Hatred"
-    },
-    {
-      "chance": 0.1351,
-      "location": "Venus/Orb Vallis (Level 50 - 70 Orb Vallis Bounty), Rotation C",
-      "rarity": "Uncommon",
-      "type": "Amar's Hatred"
-    }
-  ],
-  "fusionLimit": 5,
-  "imageName": "amar's-hatred-c1e8cbf38a.jpg",
-  "introduced": {
-    "name": "Update 31.0",
-    "url": "https://wiki.warframe.com/w/Update_31%23Update_31.0",
-    "aliases": [
-      "31",
-      "31.0",
-      "The New War"
-    ],
-    "parent": "31.0",
-    "date": "2021-12-15"
-  },
-  "isAugment": true,
-  "isPrime": false,
-  "levelStats": [
-    {
-      "stats": [
-        "+4% Armor",
-        "+2.5% Ability Strength"
-      ]
-    },
-    {
-      "stats": [
-        "+8% Armor",
-        "+5% Ability Strength"
-      ]
-    },
-    {
-      "stats": [
-        "+13% Armor",
-        "+7.5% Ability Strength"
-      ]
-    },
-    {
-      "stats": [
-        "+17% Armor",
-        "+10% Ability Strength"
-      ]
-    },
-    {
-      "stats": [
-        "+21% Armor",
-        "+12.5% Ability Strength"
-      ]
-    },
-    {
-      "stats": [
-        "+25% Armor",
-        "+15% Ability Strength"
-      ]
-    }
-  ],
-  "masterable": false,
-  "modSet": "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod",
-  "name": "Amar's Hatred",
-  "polarity": "vazarin",
-  "rarity": "Uncommon",
-  "releaseDate": "2021-12-15",
-  "tradable": true,
-  "transmutable": false,
-  "type": "Warframe Mod",
-  "uniqueName": "/Lotus/Upgrades/Mods/Sets/Amar/AmarWarframeMod",
-  "wikiAvailable": true,
-  "wikiaThumbnail": "https://wiki.warframe.com/images/Amar%27sHatredMod.png?92f89",
-  "wikiaUrl": "https://wiki.warframe.com/w/Amar's_Hatred"
-}
-"#;
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/mods_test_1.json"
+        ));
 
         let m: Mod = from_str(json_data).unwrap();
 
@@ -259,28 +245,87 @@ mod tests {
 
     #[test]
     fn test_deserialize_mod_set() {
-        let json_data = r#"
-{
-  "category": "Mods",
-  "imageName": "amarsetmod-c1bb91549f.png",
-  "isPrime": false,
-  "masterable": false,
-  "name": "Amarsetmod",
-  "numUpgradesInSet": 3,
-  "stats": [
-    "Teleport to a target within 10m on using a Heavy Attack.",
-    "Teleport to a target within 20m on using a Heavy Attack.",
-    "Teleport to a target within 30m on using a Heavy Attack."
-  ],
-  "tradable": false,
-  "type": "Mod Set Mod",
-  "uniqueName": "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod"
-}
-"#;
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/mods_test_2.json"
+        ));
 
         let m: Mod = from_str(json_data).unwrap();
 
         assert_eq!(m.unique_name, "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod");
         assert_eq!(m.num_upgrades_in_set, Some(3));
+    }
+
+    #[test]
+    fn test_mod_category_regular() {
+        let m = Mod {
+            name: "Serration".to_string(),
+            level_stats: vec![],
+            ..Default::default()
+        };
+
+        assert!(m.is_regular());
+        assert!(!m.is_riven());
+        assert!(!m.is_set());
+        assert!(!m.is_set_member());
+        assert!(!m.is_set_definition());
+    }
+
+    #[test]
+    fn test_mod_category_set_member() {
+        let m = Mod {
+            name: "Amar's Anguish".to_string(),
+            mod_set: Some("/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod".to_string()),
+            ..Default::default()
+        };
+
+        assert!(m.is_set());
+        assert!(m.is_set_member());
+        assert!(!m.is_set_definition());
+        assert!(!m.is_riven());
+        assert!(!m.is_regular());
+
+        let cat = m.mod_category();
+        assert_eq!(
+            cat.mod_set(),
+            Some("/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod")
+        );
+    }
+
+    #[test]
+    fn test_mod_category_set_definition() {
+        let m = Mod {
+            name: "Amarsetmod".to_string(),
+            num_upgrades_in_set: Some(3),
+            stats: vec!["Bonus 1".to_string(), "Bonus 2".to_string()],
+            ..Default::default()
+        };
+
+        assert!(m.is_set());
+        assert!(m.is_set_definition());
+        assert!(!m.is_set_member());
+        assert!(!m.is_riven());
+        assert!(!m.is_regular());
+
+        let cat = m.mod_category();
+        assert_eq!(cat.num_upgrades_in_set(), Some(3));
+    }
+
+    #[test]
+    fn test_mod_category_riven() {
+        let m = Mod {
+            name: "Rifle Riven Mod".to_string(),
+            available_challenges: vec![AvailableChallenge {
+                full_name: "Test Challenge".to_string(),
+                description: "Complete test".to_string(),
+                complications: vec![],
+            }],
+            upgrade_entries: vec![],
+            ..Default::default()
+        };
+
+        assert!(m.is_riven());
+        assert!(!m.is_set());
+        assert!(!m.is_regular());
     }
 }

@@ -1,0 +1,41 @@
+{
+  "Configs": [
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/PistolHipsR"
+      ],
+      "Upgrades": [
+        "",
+        "",
+        "5bc212eea38e4a8b6d15e89b",
+        "5bcf33a4a38e4a43f22f7b4a",
+        "",
+        "5bc24e033f8d4a32bf3d5f9b",
+        "",
+        "5bc3631257904a5c9b799fd5"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/PistolHipsR"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/PistolHipsR"
+      ]
+    }
+  ],
+  "ItemId": {
+    "$oid": "5be899d757904a4ff96b9c30"
+  },
+  "ItemType": "/Lotus/Weapons/Corpus/Pistols/CorpusMinigun/CorpusMinigun",
+  "UpgradeVer": 101,
+  "XP": 3744243
+}

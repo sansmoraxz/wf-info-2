@@ -1,3 +1,22 @@
+// Shared types - import from these modules instead of defining locally
+pub mod common;
+pub mod components;
+pub mod damage;
+pub mod enums;
+pub mod props;
+pub mod traits;
+
+// Re-export common traits for easier access
+pub use traits::{
+    Buildable, Character, Droppable, Equippable, HasAbilities, Item, MeleeWeapon, Prime,
+    RangedWeapon, Weapon, WikiaLinked,
+};
+
+// Re-export important enums for easier access
+pub use enums::{ModCategory, Noise, Polarity, Rarity, Trigger, VaultStatus};
+pub use props::{MeleeWeaponData, RangedWeaponData, WeaponTypeStats};
+
+// Category-specific modules
 pub mod melee;
 pub mod primary;
 pub mod secondary;
@@ -19,6 +38,7 @@ pub mod misc;
 pub mod relics;
 pub mod resource;
 
+/// Trait for items that belong to product categories (for inventory lookup).
 pub trait ProductCategory {
     fn get_product_categories(&self) -> Vec<String>;
 }
