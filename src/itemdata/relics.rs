@@ -1,7 +1,10 @@
-use serde::{Deserialize, Serialize};
+//! Void Relic item data.
 
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::itemdata::common::{Drop, Patchlog};
+use crate::itemdata::traits::{Droppable, Item};
 use crate::itemdata::ProductCategory;
 
 pub type Root = Vec<Relic>;
@@ -9,22 +12,31 @@ pub type Root = Vec<Relic>;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Relic {
-    pub category: String,
-    pub description: String,
-    pub image_name: String,
-    pub locations: Vec<Value>, // observed to be empty array
-    pub masterable: bool,
+    // Core identity
+    pub unique_name: String,
     pub name: String,
-    pub rewards: Vec<Value>, // observed to be empty array
-    pub tradable: bool,
+    pub category: String,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub unique_name: String,
+    pub image_name: String,
+    pub description: String,
+
+    // Tradable
+    pub tradable: bool,
+    pub masterable: bool,
+
+    // Relic-specific
+    #[serde(default)]
+    pub locations: Vec<Value>, // observed to be empty array
+    #[serde(default)]
+    pub rewards: Vec<Value>, // observed to be empty array
+    pub exclude_from_codex: Option<bool>,
+
+    // Droppable
     #[serde(default)]
     pub drops: Vec<Drop>,
     #[serde(default)]
     pub patchlogs: Vec<Patchlog>,
-    pub exclude_from_codex: Option<bool>,
 }
 
 impl ProductCategory for Relic {
@@ -33,25 +45,37 @@ impl ProductCategory for Relic {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Drop {
-    pub chance: f64,
-    pub location: String,
-    pub rarity: String,
-    #[serde(rename = "type")]
-    pub type_field: String,
+impl Item for Relic {
+    fn unique_name(&self) -> &str {
+        &self.unique_name
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn category(&self) -> &str {
+        &self.category
+    }
+    fn type_field(&self) -> &str {
+        &self.type_field
+    }
+    fn image_name(&self) -> Option<&str> {
+        Some(&self.image_name)
+    }
+    fn tradable(&self) -> bool {
+        self.tradable
+    }
+    fn masterable(&self) -> bool {
+        self.masterable
+    }
+    fn patchlogs(&self) -> &[Patchlog] {
+        &self.patchlogs
+    }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Patchlog {
-    pub name: String,
-    pub date: String,
-    pub url: String,
-    pub additions: String,
-    pub changes: String,
-    pub fixes: String,
+impl Droppable for Relic {
+    fn drops(&self) -> &[Drop] {
+        &self.drops
+    }
 }
 
 #[cfg(test)]

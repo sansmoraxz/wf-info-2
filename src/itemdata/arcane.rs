@@ -1,5 +1,11 @@
+//! Arcane enhancement item data.
+
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::common::{Drop, LevelStat, Patchlog};
+use crate::itemdata::components::Component;
+use crate::itemdata::enums::Rarity;
+use crate::itemdata::traits::{Droppable, Item};
 use crate::itemdata::ProductCategory;
 
 pub type Root = Vec<Arcane>;
@@ -7,28 +13,39 @@ pub type Root = Vec<Arcane>;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Arcane {
-    pub category: String,
-    #[serde(default)]
-    pub drops: Vec<Drop>,
-    pub image_name: String,
-    #[serde(default)]
-    pub level_stats: Vec<LevelStat>,
-    pub masterable: bool,
+    // Core identity
+    pub unique_name: String,
     pub name: String,
-    pub rarity: Option<String>,
-    pub tradable: bool,
+    pub category: String,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub unique_name: String,
-    pub exclude_from_codex: Option<bool>,
+    pub image_name: String,
+
+    // Tradable
+    pub tradable: bool,
+    pub masterable: bool,
+
+    // Arcane-specific
     #[serde(default)]
-    pub patchlogs: Vec<Patchlog>,
+    pub rarity: Option<Rarity>,
+    #[serde(default)]
+    pub level_stats: Vec<LevelStat>,
+    pub exclude_from_codex: Option<bool>,
+
+    // Buildable properties
     pub build_price: Option<i64>,
     pub build_quantity: Option<i64>,
     pub build_time: Option<i64>,
-    pub components: Option<Vec<Component>>,
-    pub consume_on_build: Option<bool>,
     pub skip_build_time_price: Option<i64>,
+    pub consume_on_build: Option<bool>,
+    #[serde(default)]
+    pub components: Vec<Component>,
+
+    // Droppable
+    #[serde(default)]
+    pub drops: Vec<Drop>,
+    #[serde(default)]
+    pub patchlogs: Vec<Patchlog>,
 }
 
 impl ProductCategory for Arcane {
@@ -37,41 +54,37 @@ impl ProductCategory for Arcane {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Drop {
-    pub chance: f64,
-    pub location: String,
-    pub rarity: String,
-    #[serde(rename = "type")]
-    pub type_field: String,
+impl Item for Arcane {
+    fn unique_name(&self) -> &str {
+        &self.unique_name
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn category(&self) -> &str {
+        &self.category
+    }
+    fn type_field(&self) -> &str {
+        &self.type_field
+    }
+    fn image_name(&self) -> Option<&str> {
+        Some(&self.image_name)
+    }
+    fn tradable(&self) -> bool {
+        self.tradable
+    }
+    fn masterable(&self) -> bool {
+        self.masterable
+    }
+    fn patchlogs(&self) -> &[Patchlog] {
+        &self.patchlogs
+    }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LevelStat {
-    pub stats: Vec<String>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Patchlog {
-    pub name: String,
-    pub date: String,
-    pub url: String,
-    pub additions: String,
-    pub changes: String,
-    pub fixes: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Component {
-    pub unique_name: String,
-    pub name: String,
-    pub item_count: i64,
-    pub image_name: String,
-    pub tradable: bool,
-    pub masterable: bool,
-    pub drops: Vec<Drop>,
-    pub description: Option<String>,
+impl Droppable for Arcane {
+    fn drops(&self) -> &[Drop] {
+        &self.drops
+    }
 }
 
 #[cfg(test)]
