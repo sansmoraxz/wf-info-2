@@ -1,6 +1,7 @@
 use chrono::Utc;
 use notify::RecursiveMode;
 use notify_debouncer_mini::{DebounceEventResult, new_debouncer};
+#[cfg(feature = "memory")]
 use serde_json::json;
 use std::fs::{File, metadata};
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
@@ -10,14 +11,14 @@ use tokio::sync::mpsc;
 use tokio::time::sleep;
 
 use crate::account::AccountInfo;
-use crate::control::{
-    AccountLoginEvent, AccountLogoutEvent, DaemonEvent, InventoryFetchedEvent, ProfileUpdatedEvent,
-};
-use crate::inventory_refresh;
+use crate::control::{AccountLoginEvent, AccountLogoutEvent, DaemonEvent, ProfileUpdatedEvent};
 use crate::logs::{self, LogEvent};
-use crate::process;
+
 use crate::storage;
 use crate::{api, control};
+
+#[cfg(feature = "memory")]
+use crate::{control::InventoryFetchedEvent, inventory_refresh, process};
 
 pub async fn observe_warframe_activity(
     app_config_path: PathBuf,
@@ -194,7 +195,8 @@ pub async fn observe_warframe_activity(
                                         }
                                     }
 
-                                    // 2. Scan Memory & Fetch Inventory
+                                    // 2. Scan Memory & Fetch Nonces and Inventory (if memory feature enabled)
+                                    #[cfg(feature = "memory")]
                                     if let Some(pid) = process::get_warframe_pid() {
                                         log::info!(
                                             "Warframe running (PID: {}), attempting to extract inventory auth...",

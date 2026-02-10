@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::sync::{OnceLock, RwLock};
 
 static CURRENT_ACCOUNT_ID: OnceLock<RwLock<Option<String>>> = OnceLock::new();
@@ -12,6 +14,12 @@ pub fn set_current_account(account_id: Option<String>) {
     }
 }
 
+#[cfg(feature = "memory")]
 pub(crate) fn current_account() -> Option<String> {
     account_id_store().read().ok().and_then(|g| g.clone())
+}
+
+#[cfg(not(feature = "memory"))]
+pub(crate) fn current_account() -> Option<String> {
+    None
 }

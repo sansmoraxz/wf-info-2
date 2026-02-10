@@ -1,11 +1,19 @@
-use anyhow::{Context, Result};
-use regex::bytes::Regex;
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::time::Duration;
 use sysinfo::System;
 use tokio::time::sleep;
+
+#[cfg(feature = "memory")]
+use {
+    anyhow::{Context, Result},
+    regex::bytes::Regex,
+    std::collections::HashMap,
+};
+
+#[cfg(all(feature = "memory", target_os = "linux"))]
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, Read, Seek, SeekFrom},
+};
 
 /// Checks if Warframe is the main game process (not launcher)
 fn is_warframe_game_process(process: &sysinfo::Process) -> bool {
@@ -80,7 +88,7 @@ impl AuthQuery {
 /// Scans process memory for authorization data (accountId + nonce).
 /// This reads /proc/{pid}/maps and /proc/{pid}/mem on Linux.
 /// Requires appropriate permissions
-#[cfg(target_os = "linux")]
+#[cfg(all(feature = "memory", target_os = "linux"))]
 pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQuery>> {
     log::info!(
         "Scanning memory for auth data (PID: {}, accountId: {})",
@@ -197,7 +205,7 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
 /// Scans process memory for authorization data (accountId + nonce) on Windows.
 /// Uses Windows API to enumerate and read process memory regions.
 /// Requires appropriate process access rights (PROCESS_VM_READ | PROCESS_QUERY_INFORMATION)
-#[cfg(target_os = "windows")]
+#[cfg(all(feature = "memory", target_os = "windows"))]
 pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQuery>> {
     use std::ptr;
     use winapi::shared::minwindef::{FALSE, LPVOID};
@@ -342,12 +350,13 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
 }
 
 /// Scans process memory for authorization data - stub for unsupported platforms
-#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+#[cfg(all(feature = "memory", not(any(target_os = "linux", target_os = "windows"))))]
 pub fn scan_memory_for_auth(_pid: u32, _account_id: &str) -> Result<Option<AuthQuery>> {
     anyhow::bail!("Memory scanning is not supported on this platform")
 }
 
 /// Attempts to extract auth data with retries, waiting for it to appear in memory
+#[cfg(feature = "memory")]
 pub async fn scan_memory_for_auth_with_retry(
     pid: u32,
     account_id: &str,

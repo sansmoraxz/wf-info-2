@@ -3,6 +3,7 @@ pub mod api;
 pub mod control;
 pub mod control_ops;
 pub mod inventory;
+#[cfg(feature = "memory")]
 pub mod inventory_refresh;
 pub mod itemdata;
 pub mod logs;
