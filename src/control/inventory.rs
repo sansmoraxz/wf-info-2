@@ -1,3 +1,4 @@
+#[cfg(feature = "memory")]
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
@@ -9,7 +10,7 @@ use tantivy::query::{Occur, QueryParser, TermQuery};
 use tantivy::schema::IndexRecordOption;
 
 use crate::inventory::Inventory;
-use crate::{inventory_refresh, process, storage};
+use crate::storage;
 
 use super::broadcaster;
 use super::events::{DaemonEvent, InventoryFetchedEvent, InventoryStaleEvent};
@@ -17,8 +18,13 @@ use super::item_data::lookup_item_info;
 use super::search::{
     build_tantivy_index, collect_inventory_items, get_or_build_inventory_index, search_inventory,
 };
-use super::state::current_account;
 use super::utils::parse_params;
+
+#[cfg(feature = "memory")]
+use {
+    super::state::current_account,
+    crate::{inventory_refresh, process},
+};
 
 #[derive(Debug, Deserialize, Default)]
 pub(crate) struct LoadInventoryParams {
@@ -254,6 +260,7 @@ pub(crate) fn handle_inventory_meta_get() -> Result<Value> {
     Ok(serde_json::to_value(meta).context("Failed to serialize inventory metadata")?)
 }
 
+#[cfg(feature = "memory")]
 #[derive(Debug, Deserialize, Default)]
 pub(crate) struct RefreshParams {
     pub scan_retries: Option<u32>,
@@ -262,6 +269,7 @@ pub(crate) struct RefreshParams {
     pub source: Option<String>,
 }
 
+#[cfg(feature = "memory")]
 pub(crate) async fn handle_inventory_refresh(params: Option<Value>) -> Result<Value> {
     let params: RefreshParams = parse_params(params)?;
     let account_id = current_account()
@@ -304,6 +312,11 @@ pub(crate) async fn handle_inventory_refresh(params: Option<Value>) -> Result<Va
         "summary": inventory_summary(&inventory),
         "meta": meta,
     }))
+}
+
+#[cfg(not(feature = "memory"))]
+pub(crate) async fn handle_inventory_refresh(_params: Option<Value>) -> Result<Value> {
+    anyhow::bail!("inventory.refresh requires the 'memory' feature to be enabled")
 }
 
 #[derive(Debug, Deserialize, Default)]

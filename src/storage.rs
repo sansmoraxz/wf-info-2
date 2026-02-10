@@ -19,8 +19,7 @@ use crate::{inventory, profile::ProfileData};
 // Can be any string now
 const RAW_KEY_ENV: &str = env!("WF_PROFILE_KEY");
 
-// AES-128-CBC key and IV matching the C++ reference implementation
-// Used for inventory data compatibility with other tools
+// AES-128-CBC
 const INVENTORY_KEY: [u8; 16] = [
     76, 69, 79, 45, 65, 76, 69, 67, 9, 69, 79, 45, 65, 76, 69, 67,
 ];
@@ -76,7 +75,7 @@ pub fn delete_profile() -> anyhow::Result<()> {
 
 /// Saves inventory data in two formats:
 /// 1. inventory.json - Pretty-printed JSON for human readability
-/// 2. lastData.dat - AES-128-CBC encrypted (compatible with C++ reference)
+/// 2. lastData.dat - AES-128-CBC encrypted
 pub fn save_inventory(inventory: &inventory::Inventory) -> anyhow::Result<()> {
     use aes::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
     type Aes128CbcEnc = cbc::Encryptor<aes::Aes128>;
