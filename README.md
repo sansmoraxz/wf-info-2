@@ -2,6 +2,14 @@
 
 Alternative Warframe companion app with Linux support.
 
+This app is designed to run as a background daemon that monitors the Warframe process and provides an API for fetching inventory data, account information, and other game-related details. It can be used in conjunction with a CLI client or integrated into other applications.
+
+> <font color="red">_Warning_</font>: DE has not officially granted permission to access Warframe's process, so use the `memory` feature with caution. It is used to load live inventory data using your account from DE's API but could potentially lead to risk of loosing access to your account. Use proper judgement and ensure you understand the implications of enabling this feature.
+> 
+> For inventory you may use other apps like [Overwolf's Allecaframe](https://www.overwolf.com/app/alejandro_cabrerizo-alecaframe), and load their exported inventory data into this app for filtering and querying without needing the `memory` feature.
+
+This warning does not apply for other features like screenshot capture, log monitoring, etc. which uses standard OS APIs and does not interact with the game process directly.
+
 ## Building
 
 ```bash
@@ -12,11 +20,11 @@ This produces two binaries:
 - `wf-info-daemon` - The main daemon that monitors Warframe
 - `wf-info-cli` - CLI client to interact with the daemon
 
-## Usage
+## Usage (Linux)
 
 ### Option 1: Wrapper Mode (No sudo required with default kernel settings)
 
-Run as a parent process that launches Warframe as a child. This allows memory access without sudo on most systems:
+Run as a parent process that launches Warframe as a child. This allows the daemon to automatically monitor the Warframe process without needing elevated permissions.
 
 ```bash
 ./target/release/wf-info-daemon -- /path/to/Warframe.x64.exe [warframe args]
@@ -75,7 +83,7 @@ Set endpoint via CLI flags or environment variables:
 | `inventory.filter` | Filter and search inventory items |
 | `inventory.meta.get` | Get inventory metadata |
 | `inventory.stale.update` | Mark inventory as stale |
-| `inventory.refresh` | Refresh inventory from game API |
+| `inventory.refresh` | Refresh inventory from game API (with `memory` feature enabled) |
 | `screenshot.trigger` | Capture and return a screenshot |
 
 ### Examples
