@@ -12,7 +12,7 @@ use tokio::time::sleep;
 
 use crate::account::AccountInfo;
 use crate::control::{AccountLoginEvent, AccountLogoutEvent, DaemonEvent, ProfileUpdatedEvent};
-use crate::logs::{self, LogEvent};
+use crate::logs::{self, LogEntryParser, LogEvent};
 
 use crate::storage;
 use crate::{api, control};
@@ -42,6 +42,7 @@ pub async fn observe_warframe_activity(
     log::info!("EE.log found at {:?}", log_path);
 
     let mut current_account_id: Option<String> = None;
+    let mut log_parser = LogEntryParser::new();
     let log_filename = log_path.file_name().ok_or("Invalid log path")?.to_owned();
     let initial_size = metadata(&log_path)?.len();
     let mut last_size = initial_size;
@@ -102,6 +103,7 @@ pub async fn observe_warframe_activity(
                 last_size = 0;
                 last_position = 0;
                 current_account_id = None;
+                log_parser.reset();
                 read_file = File::open(&log_path)?;
                 continue;
             }
@@ -117,6 +119,7 @@ pub async fn observe_warframe_activity(
                 last_size = 0;
                 last_position = 0;
                 current_account_id = None;
+                log_parser.reset();
                 read_file = File::open(&log_path)?;
                 continue;
             }
@@ -133,166 +136,179 @@ pub async fn observe_warframe_activity(
 
                 let reader = BufReader::new(&read_file);
 
-                // Process new lines
+                // Feed lines through the state machine, collecting complete entries
+                let mut complete_entries: Vec<String> = Vec::new();
                 for line_result in reader.lines() {
                     if let Ok(line) = line_result {
                         log::trace!("New line: {}", line);
-                        match logs::parse_log_line(&line) {
-                            Some(LogEvent::Login(AccountInfo {
-                                username,
-                                account_id,
-                            })) => {
-                                if current_account_id.as_deref() == Some(&account_id) {
-                                    log::debug!(
-                                        "Duplicate login event for account_id={}",
-                                        account_id
-                                    );
-                                    continue;
-                                }
+                        if let Some(entry) = log_parser.feed_line(&line) {
+                            complete_entries.push(entry);
+                        }
+                    }
+                }
+                // Flush the last buffered entry
+                if let Some(entry) = log_parser.flush() {
+                    complete_entries.push(entry);
+                }
 
-                                current_account_id = Some(account_id.clone());
-                                control::set_current_account(Some(account_id.clone()));
-                                log::info!(
-                                    "User logged in: username={}, account_id={}",
-                                    username,
+                // Process complete multi-line entries
+                for entry in complete_entries {
+                    log::trace!("Complete log entry: {}", entry);
+                    match logs::parse_log_line(&entry) {
+                        Some(LogEvent::Login(AccountInfo {
+                            username,
+                            account_id,
+                        })) => {
+                            if current_account_id.as_deref() == Some(&account_id) {
+                                log::debug!(
+                                    "Duplicate login event for account_id={}",
                                     account_id
                                 );
+                                continue;
+                            }
 
-                                // Emit account login event
-                                control::emit(DaemonEvent::AccountLogin(AccountLoginEvent {
-                                    timestamp: Utc::now(),
-                                    account_id: account_id.clone(),
-                                    username: username.clone(),
-                                }));
+                            current_account_id = Some(account_id.clone());
+                            control::set_current_account(Some(account_id.clone()));
+                            log::info!(
+                                "User logged in: username={}, account_id={}",
+                                username,
+                                account_id
+                            );
 
-                                let acc_id = account_id.clone();
-                                let user_name = username.clone();
-                                tokio::spawn(async move {
-                                    // 1. Fetch Profile
-                                    match api::fetch_player_profile(&acc_id).await {
-                                        Ok(profile) => {
-                                            log::info!(
-                                                "Fetched profile for {}: {:?}",
+                            // Emit account login event
+                            control::emit(DaemonEvent::AccountLogin(AccountLoginEvent {
+                                timestamp: Utc::now(),
+                                account_id: account_id.clone(),
+                                username: username.clone(),
+                            }));
+
+                            let acc_id = account_id.clone();
+                            let user_name = username.clone();
+                            tokio::spawn(async move {
+                                // 1. Fetch Profile
+                                match api::fetch_player_profile(&acc_id).await {
+                                    Ok(profile) => {
+                                        log::info!(
+                                            "Fetched profile for {}: {:?}",
+                                            user_name,
+                                            profile
+                                        );
+                                        if let Err(e) =
+                                            storage::save_encrypted_profile(&profile)
+                                        {
+                                            log::error!(
+                                                "Failed to save profile for {}: {}",
                                                 user_name,
-                                                profile
+                                                e
                                             );
+                                        } else {
+                                            // Emit profile updated event
+                                            control::emit(DaemonEvent::ProfileUpdated(
+                                                ProfileUpdatedEvent {
+                                                    timestamp: Utc::now(),
+                                                    account_id: acc_id.clone(),
+                                                },
+                                            ));
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::error!(
+                                            "Failed to fetch profile for {}: {}",
+                                            user_name,
+                                            e
+                                        );
+                                    }
+                                }
+
+                                // 2. Scan Memory & Fetch Nonces and Inventory (if memory feature enabled)
+                                #[cfg(feature = "memory")]
+                                if let Some(pid) = process::get_warframe_pid() {
+                                    log::info!(
+                                        "Warframe running (PID: {}), attempting to extract inventory auth...",
+                                        pid
+                                    );
+
+                                    match inventory_refresh::fetch_inventory_from_process(
+                                        &acc_id,
+                                        pid,
+                                        5,
+                                        Duration::from_secs(3),
+                                    )
+                                    .await
+                                    {
+                                        Ok(Some(result)) => {
+                                            log::info!(
+                                                "Successfully extracted auth: {}",
+                                                result.auth.to_query_string()
+                                            );
+
                                             if let Err(e) =
-                                                storage::save_encrypted_profile(&profile)
+                                                storage::save_inventory(&result.inventory)
                                             {
-                                                log::error!(
-                                                    "Failed to save profile for {}: {}",
-                                                    user_name,
-                                                    e
-                                                );
+                                                log::error!("Failed to save inventory: {}", e);
                                             } else {
-                                                // Emit profile updated event
-                                                control::emit(DaemonEvent::ProfileUpdated(
-                                                    ProfileUpdatedEvent {
+                                                if let Err(e) = storage::touch_inventory_updated(
+                                                    Some("auto"),
+                                                ) {
+                                                    log::warn!(
+                                                        "Failed to update inventory metadata: {}",
+                                                        e
+                                                    );
+                                                }
+
+                                                // Emit inventory fetched event
+                                                let summary = json!({
+                                                    "suits": result.inventory.suits.len(),
+                                                    "long_guns": result.inventory.long_guns.len(),
+                                                    "pistols": result.inventory.pistols.len(),
+                                                    "melee": result.inventory.melee.len(),
+                                                });
+                                                control::emit(DaemonEvent::InventoryFetched(
+                                                    InventoryFetchedEvent {
                                                         timestamp: Utc::now(),
-                                                        account_id: acc_id.clone(),
+                                                        source: "auto".to_string(),
+                                                        summary,
                                                     },
                                                 ));
                                             }
                                         }
+                                        Ok(None) => {
+                                            log::warn!(
+                                                "Could not extract auth data from process memory"
+                                            );
+                                            log::info!(
+                                                "Tip: Make sure you're logged into Warframe"
+                                            );
+                                        }
                                         Err(e) => {
-                                            log::error!(
-                                                "Failed to fetch profile for {}: {}",
-                                                user_name,
-                                                e
+                                            log::error!("Memory scan error: {}", e);
+                                            log::info!(
+                                                "Tip: Grant necessary permissions or try running with sudo"
                                             );
                                         }
                                     }
-
-                                    // 2. Scan Memory & Fetch Nonces and Inventory (if memory feature enabled)
-                                    #[cfg(feature = "memory")]
-                                    if let Some(pid) = process::get_warframe_pid() {
-                                        log::info!(
-                                            "Warframe running (PID: {}), attempting to extract inventory auth...",
-                                            pid
-                                        );
-
-                                        match inventory_refresh::fetch_inventory_from_process(
-                                            &acc_id,
-                                            pid,
-                                            5,
-                                            Duration::from_secs(3),
-                                        )
-                                        .await
-                                        {
-                                            Ok(Some(result)) => {
-                                                log::info!(
-                                                    "Successfully extracted auth: {}",
-                                                    result.auth.to_query_string()
-                                                );
-
-                                                if let Err(e) =
-                                                    storage::save_inventory(&result.inventory)
-                                                {
-                                                    log::error!("Failed to save inventory: {}", e);
-                                                } else {
-                                                    if let Err(e) = storage::touch_inventory_updated(
-                                                        Some("auto"),
-                                                    ) {
-                                                        log::warn!(
-                                                            "Failed to update inventory metadata: {}",
-                                                            e
-                                                        );
-                                                    }
-
-                                                    // Emit inventory fetched event
-                                                    let summary = json!({
-                                                        "suits": result.inventory.suits.len(),
-                                                        "long_guns": result.inventory.long_guns.len(),
-                                                        "pistols": result.inventory.pistols.len(),
-                                                        "melee": result.inventory.melee.len(),
-                                                    });
-                                                    control::emit(DaemonEvent::InventoryFetched(
-                                                        InventoryFetchedEvent {
-                                                            timestamp: Utc::now(),
-                                                            source: "auto".to_string(),
-                                                            summary,
-                                                        },
-                                                    ));
-                                                }
-                                            }
-                                            Ok(None) => {
-                                                log::warn!(
-                                                    "Could not extract auth data from process memory"
-                                                );
-                                                log::info!(
-                                                    "Tip: Make sure you're logged into Warframe"
-                                                );
-                                            }
-                                            Err(e) => {
-                                                log::error!("Memory scan error: {}", e);
-                                                log::info!(
-                                                    "Tip: Grant necessary permissions or try running with sudo"
-                                                );
-                                            }
-                                        }
-                                    } else {
-                                        log::info!(
-                                            "Warframe not running - skipping inventory fetch"
-                                        );
-                                    }
-                                });
-                            }
-                            Some(LogEvent::Logout) => {
-                                current_account_id = None;
-                                control::set_current_account(None);
-                                log::info!("User logged out");
-
-                                // Emit account logout event
-                                control::emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
-                                    timestamp: Utc::now(),
-                                }));
-
-                                if let Err(e) = storage::delete_profile() {
-                                    log::error!("Failed to delete profile: {}", e);
+                                } else {
+                                    log::info!(
+                                        "Warframe not running - skipping inventory fetch"
+                                    );
                                 }
-                            }
-                            None => {}
+                            });
                         }
+                        Some(LogEvent::Logout) => {
+                            current_account_id = None;
+                            control::set_current_account(None);
+                            log::info!("User logged out");
+
+                            // Emit account logout event
+                            control::emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
+                                timestamp: Utc::now(),
+                            }));
+
+                            if let Err(e) = storage::delete_profile() {
+                                log::error!("Failed to delete profile: {}", e);
+                            }
+                        }
+                        None => {}
                     }
                 }
 

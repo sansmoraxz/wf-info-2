@@ -78,6 +78,78 @@ pub fn find_wf_app_config() -> Option<PathBuf> {
     platform_default_app_config()
 }
 
+/// Returns true if the line starts a new log entry (has a timestamp prefix like "10.227 ").
+fn is_log_entry_start(line: &str) -> bool {
+    let bytes = line.as_bytes();
+    // Must start with at least one digit
+    let mut i = 0;
+    if i >= bytes.len() || !bytes[i].is_ascii_digit() {
+        return false;
+    }
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    // Dot
+    if i >= bytes.len() || bytes[i] != b'.' {
+        return false;
+    }
+    i += 1;
+    // At least one digit after dot
+    if i >= bytes.len() || !bytes[i].is_ascii_digit() {
+        return false;
+    }
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    // Space
+    i < bytes.len() && bytes[i] == b' '
+}
+
+/// State machine that accumulates multi-line log entries and yields complete ones.
+///
+/// Transitions:
+///   Idle   + timestamp line  → buffer it, go to Buffering
+///   Idle   + continuation    → discard (orphaned)
+///   Buffering + timestamp    → flush buffered entry, start buffering new one
+///   Buffering + continuation → append to buffer
+///   flush()                  → yield buffered entry if any, go to Idle
+pub struct LogEntryParser {
+    buffer: Option<String>,
+}
+
+impl LogEntryParser {
+    pub fn new() -> Self {
+        Self { buffer: None }
+    }
+
+    /// Feed a single line. Returns a completed log entry if one was finalized.
+    pub fn feed_line(&mut self, line: &str) -> Option<String> {
+        if is_log_entry_start(line) {
+            // New entry starts — flush previous if any
+            let completed = self.buffer.take();
+            self.buffer = Some(line.to_string());
+            completed
+        } else {
+            // Continuation line — append to current buffer
+            if let Some(buf) = &mut self.buffer {
+                buf.push('\n');
+                buf.push_str(line);
+            }
+            None
+        }
+    }
+
+    /// Flush the current buffer, returning any incomplete entry.
+    pub fn flush(&mut self) -> Option<String> {
+        self.buffer.take()
+    }
+
+    /// Reset state (e.g. on file truncation/recreation).
+    pub fn reset(&mut self) {
+        self.buffer = None;
+    }
+}
+
 pub fn parse_log_line(line: &str) -> Option<LogEvent> {
     // Check for "Logged in" pattern
     if let Some(caps) = LOGIN_REGEX.captures(line) {
