@@ -43,8 +43,13 @@ pub async fn observe_warframe_activity(
 
     let mut current_account_id: Option<String> = None;
     let log_filename = log_path.file_name().ok_or("Invalid log path")?.to_owned();
-    let mut last_size = metadata(&log_path)?.len();
-    let mut last_position = last_size;
+    let initial_size = metadata(&log_path)?.len();
+    let mut last_size = initial_size;
+    let mut last_position = initial_size;
+
+    // Keep a persistent file handle to avoid reopening on every event
+    let mut read_file = File::open(&log_path)?;
+    read_file.seek(SeekFrom::Start(last_position))?;
 
     // Set up file watcher - watch parent directory to detect file recreation
     let (tx, mut rx) = mpsc::channel(100);
@@ -84,9 +89,12 @@ pub async fn observe_warframe_activity(
             if !log_path.exists() {
                 log::info!("File deleted, waiting for recreation");
 
-                // Wait for file to be recreated
+                // Wait for file to be recreated with exponential backoff
+                let mut backoff = Duration::from_millis(100);
+                let max_backoff = Duration::from_secs(15);
                 while !log_path.exists() {
-                    sleep(Duration::from_millis(100)).await;
+                    sleep(backoff).await;
+                    backoff = (backoff * 2).min(max_backoff);
                 }
 
                 log::info!("File recreated, game restarted");
@@ -94,6 +102,7 @@ pub async fn observe_warframe_activity(
                 last_size = 0;
                 last_position = 0;
                 current_account_id = None;
+                read_file = File::open(&log_path)?;
                 continue;
             }
 
@@ -108,6 +117,7 @@ pub async fn observe_warframe_activity(
                 last_size = 0;
                 last_position = 0;
                 current_account_id = None;
+                read_file = File::open(&log_path)?;
                 continue;
             }
 
@@ -119,11 +129,9 @@ pub async fn observe_warframe_activity(
                     current_size
                 );
 
-                // Reopen file to get fresh handle
-                let mut read_file = File::open(&log_path)?;
                 read_file.seek(SeekFrom::Start(last_position))?;
 
-                let reader = BufReader::new(read_file);
+                let reader = BufReader::new(&read_file);
 
                 // Process new lines
                 for line_result in reader.lines() {
