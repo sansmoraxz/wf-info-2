@@ -6,7 +6,7 @@ use crate::itemdata::ProductCategory;
 use crate::itemdata::common::Patchlog;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{Noise, Polarity, SentinelWeaponProductCategory, Slot, Trigger};
-use crate::itemdata::props::{BuildableProps, PrimeProps, WikiaProps, WeaponTypeStats};
+use crate::itemdata::props::{BuildableProps, PrimeProps, WeaponTypeStats, WikiaProps};
 use crate::itemdata::traits::{Buildable, Equippable, Item, Prime, Weapon, WikiaLinked};
 
 pub type Root = Vec<SentinelWeapon>;

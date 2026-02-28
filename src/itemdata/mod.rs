@@ -14,7 +14,7 @@ pub use traits::{
 
 // Re-export important enums for easier access
 pub use enums::{
-    ArchGunProductCategory, ArchMeleeProductCategory, ArcaneType, ArchwingProductCategory,
+    ArcaneType, ArchGunProductCategory, ArchMeleeProductCategory, ArchwingProductCategory,
     GearType, MeleeProductCategory, MeleeType, ModCategory, Noise, Polarity,
     PrimaryProductCategory, PrimaryType, Rarity, ResourceType, SecondaryProductCategory,
     SecondaryType, SentinelProductCategory, SentinelWeaponProductCategory, Sex, Slot, Trigger,

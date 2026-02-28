@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::{inventory, itemdata};
 use crate::itemdata::Item;
+use crate::{inventory, itemdata};
 
 #[test]
 fn test_deserialize_all_warframes() {
