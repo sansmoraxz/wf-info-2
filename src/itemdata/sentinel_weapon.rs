@@ -2,13 +2,13 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{Noise, Polarity, Trigger};
 use crate::itemdata::props::WeaponTypeStats;
 use crate::itemdata::traits::{Buildable, Equippable, Item, Prime, Weapon, WikiaLinked};
-use crate::itemdata::ProductCategory;
 
 pub type Root = Vec<SentinelWeapon>;
 

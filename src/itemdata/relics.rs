@@ -3,9 +3,9 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
 use crate::itemdata::traits::{Droppable, Item};
-use crate::itemdata::ProductCategory;
 
 pub type Root = Vec<Relic>;
 

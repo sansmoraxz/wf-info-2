@@ -52,7 +52,11 @@ pub struct DamageBreakdown {
     pub corrosive: Option<f64>,
 
     // Special damage types
-    #[serde(default, rename = "void", deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(
+        default,
+        rename = "void",
+        deserialize_with = "deserialize_option_number_to_f64"
+    )]
     pub void_damage: Option<f64>,
     #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
     pub tau: Option<f64>,
@@ -64,7 +68,11 @@ pub struct DamageBreakdown {
     pub health_drain: Option<f64>,
     #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
     pub energy_drain: Option<f64>,
-    #[serde(default, rename = "true", deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(
+        default,
+        rename = "true",
+        deserialize_with = "deserialize_option_number_to_f64"
+    )]
     pub true_damage: Option<f64>,
 }
 
@@ -77,13 +85,25 @@ pub struct Attack {
     #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
     pub speed: Option<f64>,
 
-    #[serde(default, rename = "crit_chance", deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(
+        default,
+        rename = "crit_chance",
+        deserialize_with = "deserialize_option_number_to_f64"
+    )]
     pub crit_chance: Option<f64>,
 
-    #[serde(default, rename = "crit_mult", deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(
+        default,
+        rename = "crit_mult",
+        deserialize_with = "deserialize_option_number_to_f64"
+    )]
     pub crit_mult: Option<f64>,
 
-    #[serde(default, rename = "status_chance", deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(
+        default,
+        rename = "status_chance",
+        deserialize_with = "deserialize_option_number_to_f64"
+    )]
     pub status_chance: Option<f64>,
 
     #[serde(default, rename = "shot_type")]
@@ -99,7 +119,11 @@ pub struct Attack {
 
     pub falloff: Option<Falloff>,
 
-    #[serde(default, rename = "charge_time", deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(
+        default,
+        rename = "charge_time",
+        deserialize_with = "deserialize_option_number_to_f64"
+    )]
     pub charge_time: Option<f64>,
 
     pub slam: Option<Slam>,

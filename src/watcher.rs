@@ -95,7 +95,8 @@ fn read_new_entries(
     Ok(complete_entries)
 }
 
-async fn handle_login_event(acc_id: String, user_name: String) {
+#[cfg_attr(not(feature = "memory"), allow(unused_variables))]
+async fn handle_login_event(acc_id: String, user_name: String, known_pid: Option<u32>) {
     // 1. Fetch profile
     match api::fetch_player_profile(&acc_id).await {
         Ok(profile) => {
@@ -116,7 +117,7 @@ async fn handle_login_event(acc_id: String, user_name: String) {
 
     // 2. Scan memory & fetch inventory (if memory feature enabled)
     #[cfg(feature = "memory")]
-    if let Some(pid) = process::get_warframe_pid() {
+    if let Some(pid) = known_pid.or_else(process::get_warframe_pid) {
         log::info!(
             "Warframe running (PID: {}), attempting to extract inventory auth...",
             pid
@@ -169,6 +170,7 @@ async fn handle_login_event(acc_id: String, user_name: String) {
 
 pub async fn observe_warframe_activity(
     app_config_path: PathBuf,
+    warframe_pid: Option<u32>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Watching for Warframe activity...");
 
@@ -282,7 +284,7 @@ pub async fn observe_warframe_activity(
                         account_id: account_id.clone(),
                         username: username.clone(),
                     }));
-                    tokio::spawn(handle_login_event(account_id, username));
+                    tokio::spawn(handle_login_event(account_id, username, warframe_pid));
                 }
                 Some(LogEvent::Logout) => {
                     state.current_account_id = None;
@@ -298,5 +300,140 @@ pub async fn observe_warframe_activity(
                 None => {}
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::OpenOptions;
+    use std::io::Write;
+
+    const ACCOUNT_ID: &str = "2baaaaaaaaaaaaaaaaaaaaaa";
+    const USERNAME: &str = "sample_account";
+
+    fn parse_events(entries: Vec<String>) -> Vec<LogEvent> {
+        entries
+            .into_iter()
+            .filter_map(|e| logs::parse_log_line(&e))
+            .collect()
+    }
+
+    /// Simulates real game session by appending log chunks to a temp file and
+    /// reading incrementally — matching exactly what the watcher does on each
+    /// debounce event.
+    ///
+    /// Timeline (timestamps are seconds from game start, from
+    /// testdata/logs/login-logout-shutdown.log):
+    ///   T=0s   startup diagnostics  → no events
+    ///   T=72s  "Logged in"          → Login event
+    ///   T=72-84s mid-session lines  → no events
+    ///   T=84s  "Player name changed"→ Login event (account confirmation)
+    ///   T=167s shutdown + QUIT      → Logout event
+    #[test]
+    fn test_incremental_login_logout_detection() {
+        let path = std::env::temp_dir().join(format!(
+            "wf_watcher_test_{}.log",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
+        scopeguard::defer! {
+            let _ = std::fs::remove_file(&path);
+        }
+
+        let append = |content: &str| {
+            OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(&path)
+                .unwrap()
+                .write_all(content.as_bytes())
+                .unwrap();
+        };
+
+        let mut parser = LogEntryParser::new();
+        let mut read_file = File::open({
+            append("");
+            &path
+        })
+        .unwrap();
+        let mut last_pos = 0u64;
+
+        // ── T=0s: startup diagnostics ────────────────────────────────────────
+        append(
+            "0.049 Sys [Diag]: Build Label: 2026.02.13.16.03 Retail Windows x64 [Stripped]\n\
+             0.100 Sys [Info]: Loading packages took 0.0ms\n\
+             2.272 Net [Info]: RMI::Initialize - Methods: 431\n\
+             71.730 Gfx [Error]: Flushed 63 active-prefetch PSO jobs\n",
+        );
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        last_pos = metadata(&path).unwrap().len();
+        assert!(
+            parse_events(entries).is_empty(),
+            "no events expected during startup"
+        );
+
+        // ── T=72s: account login ──────────────────────────────────────────────
+        append("72.458 Sys [Info]: Logged in sample_account (2baaaaaaaaaaaaaaaaaaaaaa)\n");
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        last_pos = metadata(&path).unwrap().len();
+        let events = parse_events(entries);
+        assert_eq!(events.len(), 1, "expected exactly one login event");
+        match &events[0] {
+            LogEvent::Login(info) => {
+                assert_eq!(info.account_id, ACCOUNT_ID);
+                assert_eq!(info.username, USERNAME);
+            }
+            LogEvent::Logout => panic!("expected Login, got Logout"),
+        }
+
+        // ── T=72-84s: mid-session activity ───────────────────────────────────
+        append(
+            "72.459 Sys [Info]: Using profile dir C:\\Warframe\\3684EDC75CAB924E0418513469C6EE3B\n\
+             72.460 Sys [Info]: Profile hash on read: 6501EF2950164301C055C2A2EC6AD536\n",
+        );
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        last_pos = metadata(&path).unwrap().len();
+        assert!(
+            parse_events(entries).is_empty(),
+            "no events expected during mid-session activity"
+        );
+
+        // ── T=84s: player name change (account confirmation) ──────────────────
+        append(
+            "84.333 Sys [Info]: Player name changed to sample_account \
+             Clan: TestC#963 AccountId: 2baaaaaaaaaaaaaaaaaaaaaa\n",
+        );
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        last_pos = metadata(&path).unwrap().len();
+        let events = parse_events(entries);
+        assert_eq!(
+            events.len(),
+            1,
+            "expected exactly one login event from name-change"
+        );
+        match &events[0] {
+            LogEvent::Login(info) => {
+                assert_eq!(info.account_id, ACCOUNT_ID);
+                assert_eq!(info.username, USERNAME);
+            }
+            LogEvent::Logout => panic!("expected Login from name-change, got Logout"),
+        }
+
+        // ── T=167s: shutdown sequence + logout ────────────────────────────────
+        append(
+            "167.073 Sys [Info]: Discord Service has begun shut down.\n\
+             167.073 Sys [Info]: ===[ Exiting main loop ]===\n\
+             167.073 Net [Info]: IRC out: QUIT :Logged out of game\n",
+        );
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        let events = parse_events(entries);
+        assert_eq!(events.len(), 1, "expected exactly one logout event");
+        assert!(
+            matches!(events[0], LogEvent::Logout),
+            "expected Logout event"
+        );
     }
 }

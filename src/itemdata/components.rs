@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::itemdata::common::{deserialize_option_number_to_f64, Drop, Introduced};
+use crate::itemdata::common::{Drop, Introduced, deserialize_option_number_to_f64};
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{Noise, Polarity, Trigger};
 use crate::itemdata::props::WeaponTypeStats;

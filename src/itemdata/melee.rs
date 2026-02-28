@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
@@ -9,7 +10,6 @@ use crate::itemdata::enums::Polarity;
 use crate::itemdata::traits::{
     Buildable, Droppable, Equippable, Item, MeleeWeapon, Prime, Weapon, WikiaLinked,
 };
-use crate::itemdata::ProductCategory;
 
 pub type Root = Vec<Melee>;
 

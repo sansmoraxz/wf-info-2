@@ -1,11 +1,11 @@
 use std::time::Duration;
-use sysinfo::System;
+use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 use tokio::time::sleep;
 
 #[cfg(feature = "memory")]
 use {
     anyhow::{Context, Result},
-    regex::bytes::Regex,
+    memchr::memmem,
     std::collections::HashMap,
 };
 
@@ -38,21 +38,26 @@ fn is_warframe_game_process(process: &sysinfo::Process) -> bool {
     }
 }
 
-pub async fn wait_for_warframe_start() {
+pub async fn wait_for_warframe_start() -> u32 {
     log::info!("Waiting for Warframe to start...");
     let mut system = System::new();
 
     loop {
-        system.refresh_all();
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::All,
+            true,
+            ProcessRefreshKind::nothing().with_cmd(UpdateKind::OnlyIfNotSet),
+        );
 
-        let running = system
+        let pid = system
             .processes()
             .values()
-            .any(|p| is_warframe_game_process(p));
+            .find(|p| is_warframe_game_process(p))
+            .map(|p| p.pid().as_u32());
 
-        if running {
-            log::info!("Warframe process detected.");
-            break;
+        if let Some(pid) = pid {
+            log::info!("Warframe process detected (PID: {}).", pid);
+            return pid;
         }
 
         sleep(Duration::from_secs(5)).await;
@@ -62,7 +67,11 @@ pub async fn wait_for_warframe_start() {
 /// Finds the Warframe game process PID if running
 pub fn get_warframe_pid() -> Option<u32> {
     let mut system = System::new();
-    system.refresh_all();
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing().with_cmd(UpdateKind::OnlyIfNotSet),
+    );
 
     system
         .processes()
@@ -96,9 +105,10 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
         account_id
     );
 
-    // Pattern: ?accountId=<24 chars>&nonce=<digits>
-    let pattern_str = format!(r"\?accountId={}&nonce=([0-9]+)", regex::escape(account_id));
-    let re = Regex::new(&pattern_str).context("Failed to build regex pattern")?;
+    // Needle: ?accountId=<id>&nonce= — followed by ASCII digits
+    let needle = format!("?accountId={}&nonce=", account_id);
+    let needle_bytes = needle.as_bytes();
+    let finder = memmem::Finder::new(needle_bytes);
 
     // Read memory mappings
     let maps_path = format!("/proc/{}/maps", pid);
@@ -119,7 +129,7 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
     let mut buffer = vec![0u8; 4 * 1024 * 1024];
 
     for line in maps_reader.lines() {
-        let line = line?;
+        let line: String = line?;
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() < 2 {
             continue;
@@ -159,10 +169,18 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
 
             match mem_file.read(&mut buffer[..chunk_size]) {
                 Ok(bytes_read) if bytes_read > 0 => {
-                    // Search for all matches in this chunk
-                    for captures in re.captures_iter(&buffer[..bytes_read]) {
-                        if let Some(nonce_match) = captures.get(1) {
-                            let nonce = String::from_utf8_lossy(nonce_match.as_bytes()).to_string();
+                    let chunk = &buffer[..bytes_read];
+                    let mut search_from = 0;
+                    while let Some(pos) = finder.find(&chunk[search_from..]) {
+                        let nonce_start = search_from + pos + needle_bytes.len();
+                        let nonce_end = chunk[nonce_start..]
+                            .iter()
+                            .position(|b| !b.is_ascii_digit())
+                            .map_or(bytes_read, |i| nonce_start + i);
+
+                        if nonce_end > nonce_start {
+                            let nonce =
+                                String::from_utf8_lossy(&chunk[nonce_start..nonce_end]).to_string();
                             let auth_str = format!("{}:{}", account_id, nonce);
 
                             let count = candidates.entry(auth_str.clone()).or_insert(0);
@@ -170,7 +188,6 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
 
                             log::debug!("Found candidate auth (count={}): {}", count, auth_str);
 
-                            // Like the C++ version, require multiple matches for confidence
                             if *count >= REQUIRED_MATCHES {
                                 log::info!("Confirmed auth data after {} matches", count);
                                 log::debug!("Auth data: accountId={}, nonce={}", account_id, nonce);
@@ -180,6 +197,7 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
                                 }));
                             }
                         }
+                        search_from += pos + needle_bytes.len();
                     }
                 }
                 _ => break,
@@ -225,9 +243,10 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
         account_id
     );
 
-    // Pattern: ?accountId=<24 chars>&nonce=<digits>
-    let pattern_str = format!(r"\?accountId={}&nonce=([0-9]+)", regex::escape(account_id));
-    let re = Regex::new(&pattern_str).context("Failed to build regex pattern")?;
+    // Needle: ?accountId=<id>&nonce= — followed by ASCII digits
+    let needle = format!("?accountId={}&nonce=", account_id);
+    let needle_bytes = needle.as_bytes();
+    let finder = memmem::Finder::new(needle_bytes);
 
     // Open process with read permissions
     let process_handle =
@@ -297,11 +316,18 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
                     };
 
                     if success != FALSE && bytes_read > 0 {
-                        // Search for all matches in this chunk
-                        for captures in re.captures_iter(&buffer[..bytes_read]) {
-                            if let Some(nonce_match) = captures.get(1) {
-                                let nonce =
-                                    String::from_utf8_lossy(nonce_match.as_bytes()).to_string();
+                        let chunk = &buffer[..bytes_read];
+                        let mut search_from = 0;
+                        while let Some(pos) = finder.find(&chunk[search_from..]) {
+                            let nonce_start = search_from + pos + needle_bytes.len();
+                            let nonce_end = chunk[nonce_start..]
+                                .iter()
+                                .position(|b| !b.is_ascii_digit())
+                                .map_or(bytes_read, |i| nonce_start + i);
+
+                            if nonce_end > nonce_start {
+                                let nonce = String::from_utf8_lossy(&chunk[nonce_start..nonce_end])
+                                    .to_string();
                                 let auth_str = format!("{}:{}", account_id, nonce);
 
                                 let count = candidates.entry(auth_str.clone()).or_insert(0);
@@ -322,6 +348,7 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
                                     }));
                                 }
                             }
+                            search_from += pos + needle_bytes.len();
                         }
                     } else {
                         break; // Failed to read, move to next region
@@ -350,7 +377,10 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
 }
 
 /// Scans process memory for authorization data - stub for unsupported platforms
-#[cfg(all(feature = "memory", not(any(target_os = "linux", target_os = "windows"))))]
+#[cfg(all(
+    feature = "memory",
+    not(any(target_os = "linux", target_os = "windows"))
+))]
 pub fn scan_memory_for_auth(_pid: u32, _account_id: &str) -> Result<Option<AuthQuery>> {
     anyhow::bail!("Memory scanning is not supported on this platform")
 }

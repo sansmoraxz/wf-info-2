@@ -1,15 +1,15 @@
 //! Warframe character suit item data.
 
 use serde::{Deserialize, Serialize};
-use serde_with::{formats, serde_as, OneOrMany};
+use serde_with::{OneOrMany, formats, serde_as};
 
+use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Ability, Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::enums::Polarity;
 use crate::itemdata::traits::{
     Buildable, Character, Droppable, Equippable, HasAbilities, Item, Prime, WikiaLinked,
 };
-use crate::itemdata::ProductCategory;
 
 pub type Root = Vec<Warframe>;
 

@@ -3,13 +3,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{Noise, Polarity, Trigger};
 use crate::itemdata::props::WeaponTypeStats;
 use crate::itemdata::traits::{Buildable, Droppable, Item, WikiaLinked};
-use crate::itemdata::ProductCategory;
 
 pub type Root = Vec<Misc>;
 

@@ -110,7 +110,7 @@ async fn main() {
     log::info!("Warframe config folder: {:?}", wf_config);
 
     // If command line args provided, launch Warframe as child process
-    let child_handle = if let Some(cmd_args) = warframe_cmd {
+    let (child_handle, warframe_pid) = if let Some(cmd_args) = warframe_cmd {
         log::info!("Launching Warframe as child process: {:?}", cmd_args);
 
         let mut child = Command::new(&cmd_args[0])
@@ -124,7 +124,7 @@ async fn main() {
         log::info!("Warframe launched with PID: {:?}", child.id());
 
         // Spawn task to monitor child process exit
-        Some(tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             match child.wait().await {
                 Ok(status) => {
                     log::info!("Warframe process exited with status: {}", status);
@@ -135,17 +135,18 @@ async fn main() {
                     std::process::exit(1);
                 }
             }
-        }))
+        });
+        (Some(handle), None)
     } else {
         // No command provided, wait for Warframe to start on its own
         log::info!("No launch command provided, waiting for existing Warframe process...");
-        process::wait_for_warframe_start().await;
-        None
+        let pid = process::wait_for_warframe_start().await;
+        (None, Some(pid))
     };
 
     // Start watching the log file
     let log_watcher = tokio::spawn(async move {
-        if let Err(e) = watcher::observe_warframe_activity(wf_config).await {
+        if let Err(e) = watcher::observe_warframe_activity(wf_config, warframe_pid).await {
             log::error!("Error watching file: {}", e);
         }
     });

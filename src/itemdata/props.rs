@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::itemdata::common::{deserialize_option_number_to_f64, Introduced};
+use crate::itemdata::common::{Introduced, deserialize_option_number_to_f64};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::DamageBreakdown;
 use crate::itemdata::enums::{Noise, Polarity, Trigger};
@@ -375,15 +375,28 @@ mod tests {
     #[test]
     fn test_weapon_type_stats_ranged() {
         let stats = WeaponTypeStats::detect(
-            Some(28.6),  // accuracy
-            Some(45),    // magazine_size
-            Some(2.0),   // reload_time
-            Some(1),     // multishot
+            Some(28.6), // accuracy
+            Some(45),   // magazine_size
+            Some(2.0),  // reload_time
+            Some(1),    // multishot
             Some(Noise::Alarming),
             Some(Trigger::Auto),
             Some("Hitscan".to_string()), // projectile
-            None,        // flight
-            None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+            None,                        // flight
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         );
 
         assert!(stats.is_ranged());
@@ -398,21 +411,28 @@ mod tests {
     #[test]
     fn test_weapon_type_stats_melee() {
         let stats = WeaponTypeStats::detect(
-            None, None, None, None, None, None, None, None,
-            Some(55),    // blocking_angle
-            Some(5),     // combo_duration
-            Some(0.6),   // follow_through
-            Some(2.5),   // range
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(55),                // blocking_angle
+            Some(5),                 // combo_duration
+            Some(0.6),               // follow_through
+            Some(2.5),               // range
             Some(Polarity::Naramon), // stance_polarity
-            Some(150),   // slam_attack
-            Some(100),   // slam_radial_damage
-            Some(5),     // slam_radius
-            Some(120),   // slide_attack
-            Some(300),   // heavy_attack_damage
-            Some(450),   // heavy_slam_attack
-            Some(300),   // heavy_slam_radial_damage
-            Some(8),     // heavy_slam_radius
-            Some(0.8),   // wind_up
+            Some(150),               // slam_attack
+            Some(100),               // slam_radial_damage
+            Some(5),                 // slam_radius
+            Some(120),               // slide_attack
+            Some(300),               // heavy_attack_damage
+            Some(450),               // heavy_slam_attack
+            Some(300),               // heavy_slam_radial_damage
+            Some(8),                 // heavy_slam_radius
+            Some(0.8),               // wind_up
         );
 
         assert!(stats.is_melee());
@@ -427,8 +447,8 @@ mod tests {
     #[test]
     fn test_weapon_type_stats_none() {
         let stats = WeaponTypeStats::detect(
-            None, None, None, None, None, None, None, None,
             None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None, None, None,
         );
 
         assert!(!stats.is_ranged());
@@ -442,12 +462,28 @@ mod tests {
         // When both ranged and melee fields present, melee takes priority
         // (more distinctive fields)
         let stats = WeaponTypeStats::detect(
-            Some(28.6),  // accuracy (ranged)
-            Some(45),    // magazine_size (ranged)
-            Some(2.0),   // reload_time (ranged)
-            None, None, None, None, None,
-            Some(55),    // blocking_angle (melee)
-            None, None, None, None, None, None, None, None, None, None, None, None, None,
+            Some(28.6), // accuracy (ranged)
+            Some(45),   // magazine_size (ranged)
+            Some(2.0),  // reload_time (ranged)
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(55), // blocking_angle (melee)
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         );
 
         // Melee should win because melee detection happens first

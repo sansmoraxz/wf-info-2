@@ -47,7 +47,10 @@ mod test {
 
         let space_suit: SpaceSuit = from_str(json_data).unwrap();
 
-        assert_eq!(space_suit.item_type, "/Lotus/Powersuits/Archwing/SupportJetPack/SupportJetPack");
+        assert_eq!(
+            space_suit.item_type,
+            "/Lotus/Powersuits/Archwing/SupportJetPack/SupportJetPack"
+        );
         assert_eq!(space_suit.xp.unwrap(), 4376023);
     }
 }

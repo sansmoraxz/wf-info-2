@@ -1,19 +1,7 @@
-use regex::Regex;
 use std::env;
 use std::path::PathBuf;
-use std::sync::LazyLock;
 
 use crate::account::AccountInfo;
-
-static LOGIN_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"Sys \[Info\]: Logged in (\S+) \(([A-Fa-f0-9]+)\)").unwrap()
-});
-static ACCOUNT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"Player name changed to (\S+).*AccountId:\s*([A-Fa-f0-9]+)").unwrap()
-});
-static LOGOUT_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"IRC out: QUIT :Logged out of game").unwrap()
-});
 
 pub enum LogEvent {
     Login(AccountInfo),
@@ -150,31 +138,50 @@ impl LogEntryParser {
     }
 }
 
+/// Parses: `Sys [Info]: Logged in <username> (<hex_id>)`
+fn parse_login(line: &str) -> Option<AccountInfo> {
+    let rest = line.split_once("Sys [Info]: Logged in ")?.1;
+    let (username, rest) = rest.split_once(' ')?;
+    let rest = rest.strip_prefix('(')?.strip_suffix(')')?;
+    if !rest.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(AccountInfo {
+        username: username.to_string(),
+        account_id: rest.to_string(),
+    })
+}
+
+/// Parses: `Sys [Info]: Player name changed to <username> ... AccountId: <hex_id>`
+fn parse_account_change(line: &str) -> Option<AccountInfo> {
+    let rest = line.split_once("Sys [Info]: Player name changed to ")?.1;
+    let username = rest.split_whitespace().next()?;
+    let id = rest
+        .split_once("AccountId:")?
+        .1
+        .trim()
+        .split_whitespace()
+        .next()?;
+    if !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(AccountInfo {
+        username: username.to_string(),
+        account_id: id.to_string(),
+    })
+}
+
 pub fn parse_log_line(line: &str) -> Option<LogEvent> {
-    // Check for "Logged in" pattern
-    if let Some(caps) = LOGIN_REGEX.captures(line) {
-        if let (Some(username), Some(id)) = (caps.get(1), caps.get(2)) {
-            return Some(LogEvent::Login(AccountInfo {
-                username: username.as_str().to_string(),
-                account_id: id.as_str().to_string(),
-            }));
+    if line.contains("Logged in") {
+        if let Some(info) = parse_login(line) {
+            return Some(LogEvent::Login(info));
         }
-    }
-
-    // Check for "Player name changed" pattern
-    if let Some(caps) = ACCOUNT_REGEX.captures(line) {
-        if let (Some(username), Some(id)) = (caps.get(1), caps.get(2)) {
-            return Some(LogEvent::Login(AccountInfo {
-                username: username.as_str().to_string(),
-                account_id: id.as_str().to_string(),
-            }));
+    } else if line.contains("name changed to") {
+        if let Some(info) = parse_account_change(line) {
+            return Some(LogEvent::Login(info));
         }
-    }
-
-    // Check for logout
-    if LOGOUT_REGEX.is_match(line) {
+    } else if line.contains("QUIT :Logged out") {
         return Some(LogEvent::Logout);
     }
-
     None
 }

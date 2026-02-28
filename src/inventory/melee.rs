@@ -33,7 +33,6 @@ pub struct Melee {
     pub other: Option<Value>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

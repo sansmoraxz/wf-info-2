@@ -2,11 +2,11 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, LevelStat, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::enums::Rarity;
 use crate::itemdata::traits::{Droppable, Item};
-use crate::itemdata::ProductCategory;
 
 pub type Root = Vec<Arcane>;
 

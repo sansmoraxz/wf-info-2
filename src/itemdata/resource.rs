@@ -2,10 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::traits::{Buildable, Droppable, Item};
-use crate::itemdata::ProductCategory;
 
 pub type Root = Vec<Resource>;
 
