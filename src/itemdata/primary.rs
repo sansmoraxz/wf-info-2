@@ -3,10 +3,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
-use crate::itemdata::common::{Drop, Introduced, Patchlog};
-use crate::itemdata::components::Component;
+use crate::itemdata::common::{Drop, Patchlog};
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{Noise, Polarity, PrimaryProductCategory, PrimaryType, Slot, Trigger};
+use crate::itemdata::props::{BuildableProps, PrimeProps, WikiaProps};
 use crate::itemdata::traits::{
     Buildable, Droppable, Equippable, Item, Prime, RangedWeapon, Weapon, WikiaLinked,
 };
@@ -53,38 +53,11 @@ pub struct Primary {
     pub magazine_size: Option<i64>,
     pub reload_time: f64,
 
-    // Buildable
-    pub build_price: Option<i64>,
-    pub build_quantity: Option<i64>,
-    pub build_time: Option<i64>,
-    pub skip_build_time_price: Option<i64>,
-    pub consume_on_build: Option<bool>,
-    pub mastery_req: i64,
-    pub market_cost: Option<i64>,
-    pub bp_cost: Option<i64>,
-    #[serde(default)]
-    pub components: Vec<Component>,
-
     // Equippable
     #[serde(default)]
     pub polarities: Vec<Polarity>,
     pub slot: Slot,
-    #[serde(default)]
-    pub tags: Vec<String>,
 
-    // Prime/vault
-    #[serde(default)]
-    pub is_prime: bool,
-    pub vaulted: Option<bool>,
-    pub vault_date: Option<String>,
-    pub estimated_vault_date: Option<String>,
-
-    // Wikia
-    pub wiki_available: bool,
-    pub wikia_thumbnail: String,
-    pub wikia_url: String,
-    pub introduced: Introduced,
-    pub release_date: String,
     pub product_category: PrimaryProductCategory,
     pub max_level_cap: Option<i64>,
 
@@ -98,6 +71,14 @@ pub struct Primary {
     pub drops: Vec<Drop>,
     #[serde(default)]
     pub patchlogs: Vec<Patchlog>,
+
+    // Grouped props
+    #[serde(flatten)]
+    pub build: BuildableProps,
+    #[serde(flatten)]
+    pub prime: PrimeProps,
+    #[serde(flatten)]
+    pub wikia: WikiaProps,
 }
 
 impl ProductCategory for Primary {
@@ -141,64 +122,64 @@ impl Droppable for Primary {
 
 impl Buildable for Primary {
     fn build_price(&self) -> Option<i64> {
-        self.build_price
+        self.build.build_price
     }
     fn build_quantity(&self) -> Option<i64> {
-        self.build_quantity
+        self.build.build_quantity
     }
     fn build_time(&self) -> Option<i64> {
-        self.build_time
+        self.build.build_time
     }
     fn skip_build_time_price(&self) -> Option<i64> {
-        self.skip_build_time_price
+        self.build.skip_build_time_price
     }
     fn consume_on_build(&self) -> Option<bool> {
-        self.consume_on_build
+        self.build.consume_on_build
     }
     fn mastery_req(&self) -> Option<i64> {
-        Some(self.mastery_req)
+        self.build.mastery_req
     }
     fn market_cost(&self) -> Option<i64> {
-        self.market_cost
+        self.build.market_cost
     }
     fn bp_cost(&self) -> Option<i64> {
-        self.bp_cost
+        self.build.bp_cost
     }
-    fn components(&self) -> &[Component] {
-        &self.components
+    fn components(&self) -> &[crate::itemdata::components::Component] {
+        &self.build.components
     }
 }
 
 impl Prime for Primary {
     fn is_prime(&self) -> bool {
-        self.is_prime
+        self.prime.is_prime
     }
     fn vaulted(&self) -> Option<bool> {
-        self.vaulted
+        self.prime.vaulted
     }
     fn vault_date(&self) -> Option<&str> {
-        self.vault_date.as_deref()
+        self.prime.vault_date.as_deref()
     }
     fn estimated_vault_date(&self) -> Option<&str> {
-        self.estimated_vault_date.as_deref()
+        self.prime.estimated_vault_date.as_deref()
     }
 }
 
 impl WikiaLinked for Primary {
     fn wiki_available(&self) -> Option<bool> {
-        Some(self.wiki_available)
+        self.wikia.wiki_available
     }
     fn wikia_url(&self) -> Option<&str> {
-        Some(&self.wikia_url)
+        self.wikia.wikia_url.as_deref()
     }
     fn wikia_thumbnail(&self) -> Option<&str> {
-        Some(&self.wikia_thumbnail)
+        self.wikia.wikia_thumbnail.as_deref()
     }
-    fn introduced(&self) -> Option<&Introduced> {
-        Some(&self.introduced)
+    fn introduced(&self) -> Option<&crate::itemdata::common::Introduced> {
+        self.wikia.introduced.as_ref()
     }
     fn release_date(&self) -> Option<&str> {
-        Some(&self.release_date)
+        self.wikia.release_date.as_deref()
     }
 }
 
