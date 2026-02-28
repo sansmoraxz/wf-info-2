@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{inventory, itemdata};
+use crate::itemdata::Item;
 
 #[test]
 fn test_deserialize_all_warframes() {
@@ -240,7 +241,10 @@ fn test_map_warframe_inventory() {
 
     let info_idx: HashMap<String, itemdata::warframe::Warframe> = arr
         .into_iter()
-        .map(|item| (item.unique_name.clone(), item))
+        .map(|item| {
+            let key = item.unique_name().to_string();
+            (key, item)
+        })
         .collect();
 
     let inventory: inventory::Inventory = load_test_inventory();
@@ -259,7 +263,7 @@ fn test_map_warframe_inventory() {
 
     let data: Vec<Data> = info_idx
         .iter()
-        .map(|(key, info)| {
+        .map(|(key, info): (&String, &itemdata::warframe::Warframe)| {
             let inv_data = inv_index.get(key).cloned();
             Data {
                 info: info.clone(),

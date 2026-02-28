@@ -345,17 +345,6 @@ impl Sex {
     }
 }
 
-impl WarframeProductCategory {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            WarframeProductCategory::Suits => "Suits",
-            WarframeProductCategory::MechSuits => "MechSuits",
-            WarframeProductCategory::SpecialItems => "SpecialItems",
-            WarframeProductCategory::Unknown => "Unknown",
-        }
-    }
-}
-
 impl SecondaryProductCategory {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -406,17 +395,6 @@ impl ArchMeleeProductCategory {
         match self {
             ArchMeleeProductCategory::SpaceMelee => "SpaceMelee",
             ArchMeleeProductCategory::Unknown => "Unknown",
-        }
-    }
-}
-
-impl PetProductCategory {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            PetProductCategory::KubrowPets => "KubrowPets",
-            PetProductCategory::Pistols => "Pistols",
-            PetProductCategory::SpecialItems => "SpecialItems",
-            PetProductCategory::Unknown => "Unknown",
         }
     }
 }
@@ -560,17 +538,6 @@ pub enum Sex {
     Unknown,
 }
 
-/// Warframe product category
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-pub enum WarframeProductCategory {
-    #[default]
-    Suits,
-    MechSuits,
-    SpecialItems,
-    #[serde(other)]
-    Unknown,
-}
-
 /// Secondary weapon product category
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum SecondaryProductCategory {
@@ -621,17 +588,6 @@ pub enum ArchGunProductCategory {
 pub enum ArchMeleeProductCategory {
     #[default]
     SpaceMelee,
-    #[serde(other)]
-    Unknown,
-}
-
-/// Pet/companion product category
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-pub enum PetProductCategory {
-    #[default]
-    KubrowPets,
-    Pistols,
-    SpecialItems,
     #[serde(other)]
     Unknown,
 }
