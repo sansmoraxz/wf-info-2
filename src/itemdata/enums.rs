@@ -491,6 +491,27 @@ pub enum MeleeType {
     Unknown,
 }
 
+/// Railjack weapon types
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum RailjackType {
+    #[default]
+    #[serde(rename = "Railjack Turret")]
+    RailjackTurret,
+    Shotgun,
+    #[serde(other)]
+    Unknown,
+}
+
+impl RailjackType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RailjackType::RailjackTurret => "Railjack Turret",
+            RailjackType::Shotgun => "Shotgun",
+            RailjackType::Unknown => "Unknown",
+        }
+    }
+}
+
 /// Primary weapon product category
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum PrimaryProductCategory {
