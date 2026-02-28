@@ -2,11 +2,11 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::enums::Polarity;
 use crate::itemdata::traits::{Buildable, Character, Equippable, Item, Prime, WikiaLinked};
-use crate::itemdata::ProductCategory;
 
 pub type Root = Vec<Sentinel>;
 

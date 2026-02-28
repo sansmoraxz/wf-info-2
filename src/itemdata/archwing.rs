@@ -2,11 +2,13 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Ability, Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::enums::Polarity;
-use crate::itemdata::traits::{Buildable, Character, Equippable, HasAbilities, Item, Prime, WikiaLinked};
-use crate::itemdata::ProductCategory;
+use crate::itemdata::traits::{
+    Buildable, Character, Equippable, HasAbilities, Item, Prime, WikiaLinked,
+};
 
 pub type Root = Vec<Archwing>;
 

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-regex = "1.10"
+memchr = "2"
 notify = "8.2"
 notify-debouncer-mini = "0.7"
 chrono = {version = "0.4", features = ["serde"] }

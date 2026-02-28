@@ -2,12 +2,14 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::Polarity;
-use crate::itemdata::traits::{Buildable, Equippable, Item, MeleeWeapon, Prime, Weapon, WikiaLinked};
-use crate::itemdata::ProductCategory;
+use crate::itemdata::traits::{
+    Buildable, Equippable, Item, MeleeWeapon, Prime, Weapon, WikiaLinked,
+};
 
 pub type Root = Vec<ArchMelee>;
 

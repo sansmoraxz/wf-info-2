@@ -1,4 +1,3 @@
-use regex::Regex;
 use std::env;
 use std::path::PathBuf;
 
@@ -67,40 +66,122 @@ pub fn find_wf_app_config() -> Option<PathBuf> {
     platform_default_app_config()
 }
 
+/// Returns true if the line starts a new log entry (has a timestamp prefix like "10.227 ").
+fn is_log_entry_start(line: &str) -> bool {
+    let bytes = line.as_bytes();
+    // Must start with at least one digit
+    let mut i = 0;
+    if i >= bytes.len() || !bytes[i].is_ascii_digit() {
+        return false;
+    }
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    // Dot
+    if i >= bytes.len() || bytes[i] != b'.' {
+        return false;
+    }
+    i += 1;
+    // At least one digit after dot
+    if i >= bytes.len() || !bytes[i].is_ascii_digit() {
+        return false;
+    }
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    // Space
+    i < bytes.len() && bytes[i] == b' '
+}
+
+/// State machine that accumulates multi-line log entries and yields complete ones.
+///
+/// Transitions:
+///   Idle   + timestamp line  → buffer it, go to Buffering
+///   Idle   + continuation    → discard (orphaned)
+///   Buffering + timestamp    → flush buffered entry, start buffering new one
+///   Buffering + continuation → append to buffer
+///   flush()                  → yield buffered entry if any, go to Idle
+pub struct LogEntryParser {
+    buffer: Option<String>,
+}
+
+impl LogEntryParser {
+    pub fn new() -> Self {
+        Self { buffer: None }
+    }
+
+    /// Feed a single line. Returns a completed log entry if one was finalized.
+    pub fn feed_line(&mut self, line: &str) -> Option<String> {
+        if is_log_entry_start(line) {
+            // New entry starts — flush previous if any
+            let completed = self.buffer.take();
+            self.buffer = Some(line.to_string());
+            completed
+        } else {
+            // Continuation line — append to current buffer
+            if let Some(buf) = &mut self.buffer {
+                buf.push('\n');
+                buf.push_str(line);
+            }
+            None
+        }
+    }
+
+    /// Flush the current buffer, returning any incomplete entry.
+    pub fn flush(&mut self) -> Option<String> {
+        self.buffer.take()
+    }
+
+    /// Reset state (e.g. on file truncation/recreation).
+    pub fn reset(&mut self) {
+        self.buffer = None;
+    }
+}
+
+/// Parses: `Sys [Info]: Logged in <username> (<hex_id>)`
+fn parse_login(line: &str) -> Option<AccountInfo> {
+    let rest = line.split_once("Sys [Info]: Logged in ")?.1;
+    let (username, rest) = rest.split_once(' ')?;
+    let rest = rest.strip_prefix('(')?.strip_suffix(')')?;
+    if !rest.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(AccountInfo {
+        username: username.to_string(),
+        account_id: rest.to_string(),
+    })
+}
+
+/// Parses: `Sys [Info]: Player name changed to <username> ... AccountId: <hex_id>`
+fn parse_account_change(line: &str) -> Option<AccountInfo> {
+    let rest = line.split_once("Sys [Info]: Player name changed to ")?.1;
+    let username = rest.split_whitespace().next()?;
+    let id = rest
+        .split_once("AccountId:")?
+        .1
+        .trim()
+        .split_whitespace()
+        .next()?;
+    if !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(AccountInfo {
+        username: username.to_string(),
+        account_id: id.to_string(),
+    })
+}
+
 pub fn parse_log_line(line: &str) -> Option<LogEvent> {
-    // Regex patterns to find account ID and username
-    // Pattern 1: "Logged in Username (accountid)"
-    let login_regex = Regex::new(r"Sys \[Info\]: Logged in (\S+) \(([A-Fa-f0-9]+)\)").ok()?;
-    // Pattern 2: "Player name changed to Username ... AccountId: accountid"
-    let account_regex =
-        Regex::new(r"Player name changed to (\S+).*AccountId:\s*([A-Fa-f0-9]+)").ok()?;
-    // Pattern 3: Logout
-    let logout_regex = Regex::new(r"IRC out: QUIT :Logged out of game").ok()?;
-
-    // Check for "Logged in" pattern
-    if let Some(caps) = login_regex.captures(line) {
-        if let (Some(username), Some(id)) = (caps.get(1), caps.get(2)) {
-            return Some(LogEvent::Login(AccountInfo {
-                username: username.as_str().to_string(),
-                account_id: id.as_str().to_string(),
-            }));
+    if line.contains("Logged in") {
+        if let Some(info) = parse_login(line) {
+            return Some(LogEvent::Login(info));
         }
-    }
-
-    // Check for "Player name changed" pattern
-    if let Some(caps) = account_regex.captures(line) {
-        if let (Some(username), Some(id)) = (caps.get(1), caps.get(2)) {
-            return Some(LogEvent::Login(AccountInfo {
-                username: username.as_str().to_string(),
-                account_id: id.as_str().to_string(),
-            }));
+    } else if line.contains("name changed to") {
+        if let Some(info) = parse_account_change(line) {
+            return Some(LogEvent::Login(info));
         }
-    }
-
-    // Check for logout
-    if logout_regex.is_match(line) {
+    } else if line.contains("QUIT :Logged out") {
         return Some(LogEvent::Logout);
     }
-
     None
 }

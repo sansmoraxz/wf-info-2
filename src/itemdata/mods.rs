@@ -2,10 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Introduced, LevelStat, Patchlog};
 use crate::itemdata::enums::{ModCategory, Polarity, Rarity};
 use crate::itemdata::traits::{Droppable, Item, WikiaLinked};
-use crate::itemdata::ProductCategory;
 
 pub type Root = Vec<Mod>;
 

@@ -107,13 +107,9 @@ pub enum VaultStatus {
     /// Prime item currently available (vaulted = false, no estimated date)
     Active,
     /// Prime item with predicted vault date (vaulted = false, has estimated date)
-    EstimatedVault {
-        estimated_date: String,
-    },
+    EstimatedVault { estimated_date: String },
     /// Prime item currently vaulted (vaulted = true)
-    Vaulted {
-        date: String,
-    },
+    Vaulted { date: String },
 }
 
 impl VaultStatus {

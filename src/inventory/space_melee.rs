@@ -33,7 +33,6 @@ pub struct SpaceMelee {
     pub other: Option<Value>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
