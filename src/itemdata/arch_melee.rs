@@ -6,7 +6,7 @@ use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::Polarity;
+use crate::itemdata::enums::{ArchMeleeProductCategory, Polarity, Slot};
 use crate::itemdata::traits::{
     Buildable, Equippable, Item, MeleeWeapon, Prime, Weapon, WikiaLinked,
 };
@@ -58,7 +58,7 @@ pub struct ArchMelee {
     pub omega_attenuation: f64,
 
     // Equippable
-    pub slot: i64,
+    pub slot: Slot,
     #[serde(default)]
     pub polarities: Vec<Polarity>,
     pub mastery_req: i64,
@@ -84,7 +84,7 @@ pub struct ArchMelee {
     pub wikia_thumbnail: String,
     pub introduced: Introduced,
     pub release_date: String,
-    pub product_category: String,
+    pub product_category: ArchMeleeProductCategory,
     #[serde(default)]
     pub tags: Vec<String>,
 
@@ -95,7 +95,7 @@ pub struct ArchMelee {
 
 impl ProductCategory for ArchMelee {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.clone()]
+        vec![self.product_category.as_str().to_string()]
     }
 }
 
@@ -250,8 +250,8 @@ impl Equippable for ArchMelee {
     fn polarities(&self) -> &[Polarity] {
         &self.polarities
     }
-    fn slot(&self) -> Option<i64> {
-        Some(self.slot)
+    fn slot(&self) -> Option<&Slot> {
+        Some(&self.slot)
     }
 }
 

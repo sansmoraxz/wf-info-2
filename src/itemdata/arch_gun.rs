@@ -6,7 +6,7 @@ use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::{Noise, Polarity, Trigger};
+use crate::itemdata::enums::{ArchGunProductCategory, Noise, Polarity, Slot, Trigger};
 use crate::itemdata::traits::{
     Buildable, Equippable, Item, Prime, RangedWeapon, Weapon, WikiaLinked,
 };
@@ -68,7 +68,7 @@ pub struct ArchGun {
     // Equippable
     #[serde(default)]
     pub polarities: Vec<Polarity>,
-    pub slot: i64,
+    pub slot: Slot,
     #[serde(default)]
     pub tags: Vec<String>,
 
@@ -84,7 +84,7 @@ pub struct ArchGun {
     pub wikia_url: Option<String>,
     pub introduced: Option<Introduced>,
     pub release_date: Option<String>,
-    pub product_category: String,
+    pub product_category: ArchGunProductCategory,
     pub max_level_cap: Option<i64>,
 
     // Droppable
@@ -94,7 +94,7 @@ pub struct ArchGun {
 
 impl ProductCategory for ArchGun {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.clone()]
+        vec![self.product_category.as_str().to_string()]
     }
 }
 
@@ -246,8 +246,8 @@ impl Equippable for ArchGun {
     fn polarities(&self) -> &[Polarity] {
         &self.polarities
     }
-    fn slot(&self) -> Option<i64> {
-        Some(self.slot)
+    fn slot(&self) -> Option<&Slot> {
+        Some(&self.slot)
     }
 }
 

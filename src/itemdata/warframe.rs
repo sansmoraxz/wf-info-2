@@ -6,7 +6,7 @@ use serde_with::{OneOrMany, formats, serde_as};
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Ability, Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
-use crate::itemdata::enums::Polarity;
+use crate::itemdata::enums::{Polarity, Sex, Slot, WarframeProductCategory};
 use crate::itemdata::traits::{
     Buildable, Character, Droppable, Equippable, HasAbilities, Item, Prime, WikiaLinked,
 };
@@ -45,7 +45,7 @@ pub struct Warframe {
     #[serde_as(as = "Option<OneOrMany<_, formats::PreferOne>>")]
     pub aura: Option<Vec<String>>,
     pub passive_description: Option<String>,
-    pub sex: Option<String>,
+    pub sex: Option<Sex>,
     #[serde(default)]
     pub exalted: Vec<String>,
     pub color: Option<i64>,
@@ -79,7 +79,7 @@ pub struct Warframe {
     pub wikia_url: Option<String>,
     pub introduced: Option<Introduced>,
     pub release_date: Option<String>,
-    pub product_category: Option<String>,
+    pub product_category: Option<WarframeProductCategory>,
 
     // Droppable
     #[serde(default)]
@@ -91,7 +91,7 @@ pub struct Warframe {
 impl ProductCategory for Warframe {
     fn get_product_categories(&self) -> Vec<String> {
         match &self.product_category {
-            Some(v) => vec![v.to_string()],
+            Some(v) => vec![v.as_str().to_string()],
             None => vec![],
         }
     }
@@ -224,7 +224,7 @@ impl Equippable for Warframe {
     fn polarities(&self) -> &[Polarity] {
         &self.polarities
     }
-    fn slot(&self) -> Option<i64> {
+    fn slot(&self) -> Option<&Slot> {
         None
     }
 }

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
-use crate::itemdata::enums::Polarity;
+use crate::itemdata::enums::{PetProductCategory, Polarity, Slot};
 use crate::itemdata::traits::{Buildable, Droppable, Equippable, Item, WikiaLinked};
 
 pub type Root = Vec<Pet>;
@@ -63,7 +63,7 @@ pub struct Pet {
     pub wikia_thumbnail: Option<String>,
     pub introduced: Option<Introduced>,
     pub release_date: Option<String>,
-    pub product_category: String,
+    pub product_category: PetProductCategory,
     pub exclude_from_codex: Option<bool>,
 
     // Droppable
@@ -75,7 +75,7 @@ pub struct Pet {
 
 impl ProductCategory for Pet {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.clone()]
+        vec![self.product_category.as_str().to_string()]
     }
 }
 
@@ -164,7 +164,7 @@ impl Equippable for Pet {
     fn polarities(&self) -> &[Polarity] {
         &self.polarities
     }
-    fn slot(&self) -> Option<i64> {
+    fn slot(&self) -> Option<&Slot> {
         None
     }
 }

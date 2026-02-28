@@ -7,7 +7,7 @@ use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::{Noise, Polarity, Trigger};
+use crate::itemdata::enums::{Noise, Polarity, Rarity, Trigger};
 use crate::itemdata::props::WeaponTypeStats;
 use crate::itemdata::traits::{Buildable, Droppable, Item, WikiaLinked};
 
@@ -35,7 +35,7 @@ pub struct Misc {
     pub standing: Option<i64>,
     pub item_count: Option<i64>,
     pub probability: Option<f64>,
-    pub rarity: Option<String>,
+    pub rarity: Option<Rarity>,
     pub reward_name: Option<String>,
     pub tier: Option<i64>,
     pub fusion_points: Option<i64>,

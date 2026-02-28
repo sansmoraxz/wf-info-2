@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, LevelStat, Patchlog};
 use crate::itemdata::components::Component;
-use crate::itemdata::enums::Rarity;
+use crate::itemdata::enums::{ArcaneType, Rarity};
 use crate::itemdata::traits::{Droppable, Item};
 
 pub type Root = Vec<Arcane>;
@@ -18,7 +18,7 @@ pub struct Arcane {
     pub name: String,
     pub category: String,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: ArcaneType,
     pub image_name: String,
 
     // Tradable
@@ -65,7 +65,7 @@ impl Item for Arcane {
         &self.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
         Some(&self.image_name)

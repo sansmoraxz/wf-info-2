@@ -3,7 +3,7 @@
 use crate::itemdata::common::{Ability, Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::{Polarity, VaultStatus};
+use crate::itemdata::enums::{Polarity, Slot, VaultStatus};
 
 // =============================================================================
 // Core Item Trait (Universal - ALL types implement this)
@@ -252,6 +252,6 @@ pub trait Equippable: Item {
     /// Mod polarity slots
     fn polarities(&self) -> &[Polarity];
 
-    /// Equipment slot index
-    fn slot(&self) -> Option<i64>;
+    /// Equipment slot classification
+    fn slot(&self) -> Option<&Slot>;
 }

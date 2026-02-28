@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Introduced, Patchlog};
 use crate::itemdata::components::Component;
-use crate::itemdata::enums::Polarity;
+use crate::itemdata::enums::{Polarity, SentinelProductCategory, Slot};
 use crate::itemdata::traits::{Buildable, Character, Equippable, Item, Prime, WikiaLinked};
 
 pub type Root = Vec<Sentinel>;
@@ -60,7 +60,7 @@ pub struct Sentinel {
     pub wikia_thumbnail: Option<String>,
     pub introduced: Option<Introduced>,
     pub release_date: String,
-    pub product_category: String,
+    pub product_category: SentinelProductCategory,
 
     // Droppable
     #[serde(default)]
@@ -69,7 +69,7 @@ pub struct Sentinel {
 
 impl ProductCategory for Sentinel {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.clone()]
+        vec![self.product_category.as_str().to_string()]
     }
 }
 
@@ -188,7 +188,7 @@ impl Equippable for Sentinel {
     fn polarities(&self) -> &[Polarity] {
         &self.polarities
     }
-    fn slot(&self) -> Option<i64> {
+    fn slot(&self) -> Option<&Slot> {
         None
     }
 }

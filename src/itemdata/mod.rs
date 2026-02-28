@@ -13,7 +13,13 @@ pub use traits::{
 };
 
 // Re-export important enums for easier access
-pub use enums::{ModCategory, Noise, Polarity, Rarity, Trigger, VaultStatus};
+pub use enums::{
+    ArchGunProductCategory, ArchMeleeProductCategory, ArcaneType, ArchwingProductCategory,
+    GearType, MeleeProductCategory, MeleeType, ModCategory, Noise, PetProductCategory, Polarity,
+    PrimaryProductCategory, PrimaryType, Rarity, ResourceType, SecondaryProductCategory,
+    SecondaryType, SentinelProductCategory, SentinelWeaponProductCategory, Sex, Slot, Trigger,
+    VaultStatus, WarframeProductCategory,
+};
 pub use props::{MeleeWeaponData, RangedWeaponData, WeaponTypeStats};
 
 // Category-specific modules

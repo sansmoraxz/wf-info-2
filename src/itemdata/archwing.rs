@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Ability, Introduced, Patchlog};
 use crate::itemdata::components::Component;
-use crate::itemdata::enums::Polarity;
+use crate::itemdata::enums::{ArchwingProductCategory, Polarity, Slot};
 use crate::itemdata::traits::{
     Buildable, Character, Equippable, HasAbilities, Item, Prime, WikiaLinked,
 };
@@ -69,7 +69,7 @@ pub struct Archwing {
     pub wikia_thumbnail: Option<String>,
     pub introduced: Option<Introduced>,
     pub release_date: Option<String>,
-    pub product_category: String,
+    pub product_category: ArchwingProductCategory,
 
     // Droppable
     #[serde(default)]
@@ -78,7 +78,7 @@ pub struct Archwing {
 
 impl ProductCategory for Archwing {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.clone()]
+        vec![self.product_category.as_str().to_string()]
     }
 }
 
@@ -206,7 +206,7 @@ impl Equippable for Archwing {
             None => &[],
         }
     }
-    fn slot(&self) -> Option<i64> {
+    fn slot(&self) -> Option<&Slot> {
         None
     }
 }

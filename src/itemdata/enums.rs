@@ -5,6 +5,7 @@
 //! handle new values that may be added to the source data in the future.
 
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 /// Weapon trigger types - how the weapon fires
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
@@ -232,6 +233,407 @@ impl Disposition {
             Disposition::Unknown => 0,
         }
     }
+}
+
+impl ArcaneType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ArcaneType::WarframeArcane => "Warframe Arcane",
+            ArcaneType::OperatorArcane => "Operator Arcane",
+            ArcaneType::SecondaryArcane => "Secondary Arcane",
+            ArcaneType::AmpArcane => "Amp Arcane",
+            ArcaneType::PrimaryArcane => "Primary Arcane",
+            ArcaneType::MeleeArcane => "Melee Arcane",
+            ArcaneType::Arcane => "Arcane",
+            ArcaneType::KitgunArcane => "Kitgun Arcane",
+            ArcaneType::ZawArcane => "Zaw Arcane",
+            ArcaneType::BowArcane => "Bow Arcane",
+            ArcaneType::ShotgunArcane => "Shotgun Arcane",
+            ArcaneType::Unknown => "Unknown",
+        }
+    }
+}
+
+impl GearType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            GearType::Gear => "Gear",
+            GearType::Fish => "Fish",
+            GearType::FishBait => "Fish Bait",
+            GearType::Specter => "Specter",
+            GearType::Key => "Key",
+            GearType::Unknown => "Unknown",
+        }
+    }
+}
+
+impl ResourceType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ResourceType::Resource => "Resource",
+            ResourceType::Gem => "Gem",
+            ResourceType::Plant => "Plant",
+            ResourceType::Unknown => "Unknown",
+        }
+    }
+}
+
+impl PrimaryType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PrimaryType::Bow => "Bow",
+            PrimaryType::Launcher => "Launcher",
+            PrimaryType::Pistol => "Pistol",
+            PrimaryType::Rifle => "Rifle",
+            PrimaryType::Shotgun => "Shotgun",
+            PrimaryType::Sniper => "Sniper",
+            PrimaryType::Unknown => "Unknown",
+        }
+    }
+}
+
+impl SecondaryType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SecondaryType::DualPistols => "Dual Pistols",
+            SecondaryType::Pistol => "Pistol",
+            SecondaryType::Throwing => "Throwing",
+            SecondaryType::Unknown => "Unknown",
+        }
+    }
+}
+
+impl MeleeType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            MeleeType::Melee => "Melee",
+            MeleeType::Rifle => "Rifle",
+            MeleeType::ZawComponent => "Zaw Component",
+            MeleeType::Unknown => "Unknown",
+        }
+    }
+}
+
+impl PrimaryProductCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PrimaryProductCategory::LongGuns => "LongGuns",
+            PrimaryProductCategory::OperatorAmps => "OperatorAmps",
+            PrimaryProductCategory::Unknown => "Unknown",
+        }
+    }
+}
+
+impl MeleeProductCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            MeleeProductCategory::Melee => "Melee",
+            MeleeProductCategory::Pistols => "Pistols",
+            MeleeProductCategory::Unknown => "Unknown",
+        }
+    }
+}
+
+impl Sex {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Sex::Female => "Female",
+            Sex::Male => "Male",
+            Sex::NonBinary => "Non-binary",
+            Sex::Unknown => "Unknown",
+        }
+    }
+}
+
+impl WarframeProductCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            WarframeProductCategory::Suits => "Suits",
+            WarframeProductCategory::MechSuits => "MechSuits",
+            WarframeProductCategory::SpecialItems => "SpecialItems",
+            WarframeProductCategory::Unknown => "Unknown",
+        }
+    }
+}
+
+impl SecondaryProductCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SecondaryProductCategory::Pistols => "Pistols",
+            SecondaryProductCategory::Unknown => "Unknown",
+        }
+    }
+}
+
+impl ArchwingProductCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ArchwingProductCategory::SpaceSuits => "SpaceSuits",
+            ArchwingProductCategory::Unknown => "Unknown",
+        }
+    }
+}
+
+impl SentinelProductCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SentinelProductCategory::Sentinels => "Sentinels",
+            SentinelProductCategory::Unknown => "Unknown",
+        }
+    }
+}
+
+impl SentinelWeaponProductCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SentinelWeaponProductCategory::SentinelWeapons => "SentinelWeapons",
+            SentinelWeaponProductCategory::Unknown => "Unknown",
+        }
+    }
+}
+
+impl ArchGunProductCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ArchGunProductCategory::SpaceGuns => "SpaceGuns",
+            ArchGunProductCategory::Unknown => "Unknown",
+        }
+    }
+}
+
+impl ArchMeleeProductCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ArchMeleeProductCategory::SpaceMelee => "SpaceMelee",
+            ArchMeleeProductCategory::Unknown => "Unknown",
+        }
+    }
+}
+
+impl PetProductCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PetProductCategory::KubrowPets => "KubrowPets",
+            PetProductCategory::Pistols => "Pistols",
+            PetProductCategory::SpecialItems => "SpecialItems",
+            PetProductCategory::Unknown => "Unknown",
+        }
+    }
+}
+
+/// Arcane enhancement type classification
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum ArcaneType {
+    #[serde(rename = "Warframe Arcane")]
+    WarframeArcane,
+    #[serde(rename = "Operator Arcane")]
+    OperatorArcane,
+    #[serde(rename = "Secondary Arcane")]
+    SecondaryArcane,
+    #[serde(rename = "Amp Arcane")]
+    AmpArcane,
+    #[serde(rename = "Primary Arcane")]
+    PrimaryArcane,
+    #[serde(rename = "Melee Arcane")]
+    MeleeArcane,
+    Arcane,
+    #[serde(rename = "Kitgun Arcane")]
+    KitgunArcane,
+    #[serde(rename = "Zaw Arcane")]
+    ZawArcane,
+    #[serde(rename = "Bow Arcane")]
+    BowArcane,
+    #[serde(rename = "Shotgun Arcane")]
+    ShotgunArcane,
+    #[default]
+    #[serde(other)]
+    Unknown,
+}
+
+/// Gear item type classification
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum GearType {
+    #[default]
+    Gear,
+    Fish,
+    #[serde(rename = "Fish Bait")]
+    FishBait,
+    Specter,
+    Key,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Resource type classification
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum ResourceType {
+    #[default]
+    Resource,
+    Gem,
+    Plant,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Primary weapon type classification
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum PrimaryType {
+    Bow,
+    Launcher,
+    Pistol,
+    #[default]
+    Rifle,
+    Shotgun,
+    Sniper,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Secondary weapon type classification
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum SecondaryType {
+    #[serde(rename = "Dual Pistols")]
+    DualPistols,
+    #[default]
+    Pistol,
+    Throwing,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Melee weapon type classification
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum MeleeType {
+    #[default]
+    Melee,
+    Rifle,
+    #[serde(rename = "Zaw Component")]
+    ZawComponent,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Primary weapon product category
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum PrimaryProductCategory {
+    #[default]
+    LongGuns,
+    OperatorAmps,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Melee weapon product category
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum MeleeProductCategory {
+    #[default]
+    Melee,
+    Pistols,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Equipment slot classification
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr, Default)]
+#[repr(i64)]
+pub enum Slot {
+    /// Secondary weapons
+    Secondary = 0,
+    /// Primary, Arch-Gun, SentinelWeapons (ranged)
+    #[default]
+    Primary = 1,
+    /// Grimoire anomaly
+    SpecialSecondary = 2,
+    /// Melee, Arch-Melee
+    Melee = 5,
+}
+
+/// Warframe sex/gender
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum Sex {
+    Female,
+    Male,
+    #[serde(rename = "Non-binary")]
+    NonBinary,
+    #[default]
+    #[serde(other)]
+    Unknown,
+}
+
+/// Warframe product category
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum WarframeProductCategory {
+    #[default]
+    Suits,
+    MechSuits,
+    SpecialItems,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Secondary weapon product category
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum SecondaryProductCategory {
+    #[default]
+    Pistols,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Archwing product category
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum ArchwingProductCategory {
+    #[default]
+    SpaceSuits,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Sentinel product category
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum SentinelProductCategory {
+    #[default]
+    Sentinels,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Sentinel weapon product category
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum SentinelWeaponProductCategory {
+    #[default]
+    SentinelWeapons,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Arch-Gun product category
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum ArchGunProductCategory {
+    #[default]
+    SpaceGuns,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Arch-Melee product category
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum ArchMeleeProductCategory {
+    #[default]
+    SpaceMelee,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Pet/companion product category
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub enum PetProductCategory {
+    #[default]
+    KubrowPets,
+    Pistols,
+    SpecialItems,
+    #[serde(other)]
+    Unknown,
 }
 
 /// Mod category classification.

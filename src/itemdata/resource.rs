@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
 use crate::itemdata::components::Component;
+use crate::itemdata::enums::ResourceType;
 use crate::itemdata::traits::{Buildable, Droppable, Item};
 
 pub type Root = Vec<Resource>;
@@ -17,7 +18,7 @@ pub struct Resource {
     pub name: String,
     pub category: String,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: ResourceType,
     pub image_name: String,
     pub description: String,
 
@@ -64,7 +65,7 @@ impl Item for Resource {
         &self.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
         Some(&self.image_name)

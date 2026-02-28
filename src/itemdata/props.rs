@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::common::{Introduced, deserialize_option_number_to_f64};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::DamageBreakdown;
-use crate::itemdata::enums::{Noise, Polarity, Trigger};
+use crate::itemdata::enums::{Noise, Polarity, Slot, Trigger};
 
 /// Properties for buildable/craftable items.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -57,7 +57,7 @@ pub struct PrimeProps {
 pub struct EquippableProps {
     #[serde(default)]
     pub polarities: Vec<Polarity>,
-    pub slot: Option<i64>,
+    pub slot: Option<Slot>,
 }
 
 /// Base weapon attack properties.

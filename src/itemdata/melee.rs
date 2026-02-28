@@ -6,7 +6,7 @@ use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::Polarity;
+use crate::itemdata::enums::{MeleeProductCategory, MeleeType, Polarity, Slot};
 use crate::itemdata::traits::{
     Buildable, Droppable, Equippable, Item, MeleeWeapon, Prime, Weapon, WikiaLinked,
 };
@@ -21,7 +21,7 @@ pub struct Melee {
     pub name: String,
     pub category: String,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: MeleeType,
     pub image_name: String,
     pub description: String,
 
@@ -75,7 +75,7 @@ pub struct Melee {
     // Equippable
     #[serde(default)]
     pub polarities: Vec<Polarity>,
-    pub slot: i64,
+    pub slot: Slot,
     #[serde(default)]
     pub tags: Vec<String>,
 
@@ -92,7 +92,7 @@ pub struct Melee {
     pub wikia_thumbnail: Option<String>,
     pub introduced: Option<Introduced>,
     pub release_date: Option<String>,
-    pub product_category: String,
+    pub product_category: MeleeProductCategory,
     pub max_level_cap: Option<i64>,
     pub exclude_from_codex: Option<bool>,
 
@@ -110,7 +110,7 @@ pub struct Melee {
 
 impl ProductCategory for Melee {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.clone()]
+        vec![self.product_category.as_str().to_string()]
     }
 }
 
@@ -125,7 +125,7 @@ impl Item for Melee {
         &self.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
         Some(&self.image_name)
@@ -271,8 +271,8 @@ impl Equippable for Melee {
     fn polarities(&self) -> &[Polarity] {
         &self.polarities
     }
-    fn slot(&self) -> Option<i64> {
-        Some(self.slot)
+    fn slot(&self) -> Option<&Slot> {
+        Some(&self.slot)
     }
 }
 

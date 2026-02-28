@@ -6,7 +6,7 @@ use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::{Noise, Polarity, Trigger};
+use crate::itemdata::enums::{Noise, Polarity, SecondaryProductCategory, SecondaryType, Slot, Trigger};
 use crate::itemdata::traits::{
     Buildable, Droppable, Equippable, Item, Prime, RangedWeapon, Weapon, WikiaLinked,
 };
@@ -21,7 +21,7 @@ pub struct Secondary {
     pub name: String,
     pub category: String,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: SecondaryType,
     pub image_name: String,
     pub description: String,
 
@@ -68,7 +68,7 @@ pub struct Secondary {
     // Equippable
     #[serde(default)]
     pub polarities: Vec<Polarity>,
-    pub slot: i64,
+    pub slot: Slot,
     #[serde(default)]
     pub tags: Vec<String>,
 
@@ -85,7 +85,7 @@ pub struct Secondary {
     pub wikia_url: Option<String>,
     pub introduced: Option<Introduced>,
     pub release_date: Option<String>,
-    pub product_category: String,
+    pub product_category: SecondaryProductCategory,
     pub max_level_cap: Option<i64>,
 
     // Misc
@@ -102,7 +102,7 @@ pub struct Secondary {
 
 impl ProductCategory for Secondary {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.clone()]
+        vec![self.product_category.as_str().to_string()]
     }
 }
 
@@ -117,7 +117,7 @@ impl Item for Secondary {
         &self.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
         Some(&self.image_name)
@@ -260,8 +260,8 @@ impl Equippable for Secondary {
     fn polarities(&self) -> &[Polarity] {
         &self.polarities
     }
-    fn slot(&self) -> Option<i64> {
-        Some(self.slot)
+    fn slot(&self) -> Option<&Slot> {
+        Some(&self.slot)
     }
 }
 

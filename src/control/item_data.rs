@@ -94,7 +94,7 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
     if let Ok(raw) = fs::read_to_string(data_dir.join("Primary.json")) {
         if let Ok(arr) = serde_json::from_str::<itemdata::primary::Root>(&raw) {
             for item in arr {
-                let pc = Some(item.product_category.clone());
+                let pc = Some(item.product_category.as_str().to_string());
                 let v = serde_json::to_value(&item).unwrap_or(Value::Null);
                 push_info(&v, pc);
             }
@@ -104,7 +104,7 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
     if let Ok(raw) = fs::read_to_string(data_dir.join("Secondary.json")) {
         if let Ok(arr) = serde_json::from_str::<itemdata::secondary::Root>(&raw) {
             for item in arr {
-                let pc = Some(item.product_category.clone());
+                let pc = Some(item.product_category.as_str().to_string());
                 let v = serde_json::to_value(&item).unwrap_or(Value::Null);
                 push_info(&v, pc);
             }
@@ -114,7 +114,7 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
     if let Ok(raw) = fs::read_to_string(data_dir.join("Melee.json")) {
         if let Ok(arr) = serde_json::from_str::<itemdata::melee::Root>(&raw) {
             for item in arr {
-                let pc = Some(item.product_category.clone());
+                let pc = Some(item.product_category.as_str().to_string());
                 let v = serde_json::to_value(&item).unwrap_or(Value::Null);
                 push_info(&v, pc);
             }
@@ -124,7 +124,7 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
     if let Ok(raw) = fs::read_to_string(data_dir.join("Archwing.json")) {
         if let Ok(arr) = serde_json::from_str::<itemdata::archwing::Root>(&raw) {
             for item in arr {
-                let pc = Some(item.product_category.clone());
+                let pc = Some(item.product_category.as_str().to_string());
                 let v = serde_json::to_value(&item).unwrap_or(Value::Null);
                 push_info(&v, pc);
             }
@@ -134,7 +134,7 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
     if let Ok(raw) = fs::read_to_string(data_dir.join("Arch-Gun.json")) {
         if let Ok(arr) = serde_json::from_str::<itemdata::arch_gun::Root>(&raw) {
             for item in arr {
-                let pc = Some(item.product_category.clone());
+                let pc = Some(item.product_category.as_str().to_string());
                 let v = serde_json::to_value(&item).unwrap_or(Value::Null);
                 push_info(&v, pc);
             }
@@ -144,7 +144,7 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
     if let Ok(raw) = fs::read_to_string(data_dir.join("Arch-Melee.json")) {
         if let Ok(arr) = serde_json::from_str::<itemdata::arch_melee::Root>(&raw) {
             for item in arr {
-                let pc = Some(item.product_category.clone());
+                let pc = Some(item.product_category.as_str().to_string());
                 let v = serde_json::to_value(&item).unwrap_or(Value::Null);
                 push_info(&v, pc);
             }
