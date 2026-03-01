@@ -75,6 +75,11 @@ async fn main() {
     env_logger::init();
     log::info!("Warframe Account Info Scanner started");
 
+    // Fetch / update cached item data from upstream
+    if let Err(e) = wf_info_2::control::item_data_fetch::update_cache().await {
+        log::warn!("Failed to update item data cache: {}", e);
+    }
+
     let cli = Cli::parse();
 
     let _control_server = match cli.server.into_control_config() {

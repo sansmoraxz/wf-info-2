@@ -11,12 +11,27 @@ use crate::{inventory, itemdata};
 
 macro_rules! load_json {
     ($file:literal) => {{
-        let f = concat!(
+        // Try local dev copy first, then cached web download
+        let local = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/warframe-items-data/json/",
             $file
         );
-        std::fs::read_to_string(f).unwrap()
+        if std::path::Path::new(local).exists() {
+            std::fs::read_to_string(local).unwrap()
+        } else if let Ok(cached) = crate::control::item_data_fetch::cached_path($file) {
+            if cached.exists() {
+                std::fs::read_to_string(cached).unwrap()
+            } else {
+                panic!(
+                    "Item data file '{}' not found locally or in cache. \
+                     Run the daemon once or download warframe-items-data.",
+                    $file
+                );
+            }
+        } else {
+            panic!("Could not determine cache path for '{}'", $file);
+        }
     }};
 }
 
