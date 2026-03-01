@@ -56,7 +56,6 @@ pub struct SentinelWeapon {
     #[serde(default)]
     pub exclude_from_codex: Option<bool>,
 
-    // Droppable
     #[serde(default)]
     pub patchlogs: Vec<Patchlog>,
 

@@ -43,7 +43,6 @@ pub struct ArchGun {
     pub product_category: ArchGunProductCategory,
     pub max_level_cap: Option<i64>,
 
-    // Droppable
     #[serde(default)]
     pub patchlogs: Vec<Patchlog>,
 

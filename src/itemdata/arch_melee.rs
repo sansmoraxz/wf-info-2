@@ -50,7 +50,6 @@ pub struct ArchMelee {
 
     pub product_category: ArchMeleeProductCategory,
 
-    // Droppable
     #[serde(default)]
     pub patchlogs: Vec<Patchlog>,
 

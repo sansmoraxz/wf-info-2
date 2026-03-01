@@ -27,7 +27,6 @@ pub struct Sentinel {
 
     pub product_category: SentinelProductCategory,
 
-    // Droppable
     #[serde(default)]
     pub patchlogs: Vec<Patchlog>,
 

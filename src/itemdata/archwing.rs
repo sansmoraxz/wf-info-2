@@ -48,7 +48,6 @@ pub struct Archwing {
 
     pub product_category: ArchwingProductCategory,
 
-    // Droppable
     #[serde(default)]
     pub patchlogs: Vec<Patchlog>,
 
