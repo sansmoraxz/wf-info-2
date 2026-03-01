@@ -137,7 +137,7 @@ impl ProductCategory for PetEntry {
     fn get_product_categories(&self) -> Vec<String> {
         match self {
             PetEntry::KubrowPets(_) => vec!["KubrowPets".to_string()],
-            PetEntry::Pistols(_) => vec!["Pistols".to_string()],
+            PetEntry::Pistols(_) => vec!["MiscItems".to_string()],
             PetEntry::SpecialItems(_) => vec!["SpecialItems".to_string()],
         }
     }

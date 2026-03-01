@@ -31,7 +31,7 @@ pub struct Sigil {
 
 impl ProductCategory for Sigil {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["Sigils".to_string()]
+        vec!["WeaponSkins".to_string()]
     }
 }
 

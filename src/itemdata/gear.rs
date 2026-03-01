@@ -38,7 +38,7 @@ pub struct Gear {
 
 impl ProductCategory for Gear {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["Consumables".to_string()]
+        vec!["Consumables".to_string(), "SpectreLoadouts".to_string()]
     }
 }
 

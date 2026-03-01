@@ -82,11 +82,16 @@ pub struct Misc {
 
 impl ProductCategory for Misc {
     fn get_product_categories(&self) -> Vec<String> {
-        let s = match &self.product_category {
-            Some(v) => v.as_str(),
-            None => "MiscItems",
-        };
-        vec![s.into()]
+        match &self.product_category {
+            Some(v) => vec![v.clone()],
+            None => vec![
+                "MiscItems".into(),
+                "FusionTreasures".into(),
+                "Ships".into(),
+                "Drones".into(),
+                "CrewShips".into(),
+            ],
+        }
     }
 }
 
