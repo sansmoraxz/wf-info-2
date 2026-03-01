@@ -1,0 +1,86 @@
+{
+  "category": "Arcanes",
+  "drops": [
+    {
+      "chance": 0.0443,
+      "location": "Duviri/Endless: Tier 1 (Hard)",
+      "rarity": "Rare",
+      "type": "Akimbo Slip Shot"
+    },
+    {
+      "chance": 0.0443,
+      "location": "Duviri/Endless: Tier 3 (Hard)",
+      "rarity": "Rare",
+      "type": "Akimbo Slip Shot"
+    },
+    {
+      "chance": 0.0443,
+      "location": "Duviri/Endless: Tier 4 (Hard)",
+      "rarity": "Rare",
+      "type": "Akimbo Slip Shot"
+    },
+    {
+      "chance": 0.06,
+      "location": "Duviri/Endless: Tier 6 (Hard)",
+      "rarity": "Rare",
+      "type": "Akimbo Slip Shot"
+    },
+    {
+      "chance": 0.06,
+      "location": "Duviri/Endless: Tier 7 (Hard)",
+      "rarity": "Rare",
+      "type": "Akimbo Slip Shot"
+    },
+    {
+      "chance": 0.0909,
+      "location": "Duviri/Endless: Repeated Rewards (Hard)",
+      "rarity": "Rare",
+      "type": "Akimbo Slip Shot"
+    },
+    {
+      "chance": 0.1019,
+      "location": "Duviri Static Undercroft Portal (Steel Path)",
+      "rarity": "Uncommon",
+      "type": "Akimbo Slip Shot"
+    }
+  ],
+  "imageName": "akimbo-slip-shot-2b668cc242.png",
+  "levelStats": [
+    {
+      "stats": [
+        "While sliding or aim gliding: Gain 15% ammo efficiency with Dual Pistols."
+      ]
+    },
+    {
+      "stats": [
+        "While sliding or aim gliding: Gain 25% ammo efficiency with Dual Pistols."
+      ]
+    },
+    {
+      "stats": [
+        "While sliding or aim gliding: Gain 35% ammo efficiency with Dual Pistols."
+      ]
+    },
+    {
+      "stats": [
+        "While sliding or aim gliding: Gain 45% ammo efficiency with Dual Pistols."
+      ]
+    },
+    {
+      "stats": [
+        "While sliding or aim gliding: Gain 55% ammo efficiency with Dual Pistols."
+      ]
+    },
+    {
+      "stats": [
+        "While sliding or aim gliding: Gain 65% ammo efficiency with Dual Pistols."
+      ]
+    }
+  ],
+  "masterable": false,
+  "name": "Akimbo Slip Shot",
+  "rarity": "Rare",
+  "tradable": true,
+  "type": "Secondary Arcane",
+  "uniqueName": "/Lotus/Upgrades/CosmeticEnhancers/Offensive/AmmoEfficiencyOnSliding"
+}

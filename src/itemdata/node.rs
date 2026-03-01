@@ -105,4 +105,34 @@ mod tests {
         assert!(rec.faction_index >= 0);
         assert!(rec.mission_index >= 0);
     }
+
+    #[test]
+    fn test_deserialize_node_hydron() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/node_test_2.json"
+        ));
+        let rec: Node = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.unique_name, "SolNode195");
+        assert_eq!(rec.identity.name, "Hydron");
+        assert_eq!(rec.system_name, "Sedna");
+        assert_eq!(rec.min_enemy_level, 30);
+        assert_eq!(rec.max_enemy_level, 40);
+    }
+
+    #[test]
+    fn test_deserialize_node_mot() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/node_test_3.json"
+        ));
+        let rec: Node = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.unique_name, "SolNode409");
+        assert_eq!(rec.identity.name, "Mot");
+        assert_eq!(rec.system_name, "Void");
+        assert_eq!(rec.min_enemy_level, 40);
+        assert_eq!(rec.max_enemy_level, 45);
+    }
 }

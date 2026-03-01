@@ -260,4 +260,32 @@ mod tests {
         assert_eq!(rec.build.build_price, Some(25000));
         assert_eq!(rec.build.components.len(), 4);
     }
+
+    #[test]
+    fn test_deserialize_archmelee_centaur() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/arch_melee_test_2.json"
+        ));
+        let rec: ArchMelee = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Centaur");
+        assert!((rec.weapon.total_damage - 376.0).abs() < 1.0);
+        assert!((rec.weapon.critical_chance - 0.25).abs() < 0.01);
+        assert_eq!(rec.blocking_angle, 90);
+    }
+
+    #[test]
+    fn test_deserialize_archmelee_agkuza() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/arch_melee_test_3.json"
+        ));
+        let rec: ArchMelee = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Agkuza");
+        assert!((rec.weapon.total_damage - 436.0).abs() < 1.0);
+        assert!((rec.weapon.critical_chance - 0.05).abs() < 0.01);
+        assert_eq!(rec.blocking_angle, 90);
+    }
 }

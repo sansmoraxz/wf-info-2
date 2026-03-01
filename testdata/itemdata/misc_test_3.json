@@ -1,0 +1,12 @@
+{
+  "category": "Misc",
+  "description": "Kill |COUNT| Enemies while Sliding.",
+  "imageName": "accelerator-ab0518db13.png",
+  "masterable": false,
+  "name": "Accelerator",
+  "required": 10,
+  "standing": 1000,
+  "tradable": false,
+  "type": "Nightwave Challenge",
+  "uniqueName": "/Lotus/Types/Challenges/Seasons/Daily/SeasonDailySlideKills"
+}

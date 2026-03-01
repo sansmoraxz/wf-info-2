@@ -1,0 +1,10 @@
+{
+  "category": "Quests",
+  "description": "Darvo needs your help again. Save one of his best contractors from Grineer execution.",
+  "imageName": "a-man-of-few-words-ce44051d9c.png",
+  "masterable": false,
+  "name": "A Man Of Few Words",
+  "tradable": false,
+  "type": "Key",
+  "uniqueName": "/Lotus/Types/Keys/GetClemQuest/GetClemQuestKeyChain"
+}

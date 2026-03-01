@@ -1,0 +1,136 @@
+{
+  "uniqueName": "/Lotus/Types/Enemies/Grineer/Eidolon/Vip/Avatars/EidolonVipPilotAvatar",
+  "name": "Aerial Commander",
+  "description": "A rugged career pilot, bred to survive on the Plains.",
+  "health": 800,
+  "shield": 0,
+  "armor": 250,
+  "regionBits": 4,
+  "type": "Grineer",
+  "imageName": "aerial-commander.png",
+  "category": "Enemy",
+  "tradable": false,
+  "drops": [
+    {
+      "location": "Gladiator Rush",
+      "type": "Mod Locations",
+      "rarity": "Common",
+      "chance": 0.37939999999999996
+    },
+    {
+      "location": "Gladiator Aegis",
+      "type": "Mod Locations",
+      "rarity": "Common",
+      "chance": 0.37939999999999996
+    },
+    {
+      "location": "Gladiator Resolve",
+      "type": "Mod Locations",
+      "rarity": "Uncommon",
+      "chance": 0.1106
+    },
+    {
+      "location": "Gladiator Might",
+      "type": "Mod Locations",
+      "rarity": "Uncommon",
+      "chance": 0.1106
+    },
+    {
+      "location": "Gladiator Finesse",
+      "type": "Mod Locations",
+      "rarity": "Legendary",
+      "chance": 0.005
+    },
+    {
+      "location": "Gladiator Vice",
+      "type": "Mod Locations",
+      "rarity": "Legendary",
+      "chance": 0.005
+    },
+    {
+      "location": "Swooping Falcon",
+      "type": "Mod Locations",
+      "rarity": "Legendary",
+      "chance": 0.005
+    },
+    {
+      "location": "Kinetic Diversion",
+      "type": "Mod Locations",
+      "rarity": "Legendary",
+      "chance": 0.005
+    },
+    {
+      "location": "Aerial Commander",
+      "type": "Enemy Mod Tables",
+      "chance": null
+    }
+  ],
+  "resistances": [
+    {
+      "amount": 0,
+      "type": "Shield",
+      "affectors": [
+        {
+          "element": "None",
+          "modifier": 0
+        }
+      ]
+    },
+    {
+      "amount": 250,
+      "type": "Alloy Armor",
+      "affectors": [
+        {
+          "element": "Puncture",
+          "modifier": 0.5
+        },
+        {
+          "element": "Cold",
+          "modifier": 0.5
+        },
+        {
+          "element": "Radiation",
+          "modifier": 0
+        },
+        {
+          "element": "Slash",
+          "modifier": -0.75
+        },
+        {
+          "element": "Electricity",
+          "modifier": -0.75
+        },
+        {
+          "element": "Magnetic",
+          "modifier": -0.75
+        }
+      ]
+    },
+    {
+      "amount": 800,
+      "type": "Cloned Flesh",
+      "affectors": [
+        {
+          "element": "Slash",
+          "modifier": 0.5
+        },
+        {
+          "element": "Heat",
+          "modifier": 0.5
+        },
+        {
+          "element": "Viral",
+          "modifier": 0
+        },
+        {
+          "element": "Impact",
+          "modifier": -0.5
+        },
+        {
+          "element": "Gas",
+          "modifier": -0.75
+        }
+      ]
+    }
+  ]
+}

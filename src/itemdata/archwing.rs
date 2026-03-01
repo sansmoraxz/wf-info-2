@@ -234,4 +234,35 @@ mod tests {
 
         assert!(!rec.prime.is_prime);
     }
+
+    #[test]
+    fn test_deserialize_archwing_odonata() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/archwing_test_2.json"
+        ));
+        let rec: Archwing = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Odonata");
+        assert_eq!(rec.stats.health, 425);
+        assert_eq!(rec.stats.armor, 100);
+        assert_eq!(rec.stats.shield, 430);
+        assert_eq!(rec.build_price, 7000);
+        assert!(!rec.prime.is_prime);
+    }
+
+    #[test]
+    fn test_deserialize_archwing_prime() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/archwing_test_3.json"
+        ));
+        let rec: Archwing = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Odonata Prime");
+        assert_eq!(rec.stats.health, 650);
+        assert_eq!(rec.stats.shield, 640);
+        assert!(rec.prime.is_prime);
+        assert_eq!(rec.prime.vaulted, Some(true));
+    }
 }

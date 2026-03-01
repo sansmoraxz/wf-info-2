@@ -250,4 +250,33 @@ mod tests {
         assert_eq!(rec.build.build_price, Some(25000));
         assert_eq!(rec.build.components.len(), 5);
     }
+
+    #[test]
+    fn test_deserialize_archgun_corvas() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/arch_gun_test_2.json"
+        ));
+        let rec: ArchGun = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Corvas");
+        assert!((rec.weapon.total_damage - 880.0).abs() < 1.0);
+        assert!((rec.weapon.critical_chance - 0.4).abs() < 0.01);
+        assert_eq!(rec.gun.magazine_size, Some(25));
+        assert!(!rec.prime.is_prime);
+    }
+
+    #[test]
+    fn test_deserialize_archgun_prime() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/arch_gun_test_3.json"
+        ));
+        let rec: ArchGun = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Corvas Prime");
+        assert!((rec.weapon.total_damage - 960.0).abs() < 1.0);
+        assert!((rec.weapon.critical_chance - 0.44).abs() < 0.01);
+        assert!(rec.prime.is_prime);
+    }
 }

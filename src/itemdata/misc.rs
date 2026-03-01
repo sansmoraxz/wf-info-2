@@ -280,4 +280,31 @@ mod tests {
         assert!(!rec.trade.tradable);
         assert!(!rec.trade.masterable);
     }
+
+    #[test]
+    fn test_deserialize_misc_archon_shard() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/misc_test_2.json"
+        ));
+        let rec: Misc = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.unique_name, "/Lotus/Types/Gameplay/NarmerSorties/ArchonCrystalBoreal");
+        assert_eq!(rec.identity.name, "<Shard_blue_simple> Azure Archon Shard");
+        assert_eq!(rec.type_field, MiscType::Misc);
+        assert!(!rec.trade.tradable);
+    }
+
+    #[test]
+    fn test_deserialize_misc_nightwave() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/misc_test_3.json"
+        ));
+        let rec: Misc = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Accelerator");
+        assert_eq!(rec.type_field, MiscType::NightwaveChallenge);
+        assert!(!rec.trade.tradable);
+    }
 }

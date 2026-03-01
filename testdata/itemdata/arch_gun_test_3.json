@@ -1,0 +1,811 @@
+{
+  "accuracy": 100,
+  "attacks": [
+    {
+      "name": "Uncharged Shot",
+      "speed": 2,
+      "crit_chance": 44,
+      "crit_mult": 3,
+      "status_chance": 20,
+      "shot_type": "Projectile",
+      "shot_speed": 120,
+      "flight": 120,
+      "damage": {
+        "impact": 230,
+        "heat": 330
+      }
+    },
+    {
+      "name": "Charged Shot",
+      "speed": 2,
+      "crit_chance": 56,
+      "crit_mult": 3,
+      "status_chance": 20,
+      "charge_time": 0.5,
+      "shot_type": "Projectile",
+      "shot_speed": 140,
+      "flight": 140,
+      "falloff": {
+        "start": 100,
+        "end": 200,
+        "reduction": 0.5
+      },
+      "damage": {
+        "impact": 430,
+        "heat": 530
+      }
+    }
+  ],
+  "buildPrice": 45000,
+  "buildQuantity": 1,
+  "buildTime": 43200,
+  "category": "Arch-Gun",
+  "components": [
+    {
+      "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/CorvasPrimeBarrel",
+      "name": "Barrel",
+      "description": "An Archwing weapon-crafting component.",
+      "primeSellingPrice": 100,
+      "itemCount": 1,
+      "imageName": "prime-barrel.png",
+      "tradable": true,
+      "drops": [
+        {
+          "chance": 0.02,
+          "location": "Meso C9 Relic",
+          "rarity": "Rare",
+          "type": "Corvas Prime Barrel"
+        },
+        {
+          "chance": 0.02,
+          "location": "Neo C2 Relic",
+          "rarity": "Rare",
+          "type": "Corvas Prime Barrel"
+        },
+        {
+          "chance": 0.02,
+          "location": "Neo C4 Relic",
+          "rarity": "Rare",
+          "type": "Corvas Prime Barrel"
+        },
+        {
+          "chance": 0.02,
+          "location": "Neo C5 Relic",
+          "rarity": "Rare",
+          "type": "Corvas Prime Barrel"
+        },
+        {
+          "chance": 0.04,
+          "location": "Meso C9 Relic (Exceptional)",
+          "rarity": "Rare",
+          "type": "Corvas Prime Barrel"
+        },
+        {
+          "chance": 0.04,
+          "location": "Neo C2 Relic (Exceptional)",
+          "rarity": "Rare",
+          "type": "Corvas Prime Barrel"
+        },
+        {
+          "chance": 0.04,
+          "location": "Neo C4 Relic (Exceptional)",
+          "rarity": "Rare",
+          "type": "Corvas Prime Barrel"
+        },
+        {
+          "chance": 0.04,
+          "location": "Neo C5 Relic (Exceptional)",
+          "rarity": "Rare",
+          "type": "Corvas Prime Barrel"
+        },
+        {
+          "chance": 0.06,
+          "location": "Meso C9 Relic (Flawless)",
+          "rarity": "Rare",
+          "type": "Corvas Prime Barrel"
+        },
+        {
+          "chance": 0.06,
+          "location": "Neo C2 Relic (Flawless)",
+          "rarity": "Rare",
+          "type": "Corvas Prime Barrel"
+        },
+        {
+          "chance": 0.06,
+          "location": "Neo C4 Relic (Flawless)",
+          "rarity": "Rare",
+          "type": "Corvas Prime Barrel"
+        },
+        {
+          "chance": 0.06,
+          "location": "Neo C5 Relic (Flawless)",
+          "rarity": "Rare",
+          "type": "Corvas Prime Barrel"
+        },
+        {
+          "chance": 0.1,
+          "location": "Meso C9 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Barrel"
+        },
+        {
+          "chance": 0.1,
+          "location": "Neo C2 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Barrel"
+        },
+        {
+          "chance": 0.1,
+          "location": "Neo C4 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Barrel"
+        },
+        {
+          "chance": 0.1,
+          "location": "Neo C5 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Barrel"
+        }
+      ],
+      "masterable": false,
+      "ducats": 100
+    },
+    {
+      "uniqueName": "/Lotus/Types/Recipes/Weapons/CorvasPrimeBlueprint",
+      "name": "Blueprint",
+      "description": "Flaunting ceremonial beauty, this arch gun flak cannon is even more devastating than its standard issue counterpart.",
+      "itemCount": 1,
+      "primeSellingPrice": 45,
+      "imageName": "blueprint.png",
+      "tradable": true,
+      "masterable": false,
+      "ducats": 45,
+      "drops": [
+        {
+          "chance": 0.11,
+          "location": "Axi K7 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.11,
+          "location": "Lith W3 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.11,
+          "location": "Meso B8 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.11,
+          "location": "Meso H8 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.11,
+          "location": "Neo D5 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.11,
+          "location": "Neo L2 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.13,
+          "location": "Axi K7 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.13,
+          "location": "Lith W3 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.13,
+          "location": "Meso B8 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.13,
+          "location": "Meso H8 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.13,
+          "location": "Neo D5 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.13,
+          "location": "Neo L2 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.17,
+          "location": "Axi K7 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.17,
+          "location": "Lith W3 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.17,
+          "location": "Meso B8 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.17,
+          "location": "Meso H8 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.17,
+          "location": "Neo D5 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.17,
+          "location": "Neo L2 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi K7 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Lith W3 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Meso B8 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Meso H8 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Neo D5 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Neo L2 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Blueprint"
+        }
+      ]
+    },
+    {
+      "uniqueName": "/Lotus/Types/Items/MiscItems/OrokinCell",
+      "name": "Orokin Cell",
+      "description": "Ancient energy cell from the Orokin era.\n\nLocation: Ceres, Saturn, and Deimos",
+      "itemCount": 10,
+      "imageName": "orokin-cell-0d237af036.png",
+      "tradable": false,
+      "drops": [],
+      "masterable": false,
+      "type": "Resource"
+    },
+    {
+      "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/CorvasPrimeReceiver",
+      "name": "Receiver",
+      "description": "An Archwing weapon-crafting component.",
+      "primeSellingPrice": 15,
+      "itemCount": 1,
+      "imageName": "prime-receiver.png",
+      "tradable": true,
+      "drops": [
+        {
+          "chance": 0.1667,
+          "location": "Axi G10 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Axi K8 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Axi T10 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Lith D6 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Lith G8 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Meso A4 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Meso G4 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Neo D7 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi G10 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi K8 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi T10 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2,
+          "location": "Lith D6 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2,
+          "location": "Lith G8 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2,
+          "location": "Meso A4 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2,
+          "location": "Meso G4 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2,
+          "location": "Neo D7 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Axi G10 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Axi K8 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Axi T10 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Lith D6 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Lith G8 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Meso A4 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Meso G4 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Neo D7 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Axi G10 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Axi K8 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Axi T10 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Lith D6 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Lith G8 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Meso A4 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Meso G4 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Neo D7 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Receiver"
+        }
+      ],
+      "masterable": false,
+      "ducats": 15
+    },
+    {
+      "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/CorvasPrimeStock",
+      "name": "Stock",
+      "description": "An Archwing weapon-crafting component.",
+      "primeSellingPrice": 15,
+      "itemCount": 1,
+      "imageName": "prime-stock.png",
+      "tradable": true,
+      "drops": [
+        {
+          "chance": 0.1667,
+          "location": "Axi G8 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Lith K10 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Lith S12 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Meso G5 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Neo C3 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Neo K8 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi G8 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2,
+          "location": "Lith K10 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2,
+          "location": "Lith S12 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2,
+          "location": "Meso G5 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2,
+          "location": "Neo C3 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2,
+          "location": "Neo K8 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Axi G8 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Lith K10 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Lith S12 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Meso G5 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Neo C3 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Neo K8 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Axi G8 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Lith K10 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Lith S12 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Meso G5 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Neo C3 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Neo K8 Relic",
+          "rarity": "Uncommon",
+          "type": "Corvas Prime Stock"
+        }
+      ],
+      "masterable": false,
+      "ducats": 15
+    }
+  ],
+  "consumeOnBuild": true,
+  "criticalChance": 0.44,
+  "criticalMultiplier": 3,
+  "damage": {
+    "total": 960,
+    "impact": 430,
+    "puncture": 0,
+    "slash": 0,
+    "heat": 530,
+    "cold": 0,
+    "electricity": 0,
+    "toxin": 0,
+    "blast": 0,
+    "radiation": 0,
+    "gas": 0,
+    "magnetic": 0,
+    "viral": 0,
+    "corrosive": 0,
+    "void": 0,
+    "tau": 0,
+    "cinematic": 0,
+    "shieldDrain": 0,
+    "healthDrain": 0,
+    "energyDrain": 0,
+    "true": 0
+  },
+  "damagePerShot": [
+    430,
+    0,
+    0,
+    530,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "description": "Flaunting ceremonial beauty, this arch gun flak cannon is even more devastating than its standard issue counterpart.",
+  "disposition": 3,
+  "estimatedVaultDate": "2023-12-09",
+  "fireRate": 2,
+  "imageName": "corvas-prime-3a5514ae24.png",
+  "introduced": {
+    "name": "Update 31.3",
+    "url": "https://wiki.warframe.com/w/Update_31%23Update_31.3",
+    "aliases": [
+      "31.3"
+    ],
+    "parent": "31.0",
+    "date": "2022-03-28"
+  },
+  "isPrime": true,
+  "magazineSize": 20,
+  "masterable": true,
+  "masteryReq": 14,
+  "multishot": 1,
+  "name": "Corvas Prime",
+  "noise": "Alarming",
+  "omegaAttenuation": 0.94999999,
+  "patchlogs": [
+    {
+      "name": "Veilbreaker: Update 32",
+      "date": "2022-09-07T15:00:11Z",
+      "url": "https://forums.warframe.com/topic/1321162-veilbreaker-update-32/",
+      "additions": "",
+      "changes": "Corvas Prime\nAdded explosion FX to the Corvas Prime while in Archwing.\u00a0",
+      "fixes": ""
+    },
+    {
+      "name": "Update 31.5: Angels of the Zariman",
+      "date": "2022-04-27T15:02:06Z",
+      "url": "https://forums.warframe.com/topic/1305880-update-315-angels-of-the-zariman/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed the Corvas Prime gain being too loud.\u00a0"
+    },
+    {
+      "name": "Garuda Prime: Hotfix 31.3.1",
+      "date": "2022-03-29T17:21:39Z",
+      "url": "https://forums.warframe.com/topic/1303913-garuda-prime-hotfix-3131/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed Corvas Prime missing its localized descriptions.\u00a0"
+    },
+    {
+      "name": "Garuda Prime: Update 31.3",
+      "date": "2022-03-28T17:58:24Z",
+      "url": "https://forums.warframe.com/topic/1303793-garuda-prime-update-313/",
+      "additions": "",
+      "changes": "Awash in crimson and shimmering gold, Garuda Prime has emerged! Add Garuda Prime, exclusive Prime Accessories, Weapons, Boosters and more with Prime Access, or earn Relics in-game to craft Garuda Prime, Nagantaka Prime and Corvas Prime in your Foundry.",
+      "fixes": ""
+    }
+  ],
+  "polarities": [
+    "madurai",
+    "madurai",
+    "naramon"
+  ],
+  "procChance": 0.30000001,
+  "productCategory": "SpaceGuns",
+  "releaseDate": "2022-03-28",
+  "reloadTime": 2,
+  "skipBuildTimePrice": 50,
+  "slot": 1,
+  "tags": [
+    "Prime"
+  ],
+  "totalDamage": 960,
+  "tradable": true,
+  "trigger": "Charge",
+  "type": "Arch-Gun",
+  "uniqueName": "/Lotus/Weapons/Tenno/Archwing/Primary/PrimeCorvas/PrimeCorvasWeapon",
+  "vaulted": false,
+  "wikiAvailable": true,
+  "wikiaThumbnail": "https://wiki.warframe.com/images/CorvasPrime.png?290fd",
+  "wikiaUrl": "https://wiki.warframe.com/w/Corvas_Prime_(Atmosphere)"
+}

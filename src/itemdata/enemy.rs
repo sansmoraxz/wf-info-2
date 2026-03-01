@@ -116,4 +116,32 @@ mod tests {
         assert!(!rec.drops.is_empty());
         assert!(rec.drops.iter().any(|d| d.chance.is_none()));
     }
+
+    #[test]
+    fn test_deserialize_enemy_grineer() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/enemy_test_2.json"
+        ));
+        let rec: Enemy = from_str(json_data).unwrap();
+
+        assert_eq!(rec.type_field, EnemyType::Grineer);
+        assert_eq!(rec.combat.health, 800);
+        assert_eq!(rec.combat.armor, 250);
+        assert_eq!(rec.combat.shield, 0);
+        assert_eq!(rec.combat.resistances.len(), 3);
+    }
+
+    #[test]
+    fn test_deserialize_enemy_corpus() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/enemy_test_3.json"
+        ));
+        let rec: Enemy = from_str(json_data).unwrap();
+
+        assert_eq!(rec.type_field, EnemyType::Corpus);
+        assert!(rec.combat.health > 0);
+        assert_eq!(rec.combat.resistances.len(), 3);
+    }
 }

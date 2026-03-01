@@ -191,4 +191,31 @@ mod tests {
         // Drops
         assert!(!rec.drops.is_empty());
     }
+
+    #[test]
+    fn test_deserialize_railjack_base() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/railjack_test_2.json"
+        ));
+        let rec: Railjack = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.unique_name, "/Lotus/Weapons/CrewShip/MassDriver/AutoCannon/AutoCannon");
+        assert_eq!(rec.identity.name, "Apoc");
+        assert!((rec.weapon.total_damage - 126.0).abs() < 1.0);
+        assert!((rec.weapon.fire_rate - 8.33).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_deserialize_railjack_mk_ii() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/railjack_test_3.json"
+        ));
+        let rec: Railjack = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Apoc Mk Ii");
+        assert!((rec.weapon.total_damage - 386.0).abs() < 1.0);
+        assert!((rec.weapon.critical_chance - 0.14).abs() < 0.01);
+    }
 }

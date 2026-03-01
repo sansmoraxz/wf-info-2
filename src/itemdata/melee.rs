@@ -270,4 +270,34 @@ mod tests {
         assert_eq!(rec.equip.slot, Some(Slot::Melee));
         assert!(!rec.prime.is_prime);
     }
+
+    #[test]
+    fn test_deserialize_melee_prime() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/melee_test_2.json"
+        ));
+        let rec: Melee = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Nikana Prime");
+        assert!((rec.weapon.total_damage - 198.0).abs() < 0.01);
+        assert!((rec.weapon.critical_chance - 0.28).abs() < 0.01);
+        assert_eq!(rec.melee.blocking_angle, Some(55));
+        assert!(rec.prime.is_prime);
+        assert_eq!(rec.prime.vaulted, Some(true));
+    }
+
+    #[test]
+    fn test_deserialize_melee_base() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/melee_test_3.json"
+        ));
+        let rec: Melee = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Skana");
+        assert!((rec.weapon.total_damage - 120.0).abs() < 0.01);
+        assert_eq!(rec.melee.blocking_angle, Some(55));
+        assert!(!rec.prime.is_prime);
+    }
 }

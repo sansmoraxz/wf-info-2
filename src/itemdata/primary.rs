@@ -266,4 +266,34 @@ mod tests {
         // Equippable
         assert_eq!(rec.equip.slot, Some(Slot::Primary));
     }
+
+    #[test]
+    fn test_deserialize_primary_prime() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/primary_test_2.json"
+        ));
+        let rec: Primary = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Soma Prime");
+        assert!((rec.weapon.total_damage - 12.0).abs() < 0.01);
+        assert!((rec.weapon.critical_chance - 0.3).abs() < 0.01);
+        assert_eq!(rec.gun.magazine_size, Some(200));
+        assert!(rec.prime.is_prime);
+        assert_eq!(rec.prime.vaulted, Some(true));
+    }
+
+    #[test]
+    fn test_deserialize_primary_base() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/primary_test_3.json"
+        ));
+        let rec: Primary = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Braton");
+        assert!((rec.weapon.total_damage - 24.0).abs() < 0.01);
+        assert_eq!(rec.gun.magazine_size, Some(45));
+        assert!(!rec.prime.is_prime);
+    }
 }

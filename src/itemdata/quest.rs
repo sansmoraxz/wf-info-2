@@ -127,4 +127,31 @@ mod tests {
         assert_eq!(rec.build.build_price, Some(1500));
         assert_eq!(rec.build.components.len(), 4);
     }
+
+    #[test]
+    fn test_deserialize_quest_no_build() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/quest_test_2.json"
+        ));
+        let rec: Quest = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.unique_name, "/Lotus/Types/Keys/GetClemQuest/GetClemQuestKeyChain");
+        assert_eq!(rec.identity.name, "A Man Of Few Words");
+        assert_eq!(rec.type_field, QuestType::Key);
+        assert_eq!(rec.build.build_price, None);
+    }
+
+    #[test]
+    fn test_deserialize_quest_zariman() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/quest_test_3.json"
+        ));
+        let rec: Quest = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Angels Of The Zariman");
+        assert_eq!(rec.type_field, QuestType::Key);
+        assert!(!rec.trade.tradable);
+    }
 }

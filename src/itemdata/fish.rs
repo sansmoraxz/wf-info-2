@@ -93,4 +93,30 @@ mod tests {
         assert!(!rec.trade.masterable);
         assert!(!rec.drops.is_empty());
     }
+
+    #[test]
+    fn test_deserialize_fish_large() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/fish_test_2.json"
+        ));
+        let rec: Fish = from_str(json_data).unwrap();
+
+        assert!(rec.identity.unique_name.ends_with("Large"));
+        assert_eq!(rec.identity.category, "Fish");
+        assert_eq!(rec.type_field, FishType::Fish);
+    }
+
+    #[test]
+    fn test_deserialize_fish_medium() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/fish_test_3.json"
+        ));
+        let rec: Fish = from_str(json_data).unwrap();
+
+        assert!(rec.identity.unique_name.ends_with("Medium"));
+        assert_eq!(rec.identity.category, "Fish");
+        assert_eq!(rec.type_field, FishType::Fish);
+    }
 }

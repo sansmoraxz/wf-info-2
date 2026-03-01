@@ -132,4 +132,30 @@ mod tests {
         assert!(!rec.trade.tradable);
         assert!(!rec.trade.masterable);
     }
+
+    #[test]
+    fn test_deserialize_resource_type() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/resource_test_2.json"
+        ));
+        let rec: Resource = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.unique_name, "/Lotus/Types/Gameplay/1999Wf/Resources/HexDogTagQuincy");
+        assert_eq!(rec.identity.name, "35mm Film");
+        assert_eq!(rec.type_field, ResourceType::Resource);
+        assert!(!rec.trade.tradable);
+    }
+
+    #[test]
+    fn test_deserialize_resource_with_drops() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/resource_test_3.json"
+        ));
+        let rec: Resource = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Advances Debt-Bond");
+        assert_eq!(rec.type_field, ResourceType::Resource);
+    }
 }

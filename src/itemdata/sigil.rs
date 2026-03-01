@@ -91,4 +91,30 @@ mod tests {
         assert!(!rec.trade.tradable);
         assert!(!rec.trade.masterable);
     }
+
+    #[test]
+    fn test_deserialize_sigil_syndicate() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/sigil_test_2.json"
+        ));
+        let rec: Sigil = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.unique_name, "/Lotus/Upgrades/Skins/Sigils/Syndicate/HexRankThree");
+        assert_eq!(rec.identity.name, "2-For-1 Sigil");
+        assert_eq!(rec.type_field, SigilType::Sigil);
+    }
+
+    #[test]
+    fn test_deserialize_sigil_conclave() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/sigil_test_3.json"
+        ));
+        let rec: Sigil = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Accord Sigil");
+        assert_eq!(rec.type_field, SigilType::Sigil);
+        assert!(!rec.trade.tradable);
+    }
 }

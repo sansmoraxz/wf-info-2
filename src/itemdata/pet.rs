@@ -358,4 +358,51 @@ mod tests {
             _ => panic!("Expected KubrowPets variant"),
         }
     }
+
+    #[test]
+    fn test_deserialize_pet_component() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/pet_test_2.json"
+        ));
+
+        let rec: PetEntry = from_str(json_data).unwrap();
+
+        match &rec {
+            PetEntry::Pistols(p) => {
+                assert_eq!(p.identity.name, "Adlet Core");
+                assert_eq!(p.identity.category, "Pets");
+                assert!(!p.trade.tradable);
+                assert_eq!(p.build_price, 50000);
+                assert_eq!(p.build_quantity, 1);
+                assert_eq!(p.components.len(), 5);
+                assert_eq!(p.total_damage, 0);
+            }
+            _ => panic!("Expected Pistols variant"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_pet_warframe_companion() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/pet_test_3.json"
+        ));
+
+        let rec: PetEntry = from_str(json_data).unwrap();
+
+        match &rec {
+            PetEntry::SpecialItems(p) => {
+                assert_eq!(p.identity.name, "Venari");
+                assert_eq!(p.identity.category, "Pets");
+                assert!(!p.trade.tradable);
+                assert!(p.exclude_from_codex);
+                assert_eq!(p.stats.health, 900);
+                assert_eq!(p.stats.armor, 350);
+                assert_eq!(p.stats.shield, 0);
+                assert_eq!(p.stats.power, 100);
+            }
+            _ => panic!("Expected SpecialItems variant"),
+        }
+    }
 }

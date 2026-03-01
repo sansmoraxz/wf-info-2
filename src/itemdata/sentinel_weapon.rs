@@ -278,4 +278,31 @@ mod tests {
 
         assert!(!rec.prime.is_prime);
     }
+
+    #[test]
+    fn test_deserialize_sentinel_weapon_artax() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/sentinel_weapon_test_2.json"
+        ));
+        let rec: SentinelWeapon = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Artax");
+        assert!((rec.weapon.total_damage - 5.0).abs() < 0.01);
+        assert!((rec.weapon.fire_rate - 16.67).abs() < 0.1);
+        assert_eq!(rec.weapon.damage_per_shot.len(), 20);
+    }
+
+    #[test]
+    fn test_deserialize_sentinel_weapon_akaten() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/sentinel_weapon_test_3.json"
+        ));
+        let rec: SentinelWeapon = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Akaten");
+        assert!((rec.weapon.total_damage - 300.0).abs() < 0.01);
+        assert!((rec.weapon.fire_rate - 1.0).abs() < 0.01);
+    }
 }

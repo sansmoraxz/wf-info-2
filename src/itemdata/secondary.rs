@@ -265,4 +265,34 @@ mod tests {
         assert_eq!(rec.equip.slot, Some(Slot::Secondary));
         assert!(!rec.prime.is_prime);
     }
+
+    #[test]
+    fn test_deserialize_secondary_prime() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/secondary_test_2.json"
+        ));
+        let rec: Secondary = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Lex Prime");
+        assert!((rec.weapon.total_damage - 180.0).abs() < 0.01);
+        assert!((rec.weapon.critical_chance - 0.25).abs() < 0.01);
+        assert_eq!(rec.gun.magazine_size, Some(8));
+        assert!(rec.prime.is_prime);
+        assert_eq!(rec.prime.vaulted, Some(false));
+    }
+
+    #[test]
+    fn test_deserialize_secondary_base() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/secondary_test_3.json"
+        ));
+        let rec: Secondary = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Furis");
+        assert!((rec.weapon.total_damage - 20.0).abs() < 0.01);
+        assert_eq!(rec.gun.magazine_size, Some(35));
+        assert!(!rec.prime.is_prime);
+    }
 }

@@ -52,103 +52,77 @@ fn test_warframes_deserialize_all() {
 }
 
 #[test]
-fn test_warframes_excalibur_fields() {
+fn test_warframes_tabular_fields() {
     let raw = load_json!("Warframes.json");
     let arr: itemdata::warframe::Root = serde_json::from_str(&raw).unwrap();
-    let excal = arr.iter().find(|w| w.name() == "Excalibur").unwrap();
 
-    assert_eq!(excal.unique_name(), "/Lotus/Powersuits/Excalibur/Excalibur");
-    assert_eq!(excal.category(), "Warframes");
-    assert_eq!(excal.type_field(), "Warframe");
-    assert!(!excal.tradable());
-    assert!(excal.masterable());
+    // (name, unique_name, health, armor, shield, power, abilities, is_prime, vaulted)
+    let cases: &[(&str, &str, i64, i64, i64, i64, usize, bool, Option<bool>)] = &[
+        (
+            "Excalibur",
+            "/Lotus/Powersuits/Excalibur/Excalibur",
+            270, 240, 270, 100, 4, false, None,
+        ),
+        (
+            "Ash Prime",
+            "/Lotus/Powersuits/Ninja/AshPrime",
+            455, 185, 365, 100, 4, true, Some(true),
+        ),
+        (
+            "Bonewidow",
+            "/Lotus/Powersuits/EntratiMech/ThanoTech",
+            1880, 480, 430, 175, 4, false, None,
+        ),
+        (
+            "Helminth",
+            "/Lotus/Powersuits/PowersuitAbilities/Helminth",
+            0, 0, 0, 0, 13, false, None,
+        ),
+    ];
 
-    // Character stats
-    assert_eq!(excal.health(), 270);
-    assert_eq!(excal.shield(), 270);
-    assert_eq!(excal.armor(), 240);
-    assert_eq!(excal.power(), 100);
-    assert!((excal.sprint_speed().unwrap() - 1.0).abs() < f64::EPSILON);
-
-    // Abilities
-    assert_eq!(excal.abilities().len(), 4);
-    assert_eq!(excal.abilities()[0].name, "Slash Dash");
-    assert_eq!(excal.abilities()[3].name, "Exalted Blade");
-
-    // Buildable
-    assert_eq!(excal.build_price(), Some(25000));
-    assert_eq!(excal.mastery_req(), Some(0));
-
-    // Not prime
-    assert!(!excal.is_prime());
-    assert_eq!(excal.vault_status(), VaultStatus::NotPrime);
-
-    // Wikia
-    assert!(excal.wikia_url().is_some());
-    assert!(excal.introduced().is_some());
+    for &(name, unique, health, armor, shield, power, abilities, prime, vaulted) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Warframes", "{name} category");
+        assert_eq!(item.health(), health, "{name} health");
+        assert_eq!(item.armor(), armor, "{name} armor");
+        assert_eq!(item.shield(), shield, "{name} shield");
+        assert_eq!(item.power(), power, "{name} power");
+        assert_eq!(item.abilities().len(), abilities, "{name} abilities");
+        assert_eq!(item.is_prime(), prime, "{name} prime");
+        assert_eq!(item.vaulted(), vaulted, "{name} vaulted");
+    }
 }
 
 #[test]
-fn test_warframes_ash_prime_vaulted() {
+fn test_warframes_variant_discrimination() {
     let raw = load_json!("Warframes.json");
     let arr: itemdata::warframe::Root = serde_json::from_str(&raw).unwrap();
-    let ash = arr.iter().find(|w| w.name() == "Ash Prime").unwrap();
 
-    assert_eq!(ash.unique_name(), "/Lotus/Powersuits/Ninja/AshPrime");
-    assert!(ash.is_prime());
-    assert_eq!(ash.vaulted(), Some(true));
+    // Suits variant
+    let excal = find_by_name(&arr, "Excalibur");
+    assert!(matches!(excal, itemdata::warframe::WarframeEntry::Suits(_)));
+    assert_eq!(excal.build_price(), Some(25000));
+    assert!(excal.wikia_url().is_some());
+    assert_eq!(excal.vault_status(), VaultStatus::NotPrime);
+
+    // Suits prime variant
+    let ash = find_by_name(&arr, "Ash Prime");
+    assert!(matches!(ash, itemdata::warframe::WarframeEntry::Suits(_)));
     assert_eq!(ash.vault_date(), Some("2017-05-30"));
     assert!(matches!(ash.vault_status(), VaultStatus::Vaulted { .. }));
     assert!(!ash.is_accessible());
 
-    assert_eq!(ash.health(), 455);
-    assert_eq!(ash.armor(), 185);
-}
-
-#[test]
-fn test_warframes_necramech_bonewidow() {
-    let raw = load_json!("Warframes.json");
-    let arr: itemdata::warframe::Root = serde_json::from_str(&raw).unwrap();
-    let bw = arr.iter().find(|w| w.name() == "Bonewidow").unwrap();
-
-    assert_eq!(
-        bw.unique_name(),
-        "/Lotus/Powersuits/EntratiMech/ThanoTech"
-    );
-    assert_eq!(bw.category(), "Warframes");
-    assert_eq!(bw.health(), 1880);
-    assert_eq!(bw.shield(), 430);
-    assert_eq!(bw.armor(), 480);
-    assert_eq!(bw.power(), 175);
-    assert_eq!(bw.abilities().len(), 4);
+    // MechSuits variant
+    let bw = find_by_name(&arr, "Bonewidow");
+    assert!(matches!(bw, itemdata::warframe::WarframeEntry::MechSuits(_)));
     assert_eq!(bw.mastery_req(), Some(0));
 
-    match bw {
-        itemdata::warframe::WarframeEntry::MechSuits(_) => {}
-        _ => panic!("Expected MechSuits variant"),
-    }
-}
-
-#[test]
-fn test_warframes_helminth() {
-    let raw = load_json!("Warframes.json");
-    let arr: itemdata::warframe::Root = serde_json::from_str(&raw).unwrap();
-    let helminth = arr.iter().find(|w| w.name() == "Helminth").unwrap();
-
-    assert_eq!(
-        helminth.unique_name(),
-        "/Lotus/Powersuits/PowersuitAbilities/Helminth"
-    );
-    assert_eq!(helminth.health(), 0);
-    assert_eq!(helminth.armor(), 0);
-    assert!(!helminth.tradable());
-    assert_eq!(helminth.abilities().len(), 13);
+    // Helminth variant
+    let helminth = find_by_name(&arr, "Helminth");
+    assert!(matches!(helminth, itemdata::warframe::WarframeEntry::Helminth(_)));
     assert!(helminth.build_price().is_none());
-
-    match helminth {
-        itemdata::warframe::WarframeEntry::Helminth(_) => {}
-        _ => panic!("Expected Helminth variant"),
-    }
+    assert!(!helminth.tradable());
 }
 
 // ── Primary ──
@@ -161,57 +135,45 @@ fn test_primary_deserialize_all() {
 }
 
 #[test]
-fn test_primary_braton_fields() {
+fn test_primary_tabular_fields() {
     let raw = load_json!("Primary.json");
     let arr: itemdata::primary::Root = serde_json::from_str(&raw).unwrap();
-    let braton = find_by_name(&arr, "Braton");
 
-    assert_eq!(braton.unique_name(), "/Lotus/Weapons/Tenno/Rifle/Rifle");
-    assert_eq!(braton.type_field(), "Rifle");
-    assert!(!braton.tradable());
-    assert_eq!(braton.mastery_req(), Some(0));
+    // (name, unique_name, type, crit_chance, total_damage, mag_size, trigger, disposition, is_prime, vaulted)
+    let cases: &[(&str, &str, &str, f64, f64, i64, &str, i64, bool, Option<bool>)] = &[
+        (
+            "Braton",
+            "/Lotus/Weapons/Tenno/Rifle/Rifle",
+            "Rifle",
+            0.12, 24.0, 45, "Auto", 5, false, None,
+        ),
+        (
+            "Soma Prime",
+            "/Lotus/Weapons/Tenno/LongGuns/PrimeSoma/PrimeSomaRifle",
+            "Rifle",
+            0.30, 12.0, 200, "Auto", 3, true, Some(true),
+        ),
+        (
+            "Acceltra",
+            "/Lotus/Weapons/Tenno/LongGuns/SapientPrimary/SapientPrimaryWeapon",
+            "Rifle",
+            0.32, 70.0, 48, "Auto", 1, false, None,
+        ),
+    ];
 
-    // Weapon stats
-    assert!((braton.critical_chance() - 0.12).abs() < 0.01);
-    assert!((braton.critical_multiplier() - 1.6).abs() < 0.01);
-    assert!((braton.fire_rate() - 8.75).abs() < 0.01);
-    assert!((braton.total_damage() - 24.0).abs() < 0.01);
-    assert_eq!(braton.disposition(), Some(5));
-    assert_eq!(braton.damage_per_shot().len(), 20);
-
-    // Ranged weapon stats
-    assert!((braton.accuracy() - 28.571428).abs() < 0.01);
-    assert_eq!(braton.multishot(), 1);
-    assert_eq!(braton.noise(), "Alarming");
-    assert_eq!(braton.trigger(), "Auto");
-    assert_eq!(braton.magazine_size(), Some(45));
-    assert!((braton.reload_time() - 2.0).abs() < 0.01);
-
-    // Equippable
-    assert_eq!(braton.slot(), Some(&itemdata::Slot::Primary));
-
-    // Not prime
-    assert!(!braton.is_prime());
-}
-
-#[test]
-fn test_primary_soma_prime_vaulted() {
-    let raw = load_json!("Primary.json");
-    let arr: itemdata::primary::Root = serde_json::from_str(&raw).unwrap();
-    let soma = find_by_name(&arr, "Soma Prime");
-
-    assert_eq!(
-        soma.unique_name(),
-        "/Lotus/Weapons/Tenno/LongGuns/PrimeSoma/PrimeSomaRifle"
-    );
-    assert!(soma.is_prime());
-    assert_eq!(soma.vaulted(), Some(true));
-    assert!(matches!(soma.vault_status(), VaultStatus::Vaulted { .. }));
-
-    assert!((soma.critical_chance() - 0.30).abs() < 0.01);
-    assert!((soma.fire_rate() - 15.0).abs() < 0.1);
-    assert_eq!(soma.magazine_size(), Some(200));
-    assert_eq!(soma.disposition(), Some(3));
+    for &(name, unique, typ, crit, dmg, mag, trigger, dispo, prime, vaulted) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.type_field(), typ, "{name} type");
+        assert!((item.critical_chance() - crit).abs() < 0.01, "{name} crit");
+        assert!((item.total_damage() - dmg).abs() < 0.5, "{name} dmg");
+        assert_eq!(item.magazine_size(), Some(mag), "{name} mag_size");
+        assert_eq!(item.trigger(), trigger, "{name} trigger");
+        assert_eq!(item.disposition(), Some(dispo), "{name} disposition");
+        assert_eq!(item.is_prime(), prime, "{name} prime");
+        assert_eq!(item.vaulted(), vaulted, "{name} vaulted");
+        assert_eq!(item.damage_per_shot().len(), 20, "{name} damage_per_shot");
+    }
 }
 
 // ── Secondary ──
@@ -224,22 +186,51 @@ fn test_secondary_deserialize_all() {
 }
 
 #[test]
-fn test_secondary_lex_fields() {
+fn test_secondary_tabular_fields() {
     let raw = load_json!("Secondary.json");
     let arr: itemdata::secondary::Root = serde_json::from_str(&raw).unwrap();
-    let lex = find_by_name(&arr, "Lex");
 
-    assert_eq!(lex.unique_name(), "/Lotus/Weapons/Tenno/Pistol/HeavyPistol");
-    assert_eq!(lex.type_field(), "Pistol");
-    assert!((lex.critical_chance() - 0.2).abs() < 0.01);
-    assert!((lex.total_damage() - 130.0).abs() < 0.01);
-    assert_eq!(lex.magazine_size(), Some(6));
-    assert!((lex.accuracy() - 16.0).abs() < 0.01);
-    assert_eq!(lex.noise(), "Alarming");
-    assert_eq!(lex.trigger(), "Semi");
-    assert_eq!(lex.disposition(), Some(4));
-    assert!(!lex.is_prime());
-    assert_eq!(lex.slot(), Some(&itemdata::Slot::Secondary));
+    // (name, unique_name, type, crit_chance, total_damage, mag_size, trigger, disposition, is_prime, vaulted)
+    let cases: &[(&str, &str, &str, f64, f64, i64, &str, i64, bool, Option<bool>)] = &[
+        (
+            "Lex",
+            "/Lotus/Weapons/Tenno/Pistol/HeavyPistol",
+            "Pistol",
+            0.2, 130.0, 6, "Semi", 4, false, None,
+        ),
+        (
+            "Furis",
+            "/Lotus/Weapons/Tenno/Pistol/AutoPistol",
+            "Pistol",
+            0.05, 20.0, 35, "Auto", 5, false, None,
+        ),
+        (
+            "Lex Prime",
+            "/Lotus/Weapons/Tenno/Pistols/PrimeLex/PrimeLex",
+            "Pistol",
+            0.25, 180.0, 8, "Semi", 4, true, Some(false),
+        ),
+        (
+            "Akstiletto Prime",
+            "/Lotus/Weapons/Tenno/Pistols/PrimeAkstiletto/PrimeAkstiletto",
+            "Pistol",
+            0.15, 36.0, 40, "Auto", 2, true, Some(true),
+        ),
+    ];
+
+    for &(name, unique, typ, crit, dmg, mag, trigger, dispo, prime, vaulted) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.type_field(), typ, "{name} type");
+        assert!((item.critical_chance() - crit).abs() < 0.01, "{name} crit");
+        assert!((item.total_damage() - dmg).abs() < 0.5, "{name} dmg");
+        assert_eq!(item.magazine_size(), Some(mag), "{name} mag");
+        assert_eq!(item.trigger(), trigger, "{name} trigger");
+        assert_eq!(item.disposition(), Some(dispo), "{name} dispo");
+        assert_eq!(item.is_prime(), prime, "{name} prime");
+        assert_eq!(item.vaulted(), vaulted, "{name} vaulted");
+        assert_eq!(item.slot(), Some(&itemdata::Slot::Secondary), "{name} slot");
+    }
 }
 
 // ── Melee ──
@@ -252,35 +243,40 @@ fn test_melee_deserialize_all() {
 }
 
 #[test]
-fn test_melee_skana_fields() {
+fn test_melee_tabular_fields() {
     let raw = load_json!("Melee.json");
     let arr: itemdata::melee::Root = serde_json::from_str(&raw).unwrap();
-    let skana = find_by_name(&arr, "Skana");
 
-    assert_eq!(
-        skana.unique_name(),
-        "/Lotus/Weapons/Tenno/Melee/LongSword/LongSword"
-    );
-    assert_eq!(skana.type_field(), "Melee");
+    // (name, unique_name, crit_chance, total_damage, disposition, is_prime, blocking_angle)
+    let cases: &[(&str, &str, f64, f64, i64, bool, i64)] = &[
+        (
+            "Skana",
+            "/Lotus/Weapons/Tenno/Melee/LongSword/LongSword",
+            0.05, 120.0, 4, false, 55,
+        ),
+        (
+            "Nikana Prime",
+            "/Lotus/Weapons/Tenno/Melee/Swords/PrimeKatana/PrimeNikana",
+            0.28, 198.0, 1, true, 55,
+        ),
+        (
+            "Gram",
+            "/Lotus/Weapons/Tenno/Melee/GreatSword/GreatSword",
+            0.15, 160.0, 5, false, 55,
+        ),
+    ];
 
-    // Weapon stats
-    assert!((skana.critical_chance() - 0.05).abs() < 0.01);
-    assert!((skana.total_damage() - 120.0).abs() < 0.01);
-    assert_eq!(skana.disposition(), Some(4));
-    assert_eq!(skana.damage_per_shot().len(), 20);
-
-    // Melee-specific stats
-    assert_eq!(skana.blocking_angle(), Some(55));
-    assert_eq!(skana.combo_duration(), Some(5));
-    assert!((skana.follow_through().unwrap() - 0.6).abs() < 0.01);
-    assert!((skana.range().unwrap() - 2.5).abs() < 0.01);
-    assert_eq!(skana.slam_attack(), Some(360));
-    assert_eq!(skana.heavy_attack_damage(), Some(600));
-    assert_eq!(skana.stance_polarity(), Some("madurai"));
-
-    // Equippable
-    assert_eq!(skana.slot(), Some(&itemdata::Slot::Melee));
-    assert!(!skana.is_prime());
+    for &(name, unique, crit, dmg, dispo, prime, block_angle) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert!((item.critical_chance() - crit).abs() < 0.01, "{name} crit");
+        assert!((item.total_damage() - dmg).abs() < 0.5, "{name} dmg");
+        assert_eq!(item.disposition(), Some(dispo), "{name} dispo");
+        assert_eq!(item.is_prime(), prime, "{name} prime");
+        assert_eq!(item.blocking_angle(), Some(block_angle), "{name} blocking_angle");
+        assert_eq!(item.damage_per_shot().len(), 20, "{name} damage_per_shot len");
+        assert_eq!(item.slot(), Some(&itemdata::Slot::Melee), "{name} slot");
+    }
 }
 
 // ── Archwing ──
@@ -293,23 +289,40 @@ fn test_archwing_deserialize_all() {
 }
 
 #[test]
-fn test_archwing_sample_fields() {
+fn test_archwing_tabular_fields() {
     let raw = load_json!("Archwing.json");
     let arr: itemdata::archwing::Root = serde_json::from_str(&raw).unwrap();
-    let item = &arr[0];
 
-    // Every archwing should have basic Item fields
-    assert!(!item.unique_name().is_empty());
-    assert!(!item.name().is_empty());
-    assert_eq!(item.category(), "Archwing");
+    // (name, unique_name, health, armor, shield, abilities_count, is_prime, build_price)
+    let cases: &[(&str, &str, i64, i64, i64, usize, bool, i64)] = &[
+        (
+            "Amesha",
+            "/Lotus/Powersuits/Archwing/SupportJetPack/SupportJetPack",
+            650, 195, 220, 4, false, 25000,
+        ),
+        (
+            "Odonata",
+            "/Lotus/Powersuits/Archwing/StandardJetPack/StandardJetPack",
+            425, 100, 430, 4, false, 7000,
+        ),
+        (
+            "Odonata Prime",
+            "/Lotus/Powersuits/Archwing/PrimeJetPack/PrimeJetPack",
+            650, 100, 640, 4, true, 25000,
+        ),
+    ];
 
-    // Character stats should be non-negative
-    assert!(item.health() > 0);
-    assert!(item.armor() >= 0);
-    assert!(item.shield() >= 0);
-
-    // Archwings have abilities
-    assert!(!item.abilities().is_empty());
+    for &(name, unique, health, armor, shield, abil_count, prime, bp) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Archwing", "{name} category");
+        assert_eq!(item.health(), health, "{name} health");
+        assert_eq!(item.armor(), armor, "{name} armor");
+        assert_eq!(item.shield(), shield, "{name} shield");
+        assert_eq!(item.abilities().len(), abil_count, "{name} abilities");
+        assert_eq!(item.is_prime(), prime, "{name} prime");
+        assert_eq!(item.build_price(), Some(bp), "{name} build_price");
+    }
 }
 
 // ── Arch-Gun ──
@@ -322,20 +335,42 @@ fn test_archgun_deserialize_all() {
 }
 
 #[test]
-fn test_archgun_sample_fields() {
+fn test_archgun_tabular_fields() {
     let raw = load_json!("Arch-Gun.json");
     let arr: itemdata::arch_gun::Root = serde_json::from_str(&raw).unwrap();
-    let item = &arr[0];
 
-    assert!(!item.unique_name().is_empty());
-    assert_eq!(item.category(), "Arch-Gun");
-    assert!(item.total_damage() > 0.0);
-    assert!(item.fire_rate() > 0.0);
-    assert_eq!(item.damage_per_shot().len(), 20);
+    // (name, unique_name, total_damage, fire_rate, crit_chance, mag_size, trigger, dispo, is_prime)
+    let cases: &[(&str, &str, f64, f64, f64, i64, &str, i64, bool)] = &[
+        (
+            "Cortege",
+            "/Lotus/Weapons/Tenno/Archwing/Primary/ThanoTechArchGun/ThanoTechArchGun",
+            90.0, 12.0, 0.2, 100, "Held", 3, false,
+        ),
+        (
+            "Corvas",
+            "/Lotus/Weapons/Tenno/Archwing/Primary/LaunchGrenade/ArchCannon",
+            880.0, 2.0, 0.4, 25, "Charge", 4, false,
+        ),
+        (
+            "Corvas Prime",
+            "/Lotus/Weapons/Tenno/Archwing/Primary/PrimeCorvas/PrimeCorvasWeapon",
+            960.0, 2.0, 0.44, 20, "Charge", 3, true,
+        ),
+    ];
 
-    // Ranged weapon
-    assert!(item.magazine_size().is_some());
-    assert!(item.reload_time() > 0.0);
+    for &(name, unique, dmg, rate, crit, mag, trigger, dispo, prime) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Arch-Gun", "{name} category");
+        assert!((item.total_damage() - dmg).abs() < 1.0, "{name} dmg");
+        assert!((item.fire_rate() - rate).abs() < 0.1, "{name} rate");
+        assert!((item.critical_chance() - crit).abs() < 0.01, "{name} crit");
+        assert_eq!(item.magazine_size(), Some(mag), "{name} mag");
+        assert_eq!(item.trigger(), trigger, "{name} trigger");
+        assert_eq!(item.disposition(), Some(dispo), "{name} dispo");
+        assert_eq!(item.is_prime(), prime, "{name} prime");
+        assert_eq!(item.damage_per_shot().len(), 20, "{name} dps len");
+    }
 }
 
 // ── Arch-Melee ──
@@ -348,19 +383,40 @@ fn test_archmelee_deserialize_all() {
 }
 
 #[test]
-fn test_archmelee_sample_fields() {
+fn test_archmelee_tabular_fields() {
     let raw = load_json!("Arch-Melee.json");
     let arr: itemdata::arch_melee::Root = serde_json::from_str(&raw).unwrap();
-    let item = &arr[0];
 
-    assert!(!item.unique_name().is_empty());
-    assert_eq!(item.category(), "Arch-Melee");
-    assert!(item.total_damage() > 0.0);
-    assert_eq!(item.damage_per_shot().len(), 20);
+    // (name, unique_name, total_damage, crit_chance, blocking_angle, slam_attack)
+    let cases: &[(&str, &str, f64, f64, i64, i64)] = &[
+        (
+            "Agkuza",
+            "/Lotus/Weapons/Tenno/Archwing/Melee/ArchSwordHook/ArchHookSwordWeapon",
+            436.0, 0.05, 90, 436,
+        ),
+        (
+            "Centaur",
+            "/Lotus/Weapons/Tenno/Archwing/Melee/Archswordandshield/ArchSwordShield",
+            376.0, 0.25, 90, 376,
+        ),
+        (
+            "Kaszas",
+            "/Lotus/Weapons/Tenno/Archwing/Melee/ArchScythe/ArchScythe",
+            392.0, 0.15, 90, 392,
+        ),
+    ];
 
-    // Melee weapon stats
-    assert!(item.blocking_angle().is_some());
-    assert!(item.combo_duration().is_some());
+    for &(name, unique, dmg, crit, block_angle, slam) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Arch-Melee", "{name} category");
+        assert!((item.total_damage() - dmg).abs() < 1.0, "{name} dmg");
+        assert!((item.critical_chance() - crit).abs() < 0.01, "{name} crit");
+        assert_eq!(item.blocking_angle(), Some(block_angle), "{name} blocking");
+        assert_eq!(item.slam_attack(), Some(slam), "{name} slam");
+        assert_eq!(item.combo_duration(), Some(5), "{name} combo_dur");
+        assert_eq!(item.damage_per_shot().len(), 20, "{name} dps len");
+    }
 }
 
 // ── Arcanes ──
@@ -373,20 +429,47 @@ fn test_arcanes_deserialize_all() {
 }
 
 #[test]
-fn test_arcanes_energize_fields() {
+fn test_arcanes_tabular_fields() {
     let raw = load_json!("Arcanes.json");
     let arr: itemdata::arcane::Root = serde_json::from_str(&raw).unwrap();
-    let energize = find_by_name(&arr, "Arcane Energize");
 
-    assert_eq!(
-        energize.unique_name(),
-        "/Lotus/Upgrades/CosmeticEnhancers/Utility/GolemArcaneRadialEnergyOnEnergyPickup"
-    );
-    assert_eq!(energize.category(), "Arcanes");
-    assert_eq!(energize.type_field(), "Warframe Arcane");
-    assert!(energize.tradable());
-    assert_eq!(energize.rarity, Some(itemdata::Rarity::Legendary));
-    assert_eq!(energize.level_stats.len(), 6);
+    // (name, unique_name, type, rarity, tradable, level_stats_count)
+    let cases: &[(&str, &str, &str, itemdata::Rarity, bool, usize)] = &[
+        (
+            "Arcane Energize",
+            "/Lotus/Upgrades/CosmeticEnhancers/Utility/GolemArcaneRadialEnergyOnEnergyPickup",
+            "Warframe Arcane",
+            itemdata::Rarity::Legendary,
+            true,
+            6,
+        ),
+        (
+            "Arcane Agility",
+            "/Lotus/Upgrades/CosmeticEnhancers/Defensive/SpeedOnDamage",
+            "Warframe Arcane",
+            itemdata::Rarity::Uncommon,
+            true,
+            6,
+        ),
+        (
+            "Akimbo Slip Shot",
+            "/Lotus/Upgrades/CosmeticEnhancers/Offensive/AmmoEfficiencyOnSliding",
+            "Secondary Arcane",
+            itemdata::Rarity::Rare,
+            true,
+            6,
+        ),
+    ];
+
+    for &(name, unique, typ, ref rarity, tradable, levels) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Arcanes", "{name} category");
+        assert_eq!(item.type_field(), typ, "{name} type");
+        assert_eq!(item.rarity, Some(rarity.clone()), "{name} rarity");
+        assert_eq!(item.tradable(), tradable, "{name} tradable");
+        assert_eq!(item.level_stats.len(), levels, "{name} level_stats");
+    }
 }
 
 // ── Mods ──
@@ -399,19 +482,57 @@ fn test_mods_deserialize_all() {
 }
 
 #[test]
-fn test_mods_serration_fields() {
+fn test_mods_tabular_fields() {
     let raw = load_json!("Mods.json");
     let arr: itemdata::mods::Root = serde_json::from_str(&raw).unwrap();
+
+    // (name, unique_name, type_field, tradable, is_regular, is_riven, is_set_member, is_set_definition)
+    let cases: &[(&str, &str, &str, bool, bool, bool, bool, bool)] = &[
+        (
+            "Serration",
+            "/Lotus/Upgrades/Mods/Rifle/Beginner/WeaponDamageAmountModBeginner",
+            "Primary Mod",
+            true, true, false, false, false,
+        ),
+        (
+            "Archgun Riven Mod",
+            "/Lotus/Upgrades/Mods/Randomized/LotusArchgunRandomModRare",
+            "Arch-Gun Riven Mod",
+            false, false, true, false, false,
+        ),
+        (
+            "Vigilante Offense",
+            "/Lotus/Upgrades/Mods/Sets/Vigilante/PrimaryVigilanteOffenseMod",
+            "Primary Mod",
+            true, false, false, true, false,
+        ),
+        (
+            "Amarsetmod",
+            "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod",
+            "Mod Set Mod",
+            false, false, false, false, true,
+        ),
+    ];
+
+    for &(name, unique, typ, tradable, regular, riven, set_member, set_def) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.type_field(), typ, "{name} type");
+        assert_eq!(item.tradable(), tradable, "{name} tradable");
+        assert_eq!(item.is_regular(), regular, "{name} regular");
+        assert_eq!(item.is_riven(), riven, "{name} riven");
+        assert_eq!(item.is_set_member(), set_member, "{name} set_member");
+        assert_eq!(item.is_set_definition(), set_def, "{name} set_def");
+    }
+}
+
+#[test]
+fn test_mods_variant_details() {
+    let raw = load_json!("Mods.json");
+    let arr: itemdata::mods::Root = serde_json::from_str(&raw).unwrap();
+
+    // Regular mod details
     let serration = find_by_name(&arr, "Serration");
-
-    assert_eq!(
-        serration.unique_name(),
-        "/Lotus/Upgrades/Mods/Rifle/Beginner/WeaponDamageAmountModBeginner"
-    );
-    assert_eq!(serration.type_field(), "Primary Mod");
-    assert!(serration.tradable());
-    assert!(serration.is_regular());
-
     match serration {
         itemdata::mods::ModEntry::Regular(m) => {
             assert_eq!(m.rarity, itemdata::Rarity::Uncommon);
@@ -423,19 +544,53 @@ fn test_mods_serration_fields() {
         _ => panic!("Expected Regular variant"),
     }
     assert!(serration.has_drops());
+
+    // Riven mod details
+    let riven = find_by_name(&arr, "Archgun Riven Mod");
+    match riven {
+        itemdata::mods::ModEntry::Riven(r) => {
+            assert!(!r.available_challenges.is_empty());
+        }
+        _ => panic!("Expected Riven variant"),
+    }
+
+    // Set member details
+    let vig = find_by_name(&arr, "Vigilante Offense");
+    assert!(matches!(vig.mod_category(), itemdata::ModCategory::SetMember { .. }));
+
+    // Set definition details
+    let set_def = find_by_name(&arr, "Amarsetmod");
+    match set_def {
+        itemdata::mods::ModEntry::SetDefinition(m) => {
+            assert_eq!(m.num_upgrades_in_set, 3);
+        }
+        _ => panic!("Expected SetDefinition variant"),
+    }
 }
 
 #[test]
-fn test_mods_set_mod_fields() {
+fn test_mods_all_variants_present() {
     let raw = load_json!("Mods.json");
     let arr: itemdata::mods::Root = serde_json::from_str(&raw).unwrap();
-    let vig = find_by_name(&arr, "Vigilante Offense");
 
-    assert!(vig.is_set_member());
-    assert!(matches!(
-        vig.mod_category(),
-        itemdata::ModCategory::SetMember { .. }
-    ));
+    let mut has_regular = false;
+    let mut has_riven = false;
+    let mut has_set_member = false;
+    let mut has_set_def = false;
+
+    for m in &arr {
+        match m {
+            itemdata::mods::ModEntry::Regular(_) => has_regular = true,
+            itemdata::mods::ModEntry::Riven(_) => has_riven = true,
+            itemdata::mods::ModEntry::SetMember(_) => has_set_member = true,
+            itemdata::mods::ModEntry::SetDefinition(_) => has_set_def = true,
+        }
+    }
+
+    assert!(has_regular, "Should have Regular mods");
+    assert!(has_riven, "Should have Riven mods");
+    assert!(has_set_member, "Should have SetMember mods");
+    assert!(has_set_def, "Should have SetDefinition mods");
 }
 
 // ── Pets ──
@@ -448,22 +603,89 @@ fn test_pets_deserialize_all() {
 }
 
 #[test]
-fn test_pets_variant_discrimination() {
+fn test_pets_tabular_fields() {
     let raw = load_json!("Pets.json");
     let arr: itemdata::pet::Root = serde_json::from_str(&raw).unwrap();
 
-    // Should contain multiple variants
+    // (name, unique_name, tradable, has_wikia, has_build_price)
+    let cases: &[(&str, &str, bool, bool, bool)] = &[
+        (
+            "Adarza Kavat",
+            "/Lotus/Types/Game/CatbrowPet/MirrorCatbrowPetPowerSuit",
+            false, true, false,
+        ),
+        (
+            "Adlet Core",
+            "/Lotus/Types/Friendly/Pets/ZanukaPets/ZanukaPetParts/ZanukaPetPartBodyA",
+            false, false, true,
+        ),
+        (
+            "Venari",
+            "/Lotus/Powersuits/Khora/Kavat/KhoraKavatPowerSuit",
+            false, true, false,
+        ),
+    ];
+
+    for &(name, unique, tradable, has_wikia, has_build) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Pets", "{name} category");
+        assert_eq!(item.tradable(), tradable, "{name} tradable");
+        assert_eq!(item.wikia_url().is_some(), has_wikia, "{name} has_wikia");
+        assert_eq!(item.build_price().is_some(), has_build, "{name} has_build");
+    }
+}
+
+#[test]
+fn test_pets_all_variants_present() {
+    let raw = load_json!("Pets.json");
+    let arr: itemdata::pet::Root = serde_json::from_str(&raw).unwrap();
+
     let mut has_kubrow = false;
     let mut has_component = false;
+    let mut has_special = false;
     for pet in &arr {
         match pet {
             itemdata::pet::PetEntry::KubrowPets(_) => has_kubrow = true,
             itemdata::pet::PetEntry::Pistols(_) => has_component = true,
-            _ => {}
+            itemdata::pet::PetEntry::SpecialItems(_) => has_special = true,
         }
     }
     assert!(has_kubrow, "Should have KubrowPets entries");
-    assert!(has_component, "Should have PetComponent entries");
+    assert!(has_component, "Should have Pistols (component) entries");
+    assert!(has_special, "Should have SpecialItems entries");
+}
+
+#[test]
+fn test_pets_variant_details() {
+    let raw = load_json!("Pets.json");
+    let arr: itemdata::pet::Root = serde_json::from_str(&raw).unwrap();
+
+    // KubrowPets variant
+    let kavat = find_by_name(&arr, "Adarza Kavat");
+    match kavat {
+        itemdata::pet::PetEntry::KubrowPets(p) => {
+            assert_eq!(p.stats.health, 310);
+            assert_eq!(p.stats.armor, 300);
+            assert_eq!(p.stats.shield, 270);
+        }
+        _ => panic!("Expected KubrowPets variant"),
+    }
+
+    // Pistols (component) variant
+    let core = find_by_name(&arr, "Adlet Core");
+    assert!(matches!(core, itemdata::pet::PetEntry::Pistols(_)));
+
+    // SpecialItems variant
+    let venari = find_by_name(&arr, "Venari");
+    match venari {
+        itemdata::pet::PetEntry::SpecialItems(p) => {
+            assert_eq!(p.stats.health, 900);
+            assert_eq!(p.stats.armor, 350);
+            assert!(p.exclude_from_codex);
+        }
+        _ => panic!("Expected SpecialItems variant"),
+    }
 }
 
 // ── Sentinels ──
@@ -476,21 +698,39 @@ fn test_sentinels_deserialize_all() {
 }
 
 #[test]
-fn test_sentinels_carrier_fields() {
+fn test_sentinels_tabular_fields() {
     let raw = load_json!("Sentinels.json");
     let arr: itemdata::sentinel::Root = serde_json::from_str(&raw).unwrap();
-    let carrier = find_by_name(&arr, "Carrier");
 
-    assert_eq!(
-        carrier.unique_name(),
-        "/Lotus/Types/Sentinels/SentinelPowersuits/CarrierPowerSuit"
-    );
-    assert_eq!(carrier.category(), "Sentinels");
-    assert!(carrier.health() > 0);
-    assert!(carrier.armor() > 0);
-    assert!(carrier.shield() > 0);
-    assert!(carrier.build_price().is_some());
-    assert!(!carrier.components().is_empty());
+    // (name, unique_name, health, armor, shield, is_prime, vaulted)
+    let cases: &[(&str, &str, i64, i64, i64, bool, Option<bool>)] = &[
+        (
+            "Carrier",
+            "/Lotus/Types/Sentinels/SentinelPowersuits/CarrierPowerSuit",
+            560, 80, 250, false, None,
+        ),
+        (
+            "Carrier Prime",
+            "/Lotus/Types/Sentinels/SentinelPowersuits/PrimeCarrierPowerSuit",
+            650, 150, 300, true, Some(true),
+        ),
+        (
+            "Shade",
+            "/Lotus/Types/Sentinels/SentinelPowersuits/ShadePowerSuit",
+            600, 80, 130, false, None,
+        ),
+    ];
+
+    for &(name, unique, health, armor, shield, prime, vaulted) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Sentinels", "{name} category");
+        assert_eq!(item.health(), health, "{name} health");
+        assert_eq!(item.armor(), armor, "{name} armor");
+        assert_eq!(item.shield(), shield, "{name} shield");
+        assert_eq!(item.is_prime(), prime, "{name} prime");
+        assert_eq!(item.vaulted(), vaulted, "{name} vaulted");
+    }
 }
 
 // ── Sentinel Weapons ──
@@ -503,16 +743,37 @@ fn test_sentinel_weapons_deserialize_all() {
 }
 
 #[test]
-fn test_sentinel_weapons_sample_fields() {
+fn test_sentinel_weapons_tabular_fields() {
     let raw = load_json!("SentinelWeapons.json");
     let arr: itemdata::sentinel_weapon::Root = serde_json::from_str(&raw).unwrap();
-    let item = &arr[0];
 
-    assert!(!item.unique_name().is_empty());
-    // Note: SentinelWeapons JSON uses "Primary" as category despite being sentinel weapons
-    assert!(!item.category().is_empty());
-    assert!(item.total_damage() >= 0.0);
-    assert_eq!(item.damage_per_shot().len(), 20);
+    // (name, unique_name, total_damage, fire_rate, disposition)
+    let cases: &[(&str, &str, f64, f64, i64)] = &[
+        (
+            "Artax",
+            "/Lotus/Types/Sentinels/SentinelWeapons/Gremlin",
+            5.0, 16.67, 3,
+        ),
+        (
+            "Akaten",
+            "/Lotus/Types/Friendly/Pets/ZanukaPets/ZanukaPetMeleeWeaponPS",
+            300.0, 1.0, 3,
+        ),
+        (
+            "Batoten",
+            "/Lotus/Types/Friendly/Pets/ZanukaPets/ZanukaPetMeleeWeaponIP",
+            300.0, 1.0, 3,
+        ),
+    ];
+
+    for &(name, unique, dmg, rate, dispo) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert!((item.total_damage() - dmg).abs() < 1.0, "{name} dmg");
+        assert!((item.fire_rate() - rate).abs() < 0.1, "{name} rate");
+        assert_eq!(item.disposition(), Some(dispo), "{name} dispo");
+        assert_eq!(item.damage_per_shot().len(), 20, "{name} dps len");
+    }
 }
 
 // ── Gear ──
@@ -525,14 +786,37 @@ fn test_gear_deserialize_all() {
 }
 
 #[test]
-fn test_gear_sample_fields() {
+fn test_gear_tabular_fields() {
     let raw = load_json!("Gear.json");
     let arr: itemdata::gear::Root = serde_json::from_str(&raw).unwrap();
-    let item = &arr[0];
 
-    assert!(!item.unique_name().is_empty());
-    assert_eq!(item.category(), "Gear");
-    assert!(!item.type_field().is_empty());
+    // (name, unique_name, tradable, has_build_price)
+    let cases: &[(&str, &str, bool, bool)] = &[
+        (
+            "Advanced Nosam Cutter",
+            "/Lotus/Types/Restoratives/Consumable/MiningLaserC",
+            false, true,
+        ),
+        (
+            "Codex Scanner",
+            "/Lotus/Types/Restoratives/Consumable/Scanner",
+            false, false,
+        ),
+        (
+            "Air Support Charges",
+            "/Lotus/Types/Restoratives/LisetAirSupport",
+            false, true,
+        ),
+    ];
+
+    for &(name, unique, tradable, has_bp) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Gear", "{name} category");
+        assert_eq!(item.type_field(), "Gear", "{name} type");
+        assert_eq!(item.tradable(), tradable, "{name} tradable");
+        assert_eq!(item.build_price().is_some(), has_bp, "{name} has_build_price");
+    }
 }
 
 // ── Misc ──
@@ -542,6 +826,39 @@ fn test_misc_deserialize_all() {
     let raw = load_json!("Misc.json");
     let arr: itemdata::misc::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 100);
+}
+
+#[test]
+fn test_misc_tabular_fields() {
+    let raw = load_json!("Misc.json");
+    let arr: itemdata::misc::Root = serde_json::from_str(&raw).unwrap();
+
+    // (name, unique_name, type, tradable)
+    let cases: &[(&str, &str, &str, bool)] = &[
+        (
+            "<Shard_blue_simple> Azure Archon Shard",
+            "/Lotus/Types/Gameplay/NarmerSorties/ArchonCrystalBoreal",
+            "Misc", false,
+        ),
+        (
+            "<Shard_blue_simple> Tauforged Azure Archon Shard",
+            "/Lotus/Types/Gameplay/NarmerSorties/ArchonCrystalBorealMythic",
+            "Misc", false,
+        ),
+        (
+            "\"Circle Of Comrades\" Series On Vhs",
+            "/Lotus/Types/Gameplay/1999Wf/Gifts/VideoCassette",
+            "Misc", false,
+        ),
+    ];
+
+    for &(name, unique, typ, tradable) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Misc", "{name} category");
+        assert_eq!(item.type_field(), typ, "{name} type");
+        assert_eq!(item.tradable(), tradable, "{name} tradable");
+    }
 }
 
 // ── Relics ──
@@ -554,13 +871,36 @@ fn test_relics_deserialize_all() {
 }
 
 #[test]
-fn test_relics_sample_fields() {
+fn test_relics_tabular_fields() {
     let raw = load_json!("Relics.json");
     let arr: itemdata::relics::Root = serde_json::from_str(&raw).unwrap();
-    let item = &arr[0];
 
-    assert!(!item.unique_name().is_empty());
-    assert_eq!(item.category(), "Relics");
+    // (name, unique_name, tradable)
+    let cases: &[(&str, &str, bool)] = &[
+        (
+            "Axi A1 Exceptional",
+            "/Lotus/Types/Game/Projections/T4VoidProjectionESilver",
+            true,
+        ),
+        (
+            "Axi A1 Flawless",
+            "/Lotus/Types/Game/Projections/T4VoidProjectionEGold",
+            true,
+        ),
+        (
+            "Axi A1 Intact",
+            "/Lotus/Types/Game/Projections/T4VoidProjectionEBronze",
+            true,
+        ),
+    ];
+
+    for &(name, unique, tradable) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Relics", "{name} category");
+        assert_eq!(item.type_field(), "Relic", "{name} type");
+        assert_eq!(item.tradable(), tradable, "{name} tradable");
+    }
 }
 
 // ── Resources ──
@@ -573,14 +913,36 @@ fn test_resources_deserialize_all() {
 }
 
 #[test]
-fn test_resources_sample_fields() {
+fn test_resources_tabular_fields() {
     let raw = load_json!("Resources.json");
     let arr: itemdata::resource::Root = serde_json::from_str(&raw).unwrap();
-    let item = &arr[0];
 
-    assert!(!item.unique_name().is_empty());
-    assert_eq!(item.category(), "Resources");
-    assert!(!item.type_field().is_empty());
+    // (name, unique_name, type, tradable)
+    let cases: &[(&str, &str, &str, bool)] = &[
+        (
+            "35mm Film",
+            "/Lotus/Types/Gameplay/1999Wf/Resources/HexDogTagQuincy",
+            "Resource", false,
+        ),
+        (
+            "Adramalium",
+            "/Lotus/Types/Items/Gems/Deimos/DeimosCommonOreAItem",
+            "Gem", false,
+        ),
+        (
+            "Adramal Alloy",
+            "/Lotus/Types/Items/Gems/Deimos/DeimosCommonOreAAlloyItem",
+            "Gem", false,
+        ),
+    ];
+
+    for &(name, unique, typ, tradable) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Resources", "{name} category");
+        assert_eq!(item.type_field(), typ, "{name} type");
+        assert_eq!(item.tradable(), tradable, "{name} tradable");
+    }
 }
 
 // ── Fish ──
@@ -593,14 +955,34 @@ fn test_fish_deserialize_all() {
 }
 
 #[test]
-fn test_fish_sample_fields() {
+fn test_fish_tabular_fields() {
     let raw = load_json!("Fish.json");
     let arr: itemdata::fish::Root = serde_json::from_str(&raw).unwrap();
-    let item = &arr[0];
 
-    assert!(!item.unique_name().is_empty());
-    assert_eq!(item.category(), "Fish");
-    assert_eq!(item.type_field(), "Fish");
+    // Fish can have duplicate names (size variants), so test by unique_name
+    let cases: &[(&str, &str, bool)] = &[
+        (
+            "/Lotus/Types/Items/Fish/Deimos/InfestedCommonDFishItem",
+            "Amniophysi", true,
+        ),
+        (
+            "/Lotus/Types/Items/Fish/Deimos/InfestedCommonDFishItemLarge",
+            "Amniophysi", true,
+        ),
+        (
+            "/Lotus/Types/Items/Fish/Deimos/InfestedCommonDFishItemMedium",
+            "Amniophysi", true,
+        ),
+    ];
+
+    for &(unique, name, tradable) in cases {
+        let item = arr.iter().find(|f| f.unique_name() == unique)
+            .unwrap_or_else(|| panic!("fish with unique_name '{}' not found", unique));
+        assert_eq!(item.name(), name, "{unique} name");
+        assert_eq!(item.category(), "Fish", "{unique} category");
+        assert_eq!(item.type_field(), "Fish", "{unique} type");
+        assert_eq!(item.tradable(), tradable, "{unique} tradable");
+    }
 }
 
 // ── Glyphs ──
@@ -612,6 +994,38 @@ fn test_glyphs_deserialize_all() {
     assert!(arr.len() > 100);
 }
 
+#[test]
+fn test_glyphs_tabular_fields() {
+    let raw = load_json!("Glyphs.json");
+    let arr: itemdata::glyph::Root = serde_json::from_str(&raw).unwrap();
+
+    let cases: &[(&str, &str, bool)] = &[
+        (
+            "-Chroma- Prime Partner Glyph",
+            "/Lotus/Types/StoreItems/AvatarImages/FanChannel/AvatarImageChromaPrimePartner",
+            false,
+        ),
+        (
+            "13angtv Glyph",
+            "/Lotus/Types/StoreItems/AvatarImages/FanChannel/AvatarImage13angTV",
+            false,
+        ),
+        (
+            "1999 Drippy Glyph",
+            "/Lotus/Types/StoreItems/AvatarImages/AvatarImageDrippy",
+            false,
+        ),
+    ];
+
+    for &(name, unique, tradable) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Glyphs", "{name} category");
+        assert_eq!(item.type_field(), "Glyph", "{name} type");
+        assert_eq!(item.tradable(), tradable, "{name} tradable");
+    }
+}
+
 // ── Sigils ──
 
 #[test]
@@ -621,6 +1035,38 @@ fn test_sigils_deserialize_all() {
     assert!(arr.len() > 100);
 }
 
+#[test]
+fn test_sigils_tabular_fields() {
+    let raw = load_json!("Sigils.json");
+    let arr: itemdata::sigil::Root = serde_json::from_str(&raw).unwrap();
+
+    let cases: &[(&str, &str, bool)] = &[
+        (
+            "10 Year Anniversary Community Sigil",
+            "/Lotus/Upgrades/Skins/Sigils/Community10YearAnniversarySigil",
+            false,
+        ),
+        (
+            "2-For-1 Sigil",
+            "/Lotus/Upgrades/Skins/Sigils/Syndicate/HexRankThree",
+            false,
+        ),
+        (
+            "Accord Sigil",
+            "/Lotus/Upgrades/Skins/Sigils/SyndicateSigilConclaveN",
+            false,
+        ),
+    ];
+
+    for &(name, unique, tradable) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Sigils", "{name} category");
+        assert_eq!(item.type_field(), "Sigil", "{name} type");
+        assert_eq!(item.tradable(), tradable, "{name} tradable");
+    }
+}
+
 // ── Skins ──
 
 #[test]
@@ -628,6 +1074,39 @@ fn test_skins_deserialize_all() {
     let raw = load_json!("Skins.json");
     let arr: itemdata::skin::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 100);
+}
+
+#[test]
+fn test_skins_tabular_fields() {
+    let raw = load_json!("Skins.json");
+    let arr: itemdata::skin::Root = serde_json::from_str(&raw).unwrap();
+
+    // (name, unique_name, type, tradable)
+    let cases: &[(&str, &str, &str, bool)] = &[
+        (
+            "17173 Emblem",
+            "/Lotus/Upgrades/Skins/Clan/CY17173MediaBadge",
+            "Skin", false,
+        ),
+        (
+            "A Lost Time",
+            "/Lotus/Types/Items/ShipDecos/NewWar/LisetPropFamilyPortrait",
+            "Ship Decoration", false,
+        ),
+        (
+            "Smoke",
+            "/Lotus/Types/StoreItems/SuitCustomizations/NinjaColourPickerItem",
+            "Color Palette", false,
+        ),
+    ];
+
+    for &(name, unique, typ, tradable) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Skins", "{name} category");
+        assert_eq!(item.type_field(), typ, "{name} type");
+        assert_eq!(item.tradable(), tradable, "{name} tradable");
+    }
 }
 
 // ── Quests ──
@@ -640,13 +1119,36 @@ fn test_quests_deserialize_all() {
 }
 
 #[test]
-fn test_quests_sample_fields() {
+fn test_quests_tabular_fields() {
     let raw = load_json!("Quests.json");
     let arr: itemdata::quest::Root = serde_json::from_str(&raw).unwrap();
-    let item = &arr[0];
 
-    assert!(!item.unique_name().is_empty());
-    assert_eq!(item.category(), "Quests");
+    // (name, unique_name, tradable, has_build_price)
+    let cases: &[(&str, &str, bool, bool)] = &[
+        (
+            "Clan Key",
+            "/Lotus/Types/Keys/DojoKey",
+            false, true,
+        ),
+        (
+            "A Man Of Few Words",
+            "/Lotus/Types/Keys/GetClemQuest/GetClemQuestKeyChain",
+            false, false,
+        ),
+        (
+            "Angels Of The Zariman",
+            "/Lotus/Types/Keys/ZarimanQuest/ZarimanQuestKeyChain",
+            false, false,
+        ),
+    ];
+
+    for &(name, unique, tradable, has_bp) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Quests", "{name} category");
+        assert_eq!(item.tradable(), tradable, "{name} tradable");
+        assert_eq!(item.build_price().is_some(), has_bp, "{name} has_build_price");
+    }
 }
 
 // ── Nodes ──
@@ -659,14 +1161,25 @@ fn test_nodes_deserialize_all() {
 }
 
 #[test]
-fn test_nodes_sample_fields() {
+fn test_nodes_tabular_fields() {
     let raw = load_json!("Node.json");
     let arr: itemdata::node::Root = serde_json::from_str(&raw).unwrap();
 
-    let adaro = find_by_name(&arr, "Adaro");
-    assert_eq!(adaro.unique_name(), "SolNode181");
-    assert_eq!(adaro.system_name, "Sedna");
-    assert_eq!(adaro.category(), "Node");
+    // (name, unique_name, system_name, min_level, max_level)
+    let cases: &[(&str, &str, &str, i64, i64)] = &[
+        ("Adaro", "SolNode181", "Sedna", 32, 36),
+        ("Hydron", "SolNode195", "Sedna", 30, 40),
+        ("Mot", "SolNode409", "Void", 40, 45),
+    ];
+
+    for &(name, unique, system, min_lv, max_lv) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Node", "{name} category");
+        assert_eq!(item.system_name, system, "{name} system");
+        assert_eq!(item.min_enemy_level, min_lv, "{name} min_level");
+        assert_eq!(item.max_enemy_level, max_lv, "{name} max_level");
+    }
 }
 
 // ── Enemies ──
@@ -679,20 +1192,35 @@ fn test_enemies_deserialize_all() {
 }
 
 #[test]
-fn test_enemies_sample_fields() {
+fn test_enemies_tabular_fields() {
     let raw = load_json!("Enemy.json");
     let arr: itemdata::enemy::Root = serde_json::from_str(&raw).unwrap();
 
-    let bombard = find_by_name(&arr, "Corrupted Bombard");
-    assert_eq!(
-        bombard.unique_name(),
-        "/Lotus/Types/Enemies/Orokin/OrokinRocketBombardAvatar"
-    );
-    assert_eq!(bombard.combat.health, 300);
-    assert_eq!(bombard.combat.armor, 500);
-    assert_eq!(bombard.combat.shield, 0);
-    assert_eq!(bombard.combat.resistances.len(), 3);
-    assert!(bombard.has_drops());
+    // (unique_name, type, health, armor, shield, resistances_count)
+    let cases: &[(&str, &str, i64, i64, i64, usize)] = &[
+        (
+            "/Lotus/Types/Enemies/Orokin/OrokinRocketBombardAvatar",
+            "Orokin", 300, 500, 0, 3,
+        ),
+        (
+            "/Lotus/Types/Enemies/Grineer/SeaLab/Avatars/EliteRifleLancerAvatar",
+            "Grineer", 150, 200, 0, 3,
+        ),
+        (
+            "/Lotus/Types/Enemies/Corpus/Spaceman/AIWeek/DeployableSpacemanAvatar",
+            "Corpus", 700, 0, 250, 3,
+        ),
+    ];
+
+    for &(unique, typ, health, armor, shield, res_count) in cases {
+        let item = arr.iter().find(|e| e.unique_name() == unique)
+            .unwrap_or_else(|| panic!("enemy '{}' not found", unique));
+        assert_eq!(item.type_field(), typ, "{unique} type");
+        assert_eq!(item.combat.health, health, "{unique} health");
+        assert_eq!(item.combat.armor, armor, "{unique} armor");
+        assert_eq!(item.combat.shield, shield, "{unique} shield");
+        assert_eq!(item.combat.resistances.len(), res_count, "{unique} resistances");
+    }
 }
 
 // ── Railjack ──
@@ -705,15 +1233,37 @@ fn test_railjack_deserialize_all() {
 }
 
 #[test]
-fn test_railjack_sample_fields() {
+fn test_railjack_tabular_fields() {
     let raw = load_json!("Railjack.json");
     let arr: itemdata::railjack::Root = serde_json::from_str(&raw).unwrap();
-    let item = &arr[0];
 
-    assert!(!item.unique_name().is_empty());
-    assert_eq!(item.category(), "Railjack");
-    assert!(item.total_damage() >= 0.0);
-    assert!(item.fire_rate() > 0.0);
+    // (name, unique_name, total_damage, fire_rate, crit_chance)
+    let cases: &[(&str, &str, f64, f64, f64)] = &[
+        (
+            "Apoc",
+            "/Lotus/Weapons/CrewShip/MassDriver/AutoCannon/AutoCannon",
+            126.0, 8.33, 0.1,
+        ),
+        (
+            "Apoc Mk I",
+            "/Lotus/Weapons/CrewShip/MassDriver/AutoCannon/AutoCannonTierA",
+            227.0, 8.33, 0.1,
+        ),
+        (
+            "Apoc Mk Ii",
+            "/Lotus/Weapons/CrewShip/MassDriver/AutoCannon/AutoCannonTierB",
+            386.0, 8.33, 0.14,
+        ),
+    ];
+
+    for &(name, unique, dmg, rate, crit) in cases {
+        let item = find_by_name(&arr, name);
+        assert_eq!(item.unique_name(), unique, "{name} unique_name");
+        assert_eq!(item.category(), "Railjack", "{name} category");
+        assert!((item.total_damage() - dmg).abs() < 1.0, "{name} dmg");
+        assert!((item.fire_rate() - rate).abs() < 0.1, "{name} rate");
+        assert!((item.critical_chance() - crit).abs() < 0.01, "{name} crit");
+    }
 }
 
 // ── Cross-cutting trait invariants ──

@@ -467,4 +467,56 @@ mod tests {
             _ => panic!("Expected Suits variant"),
         }
     }
+
+    #[test]
+    fn test_deserialize_warframe_prime() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/warframe_test_2.json"
+        ));
+
+        let rec: WarframeEntry = from_str(json_data).unwrap();
+
+        match &rec {
+            WarframeEntry::Suits(w) => {
+                assert_eq!(w.identity.name, "Ash Prime");
+                assert_eq!(w.product_category, "Suits");
+                assert_eq!(w.sex, Sex::Male);
+                assert!(w.prime.is_prime);
+                assert_eq!(w.prime.vaulted, Some(true));
+                assert_eq!(w.stats.health, 455);
+                assert_eq!(w.stats.shield, 365);
+                assert_eq!(w.stats.armor, 185);
+                assert_eq!(w.abilities.len(), 4);
+                assert_eq!(w.build.components.len(), 5);
+            }
+            _ => panic!("Expected Suits variant"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_necramech() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/warframe_test_3.json"
+        ));
+
+        let rec: WarframeEntry = from_str(json_data).unwrap();
+
+        match &rec {
+            WarframeEntry::MechSuits(w) => {
+                assert_eq!(w.identity.name, "Bonewidow");
+                assert_eq!(w.product_category, "MechSuits");
+                assert!(!w.prime.is_prime);
+                assert_eq!(w.stats.health, 1880);
+                assert_eq!(w.stats.shield, 430);
+                assert_eq!(w.stats.armor, 480);
+                assert_eq!(w.stats.power, 175);
+                assert_eq!(w.abilities.len(), 4);
+                assert_eq!(w.build_price, 25000);
+                assert_eq!(w.components.len(), 5);
+            }
+            _ => panic!("Expected MechSuits variant"),
+        }
+    }
 }

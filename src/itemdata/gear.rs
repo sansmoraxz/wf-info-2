@@ -131,4 +131,33 @@ mod tests {
         assert_eq!(rec.build.build_price, Some(3500));
         assert_eq!(rec.build.components.len(), 4);
     }
+
+    #[test]
+    fn test_deserialize_gear_no_build() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/gear_test_2.json"
+        ));
+        let rec: Gear = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.unique_name, "/Lotus/Types/Restoratives/Consumable/Scanner");
+        assert_eq!(rec.identity.name, "Codex Scanner");
+        assert_eq!(rec.identity.category, "Gear");
+        assert!(!rec.trade.tradable);
+        assert_eq!(rec.build.build_price, None);
+    }
+
+    #[test]
+    fn test_deserialize_gear_with_components() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/gear_test_3.json"
+        ));
+        let rec: Gear = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.unique_name, "/Lotus/Types/Restoratives/LisetAirSupport");
+        assert_eq!(rec.identity.name, "Air Support Charges");
+        assert_eq!(rec.build.build_price, Some(4000));
+        assert_eq!(rec.build.components.len(), 5);
+    }
 }

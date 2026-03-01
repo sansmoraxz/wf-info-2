@@ -91,4 +91,30 @@ mod tests {
         assert!(!rec.trade.tradable);
         assert!(!rec.trade.masterable);
     }
+
+    #[test]
+    fn test_deserialize_glyph_fan_channel() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/glyph_test_2.json"
+        ));
+        let rec: Glyph = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.unique_name, "/Lotus/Types/StoreItems/AvatarImages/FanChannel/AvatarImage13angTV");
+        assert_eq!(rec.identity.name, "13angtv Glyph");
+        assert_eq!(rec.type_field, GlyphType::Glyph);
+    }
+
+    #[test]
+    fn test_deserialize_glyph_event() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/glyph_test_3.json"
+        ));
+        let rec: Glyph = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "1999 Drippy Glyph");
+        assert_eq!(rec.type_field, GlyphType::Glyph);
+        assert!(!rec.trade.tradable);
+    }
 }

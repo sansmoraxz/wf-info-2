@@ -1,0 +1,11 @@
+{
+  "category": "Misc",
+  "description": "A source of anti-entropic radiation ideal for empowering synthetic lifeforms, most notably Archons and Warframes.",
+  "excludeFromCodex": true,
+  "imageName": "shard_blue_simple-azure-archon-shard-d164a930fa.png",
+  "masterable": false,
+  "name": "<Shard_blue_simple> Azure Archon Shard",
+  "tradable": false,
+  "type": "Misc",
+  "uniqueName": "/Lotus/Types/Gameplay/NarmerSorties/ArchonCrystalBoreal"
+}

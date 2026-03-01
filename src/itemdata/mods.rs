@@ -463,4 +463,47 @@ mod tests {
         assert!(!riven.is_set());
         assert!(!riven.is_regular());
     }
+
+    #[test]
+    fn test_deserialize_riven() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/mods_test_3.json"
+        ));
+
+        let rec: ModEntry = from_str(json_data).unwrap();
+
+        match &rec {
+            ModEntry::Riven(m) => {
+                assert_eq!(m.identity.name, "Archgun Riven Mod");
+                assert_eq!(m.polarity, Polarity::Universal);
+                assert_eq!(m.rarity, Rarity::Common);
+                assert_eq!(m.base_drain, 0);
+                assert_eq!(m.available_challenges.len(), 1);
+            }
+            _ => panic!("Expected Riven variant"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_regular_mod() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/mods_test_4.json"
+        ));
+
+        let rec: ModEntry = from_str(json_data).unwrap();
+
+        match &rec {
+            ModEntry::Regular(m) => {
+                assert_eq!(m.identity.name, "Serration");
+                assert_eq!(m.polarity, Polarity::Madurai);
+                assert_eq!(m.rarity, Rarity::Uncommon);
+                assert_eq!(m.base_drain, 2);
+                assert_eq!(m.fusion_limit, 3);
+                assert!(m.trade.tradable);
+            }
+            _ => panic!("Expected Regular variant"),
+        }
+    }
 }

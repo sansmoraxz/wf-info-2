@@ -1,0 +1,416 @@
+{
+  "armor": 350,
+  "category": "Pets",
+  "description": "Khora's loyal Kavat. Her constant companion and protector.",
+  "drops": [
+    {
+      "chance": 1,
+      "location": "Red Veil, Exalted",
+      "rarity": "Common",
+      "type": "Venari Bodyguard (Khora)"
+    },
+    {
+      "chance": 1,
+      "location": "Steel Meridian, General",
+      "rarity": "Common",
+      "type": "Venari Bodyguard (Khora)"
+    }
+  ],
+  "excludeFromCodex": true,
+  "health": 900,
+  "imageName": "venari-d3da8c6eb7.png",
+  "introduced": {
+    "name": "Update 22.18",
+    "url": "https://wiki.warframe.com/w/Update_22%23Update_22.18",
+    "aliases": [
+      "22.18.0",
+      "22.18",
+      "Beasts of the Sanctuary",
+      "BotS"
+    ],
+    "parent": "22.18",
+    "date": "2018-04-20"
+  },
+  "masterable": false,
+  "masteryReq": 0,
+  "name": "Venari",
+  "patchlogs": [
+    {
+      "name": "Veilbreaker: Hotfix 32.0.7",
+      "date": "2022-09-28T14:59:21Z",
+      "url": "https://forums.warframe.com/topic/1325904-veilbreaker-hotfix-3207/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Khora's Venari Heal"
+    },
+    {
+      "name": "Veilbreaker: Hotfix 32.0.5",
+      "date": "2022-09-15T21:37:42Z",
+      "url": "https://forums.warframe.com/topic/1324061-veilbreaker-hotfix-3205/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed Sevagoth various healing abilities and Venari\u2019s heal not activating Archon Intensify."
+    },
+    {
+      "name": "Khora Prime: Hotfix 31.7.1",
+      "date": "2022-07-28T17:55:50Z",
+      "url": "https://forums.warframe.com/topic/1318073-khora-prime-hotfix-3171/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed Venari Prime not providing Mastery Rank points."
+    },
+    {
+      "name": "Khora Prime: Update 31.7",
+      "date": "2022-07-16T20:02:14Z",
+      "url": "https://forums.warframe.com/topic/1316750-khora-prime-update-317/",
+      "additions": "",
+      "changes": "Ensnare your enemies and dominate the battlefield with your loyal Kavat, Venari Prime. Get Khora Prime, exclusive Prime Accessories, Weapons, Boosters and more instantly with Prime Access or earn Relics in-game to craft Khora Prime, Hystrix Prime and Dual Keres Prime.",
+      "fixes": ""
+    },
+    {
+      "name": "Angels of the Zariman: Hotfix 31.5.4",
+      "date": "2022-05-02T20:54:52Z",
+      "url": "https://forums.warframe.com/topic/1308448-angels-of-the-zariman-hotfix-3154/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed Khora\u2019s Venari missing a description.\u00a0"
+    },
+    {
+      "name": "Update 31.5: Angels of the Zariman",
+      "date": "2022-04-27T15:02:06Z",
+      "url": "https://forums.warframe.com/topic/1305880-update-315-angels-of-the-zariman/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed certain decal FX missing custom Energy colors (summoning Khora\u2019s Venari for example).\u00a0"
+    },
+    {
+      "name": "Sisters of Parvos: Hotfix 30.5.4",
+      "date": "2021-07-17T12:58:58Z",
+      "url": "https://forums.warframe.com/topic/1272505-sisters-of-parvos-hotfix-3054/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed Venari being unable to Heal players properly.\u00a0\nFixed a script error when casting Khora\u2019s Venari ability."
+    },
+    {
+      "name": "Sisters of Parvos: Hotfix 30.5.3",
+      "date": "2021-07-09T15:07:34Z",
+      "url": "https://forums.warframe.com/topic/1270868-sisters-of-parvos-hotfix-3053%C2%A0%C2%A0/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed Khora\u2019s Venari not gaining Affinity.\u00a0"
+    },
+    {
+      "name": "Gara Prime: Update 30.3.0",
+      "date": "2021-05-25T17:56:49Z",
+      "url": "https://forums.warframe.com/topic/1265162-gara-prime-update-3030/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed being unable to swap Khora\u2019s Venari's Polarities in the Arsenal."
+    },
+    {
+      "name": "Update 29.10.0: Corpus Proxima & The New Railjack",
+      "date": "2021-03-19T15:18:34Z",
+      "url": "https://forums.warframe.com/topic/1253565-update-29100-corpus-proxima-the-new-railjack/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed script error related to Khora\u2019s Venari.\u00a0"
+    },
+    {
+      "name": "Octavia Prime: Update 29.9.0",
+      "date": "2021-02-23T18:53:41Z",
+      "url": "https://forums.warframe.com/topic/1250473-octavia-prime-update-2990/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed script errors when Venari attacks."
+    },
+    {
+      "name": "Star Days: Update 29.8.0",
+      "date": "2021-02-11T18:57:30Z",
+      "url": "https://forums.warframe.com/topic/1248934-star-days-update-2980/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed a harmless script error when Venari respawns in the Simulacrum."
+    },
+    {
+      "name": "Deimos: Arcana: Hotfix 29.5.5 + 29.5.5.1",
+      "date": "2020-11-27T20:28:28Z",
+      "url": "https://forums.warframe.com/topic/1238119-deimos-arcana-hotfix-2955-29551/",
+      "additions": "",
+      "changes": "",
+      "fixes": "With the exception of Venari, as it is a tap and cycle ability. Venari will simply stick to her default attack mode.\u00a0"
+    },
+    {
+      "name": "Update 29.5: Deimos Arcana",
+      "date": "2020-11-19T23:39:27Z",
+      "url": "https://forums.warframe.com/topic/1236257-update-295-deimos-arcana/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed Khora spawning an extra Venari when toggling the free camera in the Orbiter Captura Scene."
+    },
+    {
+      "name": "Heart of Deimos: Hotfix 29.1.2 + Hotfix 29.1.2.1",
+      "date": "2020-09-22T17:35:35Z",
+      "url": "https://forums.warframe.com/topic/1227236-heart-of-deimos-hotfix-2912-hotfix-29121/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed a script error that could occur with Khora and Venari."
+    },
+    {
+      "name": "Heart of Deimos: Hotfix 29.0.2",
+      "date": "2020-08-26T19:56:10Z",
+      "url": "https://forums.warframe.com/topic/1217239-heart-of-deimos-hotfix-2902/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed a script error related to Venari.\u00a0"
+    },
+    {
+      "name": "Derelict Shift: Update 28.3.0",
+      "date": "2020-08-12T18:34:52Z",
+      "url": "https://forums.warframe.com/topic/1212935-derelict-shift-update-2830/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed parts of the Khora Urushu Skin disappearing if Venari is missing (Dead, in a Relay, etc)."
+    },
+    {
+      "name": "The Steel Path: Inaros Prime 28.2.0 + 28.2.0.1",
+      "date": "2020-07-14T18:01:09Z",
+      "url": "https://forums.warframe.com/topic/1207002-the-steel-path-inaros-prime-2820-28201/",
+      "additions": "",
+      "changes": "Fixed Venari\u2019s tail remaining default when equipping the Maculatia Venari Skin in the Arsenal.",
+      "fixes": ""
+    },
+    {
+      "name": "The Steel Path: Hotfix 28.1.1",
+      "date": "2020-07-09T19:48:17Z",
+      "url": "https://forums.warframe.com/topic/1205966-the-steel-path-hotfix-2811/",
+      "additions": "",
+      "changes": "Added more tail spikes on the Maculatia Venari Skin. Cause who doesn\u2019t love more spikes!\nFixed Maculatia Venari Skin spikes not being updated when switching postures.",
+      "fixes": ""
+    },
+    {
+      "name": "The Deadlock Protocol: Hotfix 28.0.6 + 28.0.6.1",
+      "date": "2020-06-24T18:00:22Z",
+      "url": "https://forums.warframe.com/topic/1203007-the-deadlock-protocol-hotfix-2806-28061/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed Arcane Bodyguard not healing Venari."
+    },
+    {
+      "name": "Warframe Revised: Railjack Revisited (Part 1): Update 27.4",
+      "date": "2020-05-01T13:21:46Z",
+      "url": "https://forums.warframe.com/topic/1189247-warframe-revised-railjack-revisited-part-1-update-274/",
+      "additions": "",
+      "changes": "Venari",
+      "fixes": ""
+    },
+    {
+      "name": "Operation: Scarlet Spear: TennoGen 27.3.8 + 27.3.8.1 + 27.3.8.2",
+      "date": "2020-04-02T16:33:08Z",
+      "url": "https://forums.warframe.com/topic/1181462-operation-scarlet-spear-tennogen-2738-27381-27382/",
+      "additions": "",
+      "changes": "",
+      "fixes": "We made a hasty change in Hotfix 27.3.6 that removed Venari\u2019s Heal aura from affecting Oplinks AND Defense Targets. Firstly, the terminology of calling Venari\u2019s Defense Target healing a \u2018fix\u2019 was incorrect, so apologies there on my behalf. It\u2019s correct to say it was a feature for Venari, considering it had its own Tip for it! The change stemmed from our desire to resolve Operation exploits as quickly as possible, and we didn't communicate this properly."
+    },
+    {
+      "name": "Operation: Scarlet Spear: Titania Prime 27.3.6",
+      "date": "2020-03-31T17:04:24Z",
+      "url": "https://forums.warframe.com/topic/1180787-operation-scarlet-spear-titania-prime-2736/",
+      "additions": "",
+      "changes": "Fixed Venari\u2019s Healing aura affecting the Oplink.",
+      "fixes": "Fixed Venari\u2019s Healing aura affecting Defense Targets."
+    },
+    {
+      "name": "Warframe Revised: Hotfix 27.2.1",
+      "date": "2020-03-05T23:06:21Z",
+      "url": "https://forums.warframe.com/topic/1172684-warframe-revised-hotfix-2721/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed missing Arsenal Damage numbers for Beast Companions (Kubrow, Kavat, Khora's Venari)."
+    },
+    {
+      "name": "Empyrean: Kuva Lich Changes 27.1.0 + 27.1.0.1",
+      "date": "2020-02-04T18:58:30Z",
+      "url": "https://forums.warframe.com/topic/1166021-empyrean-kuva-lich-changes-2710-27101/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixes toward Look Link colors not applying properly to Kubrows/Kavats/Venari.\nFixed Look Link diorama for Venari appearing squashed and having a normal Kavat tail."
+    },
+    {
+      "name": "Empyrean: Ivara Prime 27.0.4",
+      "date": "2019-12-17T18:58:02Z",
+      "url": "https://forums.warframe.com/topic/1154021-empyrean-ivara-prime-2704/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed a script error related to Venari."
+    },
+    {
+      "name": "Update 26: The Old Blood",
+      "date": "2019-10-31T20:07:22Z",
+      "url": "https://forums.warframe.com/topic/1136784-update-26-the-old-blood/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed incorrect Mod UI when viewing a Venari Mod Link."
+    },
+    {
+      "name": "Arbitrations Revisited: Hotfix 25.7.6",
+      "date": "2019-09-18T19:13:08Z",
+      "url": "https://forums.warframe.com/topic/1129207-arbitrations-revisited-hotfix-2576/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed Synth Fiber not working correctly when equipped on Venari."
+    },
+    {
+      "name": "Wukong Prime: Update 25.3.0",
+      "date": "2019-07-06T20:11:39Z",
+      "url": "https://forums.warframe.com/topic/1108021-wukong-prime-update-2530/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed a script error when trying to go to the Appearance tab for Venari."
+    },
+    {
+      "name": "The Jovian Concord: Hotfix 25.0.8",
+      "date": "2019-05-31T20:15:29Z",
+      "url": "https://forums.warframe.com/topic/1099109-the-jovian-concord-hotfix-2508/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed inability to add a Precept Polarity to Venari using Forma."
+    },
+    {
+      "name": "Buried Debts: Update 24.5.0",
+      "date": "2019-03-14T21:06:12Z",
+      "url": "https://forums.warframe.com/topic/1070992-buried-debts-update-2450/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed Khora's Venari not displaying color changes in the Abilities diorama."
+    },
+    {
+      "name": "Fortuna: Hotfix 24.2.10",
+      "date": "2019-01-23T20:08:15Z",
+      "url": "https://forums.warframe.com/topic/1056534-fortuna-hotfix-24210/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed broken tags in the Venari Bodyguard Mod that were broken in a few languages (German, Polish, Chinese)."
+    },
+    {
+      "name": "Fortuna: Hotfix 24.2.7 + 24.2.7.1",
+      "date": "2019-01-09T18:37:18Z",
+      "url": "https://forums.warframe.com/topic/1052727-fortuna-hotfix-2427-24271/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed a script error when Khora\u2019s Venari passive activates."
+    },
+    {
+      "name": "Fortuna: Hotfix 24.0.8",
+      "date": "2018-11-15T22:34:29Z",
+      "url": "https://forums.warframe.com/topic/1032170-fortuna-hotfix-2408/",
+      "additions": "",
+      "changes": "Fixed a script error related to Khora\u2019s Venari.",
+      "fixes": ""
+    },
+    {
+      "name": "Fortuna: Hotfix 24.0.7",
+      "date": "2018-11-15T20:08:27Z",
+      "url": "https://forums.warframe.com/topic/1032058-fortuna-hotfix-2407/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed the Fetch Mod not functioning for a Client Venari.\u00a0"
+    },
+    {
+      "name": "Chimera: Hotfix 23.10.7",
+      "date": "2018-10-24T14:34:07Z",
+      "url": "https://forums.warframe.com/topic/1021711-chimera-hotfix-23107/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed Khora\u2019s Venari being invisible in the Cetus Arsenal when accessing it as the Operator."
+    },
+    {
+      "name": "Mask of the Revenant: Update 23.5.0",
+      "date": "2018-08-24T21:39:09Z",
+      "url": "https://forums.warframe.com/topic/1001509-mask-of-the-revenant-update-2350/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed sometimes getting unintended colors on Venari \u00a0when using the Randomize feature."
+    },
+    {
+      "name": "The Sacrifice: Update 23",
+      "date": "2018-06-15T00:51:48Z",
+      "url": "https://forums.warframe.com/topic/967249-the-sacrifice-update-23/",
+      "additions": "",
+      "changes": "While Exalted Weapons can be ranked, they do not count towards Mastery Rank (with the exception of Khora\u2019s Venari).\u00a0",
+      "fixes": "Fixed Khora\u2019s Venari disarming Vor after attacking him.\u00a0"
+    },
+    {
+      "name": "Beasts of the Sanctuary: Hotfix 22.20.5",
+      "date": "2018-05-24T19:33:19Z",
+      "url": "https://forums.warframe.com/topic/960082-beasts-of-the-sanctuary-hotfix-22205/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed a Venari script error in rare cases where the player's Warframe is not available (ex. War Within)."
+    },
+    {
+      "name": "Beasts of the Sanctuary: Update 22.20.0",
+      "date": "2018-05-17T14:55:31Z",
+      "url": "https://forums.warframe.com/topic/957066-beasts-of-the-sanctuary-update-22200/",
+      "additions": "",
+      "changes": "Changed Khora\u2019s Venari animations from domestic Kavat to Feral Kavat.\u00a0\nTweaked Venari command sounds.\nFixed Khora\u2019s Venari getting locked in her Attack Mode when attempting Mastery Rank tests, which can cause failure on stealth tests (MR9 for example).\u00a0\nFixed Venari freezing in place when entering Cetus from the Plains, and subsequently duplicating if you head back out, eventually leading to a hall of kitty statues.\nReduced the damage of Khora's Venari in Conclave.",
+      "fixes": "Fixed being able to pet an invisible Venari if interacting with her immediately after exiting her upgrade screen in the Arsenal.\u00a0\nFixed a script error with Khora\u2019s Venari.\u00a0"
+    },
+    {
+      "name": "Beasts of the Sanctuary: Update 22.19.0",
+      "date": "2018-05-02T18:30:06Z",
+      "url": "https://forums.warframe.com/topic/952702-beasts-of-the-sanctuary-update-22190/",
+      "additions": "",
+      "changes": "Operators can no longer be targeted for Venari to Heal. This follows precedent with other Warframe abilities not being castable on Operators. \nFixed Venari\u2019s ability stats and passive speed buff UI appearing to be affected by Efficiency Mods. Ability Strength Mods are what applies to Venari\u2019s abilities/passive. \nFixed Venari\u2019s Heal being permanently active when equipping negative Duration Mods on Khora.\nFixed not being able to see Venari\u2019s hold indicator when switching postures. \nFixed incorrect icon displaying for Venari\u2019s Healing posture.\nFixed Venari script error that would occur if you're controlling the Operator when Venari respawns.\nFixed Venari not disappearing when playing an Archwing mission as Khora.\nFixed a case of Khora getting the Venari speed buff HUD icon when Venari fails to spawn.\nFixed Venari attacking you in the Simulacrum Arsenal when Friendly Fire is enabled.\nReduced the damage of Khora's Venari in Conclave.",
+      "fixes": ""
+    },
+    {
+      "name": "Beasts of the Sanctuary: Hotfix 22.18.8",
+      "date": "2018-04-27T23:14:52Z",
+      "url": "https://forums.warframe.com/topic/950912-beasts-of-the-sanctuary-hotfix-22188/",
+      "additions": "",
+      "changes": "Venari fights independently until she receives a command. Khora\u2019s third ability (Venari) overrides Venari\u2019s target, as indicated by the icon over Khora\u2019s head.\nCommanding Venari while in the Heal posture without a valid target will command Venari to heal Khora.\nCompanion mods like Animal Instinct have been fixed so they will work properly on Venari.\nVenari deals Slash damage to enemies instead of Impact damage.\nAbility Strength Mods on Khora now affect Venari abilities.",
+      "fixes": ""
+    },
+    {
+      "name": "Beasts of the Sanctuary: Hotfix 22.18.7",
+      "date": "2018-04-25T21:12:12Z",
+      "url": "https://forums.warframe.com/topic/950089-beasts-of-the-sanctuary-hotfix-22187/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed Venari UI stats overlapping text when Dual Wielding.\nFixed Venari's loadout slot appearing in the Conclave Arsenal even if Khora is not equipped. Interacting with Venari\u2019s loadout slot would result in a crash."
+    },
+    {
+      "name": "Beasts of the Sanctuary: Update 22.18.0",
+      "date": "2018-04-20T14:27:12Z",
+      "url": "https://forums.warframe.com/topic/947321-beasts-of-the-sanctuary-update-22180/",
+      "additions": "",
+      "changes": "It\u2019s the postponed Christmas gift that keeps on giving! Revealed back on November 3rd 2017, Khora has finally clawed her way to your screens. From an originally proposed damage deviator to the now metallic Kavat wielding queen of the Strangledome, her time is now. But, she won\u2019t come easily. For Khora and Venari have been detected in Simaris\u2019 Sanctuary, and it\u2019s his rules that are law there.",
+      "fixes": ""
+    },
+    {
+      "name": "Plains of Eidolon: Update 22.1.0",
+      "date": "2017-10-25T20:57:43Z",
+      "url": "https://forums.warframe.com/topic/867056-plains-of-eidolon-update-2210/",
+      "additions": "",
+      "changes": "Limbo Venari Helmet by Volkovyi and Sab531",
+      "fixes": ""
+    }
+  ],
+  "polarities": [
+    "penjaga",
+    "madurai",
+    "vazarin",
+    "naramon"
+  ],
+  "power": 100,
+  "productCategory": "SpecialItems",
+  "releaseDate": "2018-04-20",
+  "shield": 0,
+  "stamina": 8,
+  "tradable": false,
+  "type": "Warframe",
+  "uniqueName": "/Lotus/Powersuits/Khora/Kavat/KhoraKavatPowerSuit",
+  "wikiAvailable": true,
+  "wikiaThumbnail": "https://wiki.warframe.com/images/Venari.png?d08b0",
+  "wikiaUrl": "https://wiki.warframe.com/w/Venari"
+}

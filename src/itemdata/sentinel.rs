@@ -205,4 +205,35 @@ mod tests {
 
         assert!(!rec.prime.is_prime);
     }
+
+    #[test]
+    fn test_deserialize_sentinel_prime() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/sentinel_test_2.json"
+        ));
+        let rec: Sentinel = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Carrier Prime");
+        assert_eq!(rec.stats.health, 650);
+        assert_eq!(rec.stats.armor, 150);
+        assert_eq!(rec.stats.shield, 300);
+        assert!(rec.prime.is_prime);
+        assert_eq!(rec.prime.vaulted, Some(true));
+    }
+
+    #[test]
+    fn test_deserialize_sentinel_shade() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/sentinel_test_3.json"
+        ));
+        let rec: Sentinel = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Shade");
+        assert_eq!(rec.stats.health, 600);
+        assert_eq!(rec.stats.armor, 80);
+        assert_eq!(rec.stats.shield, 130);
+        assert!(!rec.prime.is_prime);
+    }
 }

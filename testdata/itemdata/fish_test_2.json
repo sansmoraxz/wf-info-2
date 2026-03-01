@@ -1,0 +1,28 @@
+{
+  "category": "Fish",
+  "description": "These fish hatch out of translucent pods formed in caverns below the Infested landscape. They hover to feed.",
+  "drops": [
+    {
+      "chance": 1,
+      "location": "Entrati (Daughter), Stranger",
+      "rarity": "Common",
+      "type": "Amniophysi Trophy Blueprint"
+    }
+  ],
+  "imageName": "amniophysi-a0ee0c1c56.png",
+  "masterable": false,
+  "name": "Amniophysi",
+  "patchlogs": [
+    {
+      "name": "Heart of Deimos: Update 29",
+      "date": "2020-08-25T19:57:29Z",
+      "url": "https://forums.warframe.com/topic/1216407-heart-of-deimos-update-29/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Amniophysi "
+    }
+  ],
+  "tradable": true,
+  "type": "Fish",
+  "uniqueName": "/Lotus/Types/Items/Fish/Deimos/InfestedCommonDFishItemLarge"
+}

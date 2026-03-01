@@ -104,4 +104,31 @@ mod tests {
         assert_eq!(rec.rarity, Some(Rarity::Uncommon));
         assert!(!rec.drops.is_empty());
     }
+
+    #[test]
+    fn test_deserialize_arcane_legendary() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/arcane_test_2.json"
+        ));
+        let rec: Arcane = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Arcane Energize");
+        assert_eq!(rec.rarity, Some(Rarity::Legendary));
+        assert!(rec.trade.tradable);
+        assert_eq!(rec.level_stats.len(), 6);
+    }
+
+    #[test]
+    fn test_deserialize_arcane_secondary() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/arcane_test_3.json"
+        ));
+        let rec: Arcane = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Akimbo Slip Shot");
+        assert_eq!(rec.rarity, Some(Rarity::Rare));
+        assert!(rec.trade.tradable);
+    }
 }

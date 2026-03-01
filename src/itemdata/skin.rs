@@ -144,4 +144,31 @@ mod tests {
 
         assert_eq!(rec.exclude_from_codex, Some(true));
     }
+
+    #[test]
+    fn test_deserialize_skin_ship_decoration() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/skin_test_2.json"
+        ));
+        let rec: Skin = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.unique_name, "/Lotus/Types/Items/ShipDecos/NewWar/LisetPropFamilyPortrait");
+        assert_eq!(rec.identity.name, "A Lost Time");
+        assert_eq!(rec.type_field, SkinType::ShipDecoration);
+        assert!(!rec.trade.tradable);
+    }
+
+    #[test]
+    fn test_deserialize_skin_color_palette() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/skin_test_3.json"
+        ));
+        let rec: Skin = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Smoke");
+        assert_eq!(rec.type_field, SkinType::ColorPalette);
+        assert!(!rec.hex_colours.is_empty());
+    }
 }
