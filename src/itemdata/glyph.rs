@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
+use crate::itemdata::enums::GlyphType;
 use crate::itemdata::props::{ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::itemdata::traits::{Droppable, Item};
 
@@ -15,7 +16,7 @@ pub struct Glyph {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: GlyphType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -45,7 +46,7 @@ impl Item for Glyph {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()
@@ -86,7 +87,7 @@ mod tests {
             "/Lotus/Types/StoreItems/AvatarImages/FanChannel/AvatarImageChromaPrimePartner"
         );
         assert_eq!(rec.identity.category, "Glyphs");
-        assert_eq!(rec.type_field, "Glyph");
+        assert_eq!(rec.type_field, GlyphType::Glyph);
         assert!(!rec.trade.tradable);
         assert!(!rec.trade.masterable);
     }

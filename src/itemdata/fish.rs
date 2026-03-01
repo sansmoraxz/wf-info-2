@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
+use crate::itemdata::enums::FishType;
 use crate::itemdata::props::{ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::itemdata::traits::{Droppable, Item};
 
@@ -15,7 +16,7 @@ pub struct Fish {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: FishType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -45,7 +46,7 @@ impl Item for Fish {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()
@@ -87,7 +88,7 @@ mod tests {
         );
         assert_eq!(rec.identity.name, "Amniophysi");
         assert_eq!(rec.identity.category, "Fish");
-        assert_eq!(rec.type_field, "Fish");
+        assert_eq!(rec.type_field, FishType::Fish);
         assert!(rec.trade.tradable);
         assert!(!rec.trade.masterable);
         assert!(!rec.drops.is_empty());

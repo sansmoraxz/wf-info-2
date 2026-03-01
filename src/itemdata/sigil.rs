@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
+use crate::itemdata::enums::SigilType;
 use crate::itemdata::props::{ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::itemdata::traits::{Droppable, Item};
 
@@ -15,7 +16,7 @@ pub struct Sigil {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: SigilType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -45,7 +46,7 @@ impl Item for Sigil {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()
@@ -86,7 +87,7 @@ mod tests {
             "/Lotus/Upgrades/Skins/Sigils/Community10YearAnniversarySigil"
         );
         assert_eq!(rec.identity.category, "Sigils");
-        assert_eq!(rec.type_field, "Sigil");
+        assert_eq!(rec.type_field, SigilType::Sigil);
         assert!(!rec.trade.tradable);
         assert!(!rec.trade.masterable);
     }

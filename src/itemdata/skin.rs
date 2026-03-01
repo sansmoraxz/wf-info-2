@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::itemdata::enums::SkinType;
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
 use crate::itemdata::props::{BuildableProps, ItemDetailProps, ItemIdentityProps, TradableProps};
@@ -21,7 +22,7 @@ pub struct Skin {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: SkinType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -60,7 +61,7 @@ impl Item for Skin {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()

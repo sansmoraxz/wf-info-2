@@ -6,7 +6,7 @@ use serde_json::Value;
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::{Noise, Polarity, Rarity, Trigger};
+use crate::itemdata::enums::{MiscType, Noise, Polarity, Rarity, Trigger};
 use crate::itemdata::props::{
     BuildableProps, ItemDetailProps, ItemIdentityProps, TradableProps, WeaponTypeStats, WikiaProps,
 };
@@ -20,7 +20,7 @@ pub struct Misc {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: MiscType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -187,7 +187,7 @@ impl Item for Misc {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()
@@ -276,7 +276,7 @@ mod tests {
             "/Lotus/Types/Gameplay/NarmerSorties/ArchonCrystalBorealMythic"
         );
         assert_eq!(rec.identity.category, "Misc");
-        assert_eq!(rec.type_field, "Misc");
+        assert_eq!(rec.type_field, MiscType::Misc);
         assert!(!rec.trade.tradable);
         assert!(!rec.trade.masterable);
     }

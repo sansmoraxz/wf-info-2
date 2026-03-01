@@ -15,11 +15,13 @@ pub use traits::{
 
 // Re-export important enums for easier access
 pub use enums::{
-    ArcaneType, ArchGunProductCategory, ArchMeleeProductCategory, ArchwingProductCategory,
-    GearType, MeleeProductCategory, MeleeType, ModCategory, Noise, Polarity,
-    PrimaryProductCategory, PrimaryType, RailjackType, Rarity, ResourceType,
-    SecondaryProductCategory, SecondaryType, SentinelProductCategory,
-    SentinelWeaponProductCategory, Sex, Slot, Trigger, VaultStatus,
+    ArcaneType, ArchGunProductCategory, ArchGunType, ArchMeleeProductCategory, ArchMeleeType,
+    ArchwingProductCategory, ArchwingType, ComponentType, Disposition, EnemyType, FishType,
+    GearType, GlyphType, MeleeProductCategory, MeleeType, MiscType, ModCategory, ModType, Noise,
+    NodeType, PetType, Polarity, PrimaryProductCategory, PrimaryType, QuestType, RailjackType,
+    Rarity, RelicType, ResistanceType, ResourceType, SecondaryProductCategory, SecondaryType,
+    SentinelProductCategory, SentinelType, SentinelWeaponProductCategory, SentinelWeaponType, Sex,
+    SigilType, SkinType, Slot, Trigger, VaultStatus, WarframeType,
 };
 pub use props::{MeleeWeaponData, RangedWeaponData, WeaponTypeStats};
 

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, LevelStat, Patchlog};
-use crate::itemdata::enums::{ModCategory, Polarity, Rarity};
+use crate::itemdata::enums::{ModCategory, ModType, Polarity, Rarity};
 use crate::itemdata::props::{ItemDetailProps, ItemIdentityProps, TradableProps, WikiaProps};
 use crate::itemdata::traits::{Droppable, Item, WikiaLinked};
 
@@ -16,7 +16,7 @@ pub struct Mod {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: ModType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -135,7 +135,7 @@ impl Item for Mod {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()

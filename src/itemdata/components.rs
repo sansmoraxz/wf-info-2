@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::common::{Drop, Introduced, deserialize_option_number_to_f64};
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::{Noise, Polarity, Slot, Trigger};
+use crate::itemdata::enums::{ComponentType, Noise, Polarity, Slot, Trigger};
 use crate::itemdata::props::WeaponTypeStats;
 
 /// Crafting component for buildable items.
@@ -31,7 +31,7 @@ pub struct Component {
     pub description: Option<String>,
 
     #[serde(rename = "type")]
-    pub type_field: Option<String>,
+    pub type_field: Option<ComponentType>,
 
     // Prime trading
     pub prime_selling_price: Option<i64>,

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
-use crate::itemdata::enums::Polarity;
+use crate::itemdata::enums::{Polarity, PetType};
 use crate::itemdata::props::{CharacterStats, ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::itemdata::traits::{Buildable, Droppable, Equippable, Item, WikiaLinked};
 
@@ -35,7 +35,7 @@ pub struct KubrowPet {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: PetType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -69,7 +69,7 @@ pub struct PetComponent {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: PetType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -107,7 +107,7 @@ pub struct WarframeCompanion {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: PetType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -172,9 +172,9 @@ impl Item for PetEntry {
     }
     fn type_field(&self) -> &str {
         match self {
-            PetEntry::KubrowPets(p) => &p.type_field,
-            PetEntry::Pistols(p) => &p.type_field,
-            PetEntry::SpecialItems(p) => &p.type_field,
+            PetEntry::KubrowPets(p) => p.type_field.as_str(),
+            PetEntry::Pistols(p) => p.type_field.as_str(),
+            PetEntry::SpecialItems(p) => p.type_field.as_str(),
         }
     }
     fn image_name(&self) -> Option<&str> {

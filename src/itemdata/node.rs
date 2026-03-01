@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
+use crate::itemdata::enums::NodeType;
 use crate::itemdata::props::{ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::itemdata::traits::{Droppable, Item};
 
@@ -15,7 +16,7 @@ pub struct Node {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: NodeType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -54,7 +55,7 @@ impl Item for Node {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()
@@ -93,7 +94,7 @@ mod tests {
         assert_eq!(rec.identity.unique_name, "SolNode203");
         assert_eq!(rec.identity.name, "Abaddon");
         assert_eq!(rec.identity.category, "Node");
-        assert_eq!(rec.type_field, "Node");
+        assert_eq!(rec.type_field, NodeType::Node);
         assert!(!rec.trade.tradable);
         assert!(!rec.trade.masterable);
 

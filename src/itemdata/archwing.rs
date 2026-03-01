@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Ability, Patchlog};
 use crate::itemdata::components::Component;
-use crate::itemdata::enums::{ArchwingProductCategory, Polarity, Slot};
+use crate::itemdata::enums::{ArchwingProductCategory, ArchwingType, Polarity, Slot};
 use crate::itemdata::props::{
     CharacterStats, ItemDetailProps, ItemIdentityProps, PrimeProps, TradableProps, WikiaProps,
 };
@@ -21,7 +21,7 @@ pub struct Archwing {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: ArchwingType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -78,7 +78,7 @@ impl Item for Archwing {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()

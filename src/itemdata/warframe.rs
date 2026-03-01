@@ -11,7 +11,7 @@ use serde_with::{OneOrMany, formats, serde_as};
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Ability, Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
-use crate::itemdata::enums::{Polarity, Sex, Slot};
+use crate::itemdata::enums::{Polarity, Sex, Slot, WarframeType};
 use crate::itemdata::props::{
     BuildableProps, CharacterStats, ItemDetailProps, ItemIdentityProps, PrimeProps, TradableProps,
 };
@@ -41,7 +41,7 @@ pub struct WarframeData {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: WarframeType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -92,7 +92,7 @@ pub struct NecramechData {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: WarframeType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -131,7 +131,7 @@ pub struct HelminthData {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: WarframeType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -185,9 +185,9 @@ impl Item for WarframeEntry {
     }
     fn type_field(&self) -> &str {
         match self {
-            WarframeEntry::Suits(w) => &w.type_field,
-            WarframeEntry::MechSuits(w) => &w.type_field,
-            WarframeEntry::Helminth(w) => &w.type_field,
+            WarframeEntry::Suits(w) => w.type_field.as_str(),
+            WarframeEntry::MechSuits(w) => w.type_field.as_str(),
+            WarframeEntry::Helminth(w) => w.type_field.as_str(),
         }
     }
     fn image_name(&self) -> Option<&str> {
@@ -441,7 +441,7 @@ mod tests {
                 );
                 assert_eq!(w.identity.name, "Harrow Prime");
                 assert_eq!(w.identity.category, "Warframes");
-                assert_eq!(w.type_field, "Warframe");
+                assert_eq!(w.type_field, WarframeType::Warframe);
                 assert_eq!(w.sex, Sex::Male);
                 assert!(!w.trade.tradable);
                 assert!(w.trade.masterable);

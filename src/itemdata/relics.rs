@@ -5,6 +5,7 @@ use serde_json::Value;
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
+use crate::itemdata::enums::RelicType;
 use crate::itemdata::props::{ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::itemdata::traits::{Droppable, Item};
 
@@ -16,7 +17,7 @@ pub struct Relic {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: RelicType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -53,7 +54,7 @@ impl Item for Relic {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()
@@ -95,7 +96,7 @@ mod tests {
         );
         assert_eq!(rec.identity.name, "Axi P8 Exceptional");
         assert_eq!(rec.identity.category, "Relics");
-        assert_eq!(rec.type_field, "Relic");
+        assert_eq!(rec.type_field, RelicType::Relic);
         assert!(rec.trade.tradable);
         assert!(!rec.trade.masterable);
         assert!(!rec.drops.is_empty());

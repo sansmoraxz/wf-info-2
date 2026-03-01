@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::Patchlog;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::{Noise, Polarity, SentinelWeaponProductCategory, Slot, Trigger};
+use crate::itemdata::enums::{Noise, Polarity, SentinelWeaponProductCategory, SentinelWeaponType, Slot, Trigger};
 use crate::itemdata::props::{
     BuildableProps, EquippableProps, ItemDetailProps, ItemIdentityProps, PrimeProps, TradableProps,
     WeaponProps, WeaponTypeStats, WikiaProps,
@@ -20,7 +20,7 @@ pub struct SentinelWeapon {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: SentinelWeaponType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -128,7 +128,7 @@ impl Item for SentinelWeapon {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()

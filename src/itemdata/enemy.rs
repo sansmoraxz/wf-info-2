@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
+use crate::itemdata::enums::{EnemyType, ResistanceType};
 use crate::itemdata::props::{ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::itemdata::traits::{Droppable, Item};
 
@@ -21,7 +22,7 @@ pub struct Affector {
 pub struct Resistance {
     pub amount: f64,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: ResistanceType,
     #[serde(default)]
     pub affectors: Vec<Affector>,
 }
@@ -32,7 +33,7 @@ pub struct Enemy {
     #[serde(flatten)]
     pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
+    pub type_field: EnemyType,
     #[serde(flatten)]
     pub detail: ItemDetailProps,
     #[serde(flatten)]
@@ -72,7 +73,7 @@ impl Item for Enemy {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()
@@ -114,7 +115,7 @@ mod tests {
         );
         assert_eq!(rec.identity.name, "002-Er");
         assert_eq!(rec.identity.category, "Enemy");
-        assert_eq!(rec.type_field, "Corpus");
+        assert_eq!(rec.type_field, EnemyType::Corpus);
         assert!(!rec.trade.tradable);
 
         // Combat stats
@@ -124,7 +125,7 @@ mod tests {
 
         // Resistances
         assert_eq!(rec.resistances.len(), 3);
-        assert!(!rec.resistances[0].type_field.is_empty());
+        assert_ne!(rec.resistances[0].type_field, ResistanceType::Unknown(String::new()));
         assert!(!rec.resistances[0].affectors.is_empty());
 
         // Drops with null chance handling
