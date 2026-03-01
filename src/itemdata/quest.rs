@@ -35,7 +35,7 @@ pub struct Quest {
 
 impl ProductCategory for Quest {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["Quests".to_string()]
+        vec!["QuestKeys".to_string(), "LevelKeys".to_string()]
     }
 }
 

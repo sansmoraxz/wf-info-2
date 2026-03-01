@@ -4,10 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Ability, Patchlog};
-use crate::itemdata::components::Component;
 use crate::itemdata::enums::{ArchwingProductCategory, ArchwingType, Polarity, Slot};
 use crate::itemdata::props::{
-    CharacterStats, ItemDetailProps, ItemIdentityProps, PrimeProps, TradableProps, WikiaProps,
+    BuildableProps, CharacterStats, ItemDetailProps, ItemIdentityProps, PrimeProps, TradableProps,
+    WikiaProps,
 };
 use crate::itemdata::traits::{
     Buildable, Character, Equippable, HasAbilities, Item, Prime, WikiaLinked,
@@ -33,22 +33,14 @@ pub struct Archwing {
     pub color: Option<i64>,
     pub conclave: Option<bool>,
 
-    // Buildable
-    pub build_price: i64,
-    pub build_quantity: i64,
-    pub build_time: i64,
-    pub skip_build_time_price: i64,
-    pub consume_on_build: bool,
-    pub mastery_req: i64,
-    #[serde(default)]
-    pub components: Vec<Component>,
+    #[serde(flatten)]
+    pub build: BuildableProps,
 
     // Equippable
     pub polarities: Option<Vec<Polarity>>,
 
     pub product_category: ArchwingProductCategory,
 
-    // Droppable
     #[serde(default)]
     pub patchlogs: Vec<Patchlog>,
 
@@ -96,31 +88,31 @@ impl Item for Archwing {
 
 impl Buildable for Archwing {
     fn build_price(&self) -> Option<i64> {
-        Some(self.build_price)
+        self.build.build_price
     }
     fn build_quantity(&self) -> Option<i64> {
-        Some(self.build_quantity)
+        self.build.build_quantity
     }
     fn build_time(&self) -> Option<i64> {
-        Some(self.build_time)
+        self.build.build_time
     }
     fn skip_build_time_price(&self) -> Option<i64> {
-        Some(self.skip_build_time_price)
+        self.build.skip_build_time_price
     }
     fn consume_on_build(&self) -> Option<bool> {
-        Some(self.consume_on_build)
+        self.build.consume_on_build
     }
     fn mastery_req(&self) -> Option<i64> {
-        Some(self.mastery_req)
+        self.build.mastery_req
     }
     fn market_cost(&self) -> Option<i64> {
-        None
+        self.build.market_cost
     }
     fn bp_cost(&self) -> Option<i64> {
-        None
+        self.build.bp_cost
     }
-    fn components(&self) -> &[Component] {
-        &self.components
+    fn components(&self) -> &[crate::itemdata::components::Component] {
+        &self.build.components
     }
 }
 
@@ -229,8 +221,8 @@ mod tests {
         assert_eq!(rec.abilities.len(), 4);
 
         // Buildable
-        assert_eq!(rec.build_price, 25000);
-        assert_eq!(rec.components.len(), 5);
+        assert_eq!(rec.build.build_price, Some(25000));
+        assert_eq!(rec.build.components.len(), 5);
 
         assert!(!rec.prime.is_prime);
     }
@@ -247,7 +239,7 @@ mod tests {
         assert_eq!(rec.stats.health, 425);
         assert_eq!(rec.stats.armor, 100);
         assert_eq!(rec.stats.shield, 430);
-        assert_eq!(rec.build_price, 7000);
+        assert_eq!(rec.build.build_price, Some(7000));
         assert!(!rec.prime.is_prime);
     }
 

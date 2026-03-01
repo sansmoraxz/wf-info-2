@@ -149,6 +149,84 @@ pub struct MeleeProps {
     pub wind_up: Option<f64>,
 }
 
+/// Weapon stats for component items that are weapons (e.g., Prime weapon parts).
+///
+/// `total_damage` is required (non-optional) and serves as the discriminant
+/// for [`ComponentWeapon`]'s untagged enum deserialization.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComponentWeaponData {
+    pub total_damage: f64,
+
+    #[serde(default)]
+    pub damage_per_shot: Vec<f64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub critical_chance: Option<f64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub critical_multiplier: Option<f64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub proc_chance: Option<f64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub fire_rate: Option<f64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub omega_attenuation: Option<f64>,
+
+    pub damage: Option<DamageBreakdown>,
+
+    #[serde(default)]
+    pub attacks: Vec<Attack>,
+
+    pub disposition: Option<i64>,
+
+    // Gun-specific
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub accuracy: Option<f64>,
+
+    #[serde(default)]
+    pub noise: Option<Noise>,
+
+    #[serde(default)]
+    pub trigger: Option<Trigger>,
+
+    pub magazine_size: Option<i64>,
+
+    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    pub reload_time: Option<f64>,
+
+    pub multishot: Option<i64>,
+}
+
+/// Weapon classification for components.
+///
+/// Components can be weapon parts (with full weapon stats) or simple materials.
+/// Uses serde untagged: tries `Armed` first (requires `totalDamage`), falls back to `Unarmed`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ComponentWeapon {
+    Armed(ComponentWeaponData),
+    Unarmed {},
+}
+
+impl Default for ComponentWeapon {
+    fn default() -> Self {
+        ComponentWeapon::Unarmed {}
+    }
+}
+
+impl ComponentWeapon {
+    pub fn as_armed(&self) -> Option<&ComponentWeaponData> {
+        match self {
+            ComponentWeapon::Armed(data) => Some(data),
+            ComponentWeapon::Unarmed {} => None,
+        }
+    }
+}
+
 /// Computed weapon type classification.
 ///
 /// This enum represents whether an item has ranged (gun) or melee weapon stats.

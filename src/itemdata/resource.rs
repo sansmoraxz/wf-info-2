@@ -32,7 +32,6 @@ pub struct Resource {
     pub parents: Vec<String>,
     pub exclude_from_codex: Option<bool>,
 
-    // Droppable
     #[serde(default)]
     pub drops: Vec<Drop>,
     #[serde(default)]

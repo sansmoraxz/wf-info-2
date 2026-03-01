@@ -5,10 +5,12 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::itemdata::common::{Drop, Introduced, deserialize_option_number_to_f64};
-use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::{ComponentType, Noise, Polarity, Slot, Trigger};
-use crate::itemdata::props::WeaponTypeStats;
+use crate::itemdata::common::Drop;
+use crate::itemdata::enums::ComponentType;
+use crate::itemdata::props::{
+    ComponentWeapon, EquippableProps, MeleeProps, PrimeProps, TradableProps, WeaponTypeStats,
+    WikiaProps,
+};
 
 /// Crafting component for buildable items.
 ///
@@ -22,8 +24,9 @@ pub struct Component {
     pub name: String,
     pub item_count: i64,
     pub image_name: String,
-    pub tradable: bool,
-    pub masterable: bool,
+
+    #[serde(flatten)]
+    pub trade: TradableProps,
 
     #[serde(default)]
     pub drops: Vec<Drop>,
@@ -37,102 +40,26 @@ pub struct Component {
     pub prime_selling_price: Option<i64>,
     pub ducats: Option<i64>,
 
-    // Weapon stats (for weapon components)
-    #[serde(default)]
-    pub damage_per_shot: Vec<f64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub total_damage: Option<f64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub critical_chance: Option<f64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub critical_multiplier: Option<f64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub proc_chance: Option<f64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub fire_rate: Option<f64>,
-
     pub mastery_req: Option<i64>,
     pub product_category: Option<String>,
-    pub slot: Option<Slot>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub accuracy: Option<f64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub omega_attenuation: Option<f64>,
-
-    #[serde(default)]
-    pub noise: Option<Noise>,
-
-    #[serde(default)]
-    pub trigger: Option<Trigger>,
-
-    pub magazine_size: Option<i64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub reload_time: Option<f64>,
-
-    pub multishot: Option<i64>,
-
-    pub damage: Option<DamageBreakdown>,
-
-    pub wiki_available: Option<bool>,
-
-    #[serde(default)]
-    pub attacks: Vec<Attack>,
 
     pub market_cost: Option<i64>,
     pub bp_cost: Option<i64>,
 
-    #[serde(default)]
-    pub polarities: Vec<Polarity>,
-
-    #[serde(default)]
-    pub tags: Vec<String>,
-
-    pub wikia_thumbnail: Option<String>,
-    pub wikia_url: Option<String>,
-
-    pub disposition: Option<i64>,
-
-    pub introduced: Option<Introduced>,
-    pub release_date: Option<String>,
-
-    // Melee-specific
-    pub blocking_angle: Option<i64>,
-    pub combo_duration: Option<i64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub follow_through: Option<f64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub range: Option<f64>,
-
-    pub slam_attack: Option<i64>,
-    pub slam_radial_damage: Option<i64>,
-    pub slam_radius: Option<i64>,
-    pub slide_attack: Option<i64>,
-    pub heavy_attack_damage: Option<i64>,
-    pub heavy_slam_attack: Option<i64>,
-    pub heavy_slam_radial_damage: Option<i64>,
-    pub heavy_slam_radius: Option<i64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub wind_up: Option<f64>,
-
-    #[serde(default)]
-    pub stance_polarity: Option<Polarity>,
-
     pub exclude_from_codex: Option<bool>,
 
-    pub vaulted: Option<bool>,
-    pub estimated_vault_date: Option<String>,
-    pub vault_date: Option<String>,
+    #[serde(flatten)]
+    pub weapon: ComponentWeapon,
+
+    // Grouped props
+    #[serde(flatten)]
+    pub wikia: WikiaProps,
+    #[serde(flatten)]
+    pub prime: PrimeProps,
+    #[serde(flatten)]
+    pub melee: MeleeProps,
+    #[serde(flatten)]
+    pub equippable: EquippableProps,
 }
 
 impl Component {
@@ -142,29 +69,30 @@ impl Component {
     /// `WeaponTypeStats::Melee` for melee weapon components,
     /// or `WeaponTypeStats::None` for simple materials.
     pub fn weapon_type_stats(&self) -> WeaponTypeStats {
+        let w = self.weapon.as_armed();
         WeaponTypeStats::detect(
-            self.accuracy,
-            self.magazine_size,
-            self.reload_time,
-            self.multishot,
-            self.noise.clone(),
-            self.trigger.clone(),
+            w.and_then(|d| d.accuracy),
+            w.and_then(|d| d.magazine_size),
+            w.and_then(|d| d.reload_time),
+            w.and_then(|d| d.multishot),
+            w.and_then(|d| d.noise.clone()),
+            w.and_then(|d| d.trigger.clone()),
             None, // projectile - not in Component
             None, // flight - not in Component
-            self.blocking_angle,
-            self.combo_duration,
-            self.follow_through,
-            self.range,
-            self.stance_polarity.clone(),
-            self.slam_attack,
-            self.slam_radial_damage,
-            self.slam_radius,
-            self.slide_attack,
-            self.heavy_attack_damage,
-            self.heavy_slam_attack,
-            self.heavy_slam_radial_damage,
-            self.heavy_slam_radius,
-            self.wind_up,
+            self.melee.blocking_angle,
+            self.melee.combo_duration,
+            self.melee.follow_through,
+            self.melee.range,
+            self.melee.stance_polarity.clone(),
+            self.melee.slam_attack,
+            self.melee.slam_radial_damage,
+            self.melee.slam_radius,
+            self.melee.slide_attack,
+            self.melee.heavy_attack_damage,
+            self.melee.heavy_slam_attack,
+            self.melee.heavy_slam_radial_damage,
+            self.melee.heavy_slam_radius,
+            self.melee.wind_up,
         )
     }
 
@@ -203,7 +131,7 @@ mod tests {
         let component: Component = serde_json::from_str(json).unwrap();
         assert_eq!(component.name, "Neurodes");
         assert_eq!(component.item_count, 2);
-        assert!(component.damage.is_none());
+        assert!(component.weapon.as_armed().is_none());
     }
 
     #[test]
@@ -224,8 +152,9 @@ mod tests {
 
         let component: Component = serde_json::from_str(json).unwrap();
         assert_eq!(component.name, "Lex Prime Barrel");
-        assert!(component.total_damage.is_some());
-        assert!((component.critical_chance.unwrap() - 0.25).abs() < f64::EPSILON);
+        let weapon = component.weapon.as_armed().unwrap();
+        assert!((weapon.total_damage - 150.0).abs() < f64::EPSILON);
+        assert!((weapon.critical_chance.unwrap() - 0.25).abs() < f64::EPSILON);
         assert_eq!(component.ducats, Some(15));
     }
 }

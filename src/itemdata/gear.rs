@@ -30,7 +30,6 @@ pub struct Gear {
     pub item_count: Option<i64>,
     pub parents: Option<Vec<String>>,
 
-    // Droppable
     #[serde(default)]
     pub drops: Vec<Drop>,
     #[serde(default)]
@@ -39,7 +38,7 @@ pub struct Gear {
 
 impl ProductCategory for Gear {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["Consumables".to_string()]
+        vec!["Consumables".to_string(), "SpectreLoadouts".to_string()]
     }
 }
 

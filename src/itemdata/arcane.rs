@@ -32,12 +32,11 @@ pub struct Arcane {
     // Grouped props
     #[serde(flatten)]
     pub build: BuildableProps,
-
-    // Droppable
-    #[serde(default)]
-    pub drops: Vec<Drop>,
     #[serde(default)]
     pub patchlogs: Vec<Patchlog>,
+
+    #[serde(default)]
+    pub drops: Vec<Drop>,
 }
 
 impl ProductCategory for Arcane {

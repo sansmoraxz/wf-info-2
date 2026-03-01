@@ -31,7 +31,7 @@ pub struct Glyph {
 
 impl ProductCategory for Glyph {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["Glyphs".to_string()]
+        vec!["FlavourItems".to_string()]
     }
 }
 

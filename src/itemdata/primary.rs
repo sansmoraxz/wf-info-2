@@ -36,7 +36,6 @@ pub struct Primary {
     #[serde(default)]
     pub parents: Vec<String>,
 
-    // Droppable
     #[serde(default)]
     pub drops: Vec<Drop>,
     #[serde(default)]
