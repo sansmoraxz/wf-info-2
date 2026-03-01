@@ -1,0 +1,59 @@
+{
+  "Configs": [
+    {
+      "Skins": [
+        "6119fc8d1ad4102f6a3c5632",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Necramech/NecramechVoidRigDefaultSkin"
+      ],
+      "Upgrades": [
+        "62936a3bafcbe12a2425cd63",
+        "6284a000a009aa7ea7250c3c",
+        "69976e73102640a18b04f1bd",
+        "6119fcebd3d8d4687a14de51",
+        "69976e50e913e775d207ad3b",
+        "62849feeb6ba0942e36bbbbd",
+        "6119fcf9e3dfb31fdd555328",
+        "6119fce4e3dfb31fdd555219",
+        "69976e81f259174ed50c994f"
+      ]
+    },
+    {
+      "Skins": [
+        "/Lotus/Upgrades/Skins/Necramech/NecramechVoidRigDefaultHelmet"
+      ]
+    },
+    {
+      "Skins": [
+        "/Lotus/Upgrades/Skins/Necramech/NecramechVoidRigDefaultHelmet"
+      ]
+    }
+  ],
+  "Features": 1,
+  "ItemId": {
+    "$oid": "6119fc8d1ad4102f6a3c5630"
+  },
+  "ItemType": "/Lotus/Powersuits/EntratiMech/NechroTech",
+  "Polarity": [
+    {
+      "Slot": 6,
+      "Value": "AP_DEFENSE"
+    },
+    {
+      "Slot": 7,
+      "Value": "AP_ATTACK"
+    },
+    {
+      "Slot": 5,
+      "Value": "AP_DEFENSE"
+    }
+  ],
+  "Polarized": 3,
+  "UpgradeVer": 101,
+  "XP": 503210
+}

@@ -1,0 +1,48 @@
+{
+  "Configs": [
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/OperatorAmp"
+      ],
+      "pricol": {
+        "e1": -4312710,
+        "en": -14380858,
+        "m0": -11157550,
+        "m1": -4312710,
+        "t0": -11001302,
+        "t1": -11442505,
+        "t2": -8494712,
+        "t3": -2649561
+      }
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/OperatorAmp"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/OperatorAmp"
+      ]
+    }
+  ],
+  "Features": 9,
+  "ItemId": {
+    "$oid": "5bec6a79a38e4aa3b1542ef6"
+  },
+  "ItemName": "Guilly Ran",
+  "ItemType": "/Lotus/Weapons/Sentients/OperatorAmplifiers/SentTrainingAmplifier/OperatorTrainingAmpWeapon",
+  "ModularParts": [
+    "/Lotus/Weapons/Sentients/OperatorAmplifiers/SentTrainingAmplifier/SentAmpTrainingGrip",
+    "/Lotus/Weapons/Sentients/OperatorAmplifiers/SentTrainingAmplifier/SentAmpTrainingChassis",
+    "/Lotus/Weapons/Sentients/OperatorAmplifiers/SentTrainingAmplifier/SentAmpTrainingBarrel"
+  ],
+  "UpgradeVer": 101,
+  "XP": 838159
+}

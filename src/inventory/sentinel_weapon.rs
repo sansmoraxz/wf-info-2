@@ -24,3 +24,26 @@ pub struct SentinelWeapon {
     #[serde(flatten)]
     pub other: Option<Value>,
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::from_str;
+
+    #[test]
+    fn test_deserialize_sentinelweapon() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/inventory/inventory_sentinel_weapon_test.json"
+        ));
+
+        let item: SentinelWeapon = from_str(json_data).unwrap();
+
+        assert_eq!(
+            item.item_type,
+            "/Lotus/Types/Sentinels/SentinelWeapons/Gremlin"
+        );
+        assert_eq!(item.xp.unwrap(), 20545526);
+    }
+}

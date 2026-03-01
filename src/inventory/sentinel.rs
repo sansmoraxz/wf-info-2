@@ -24,3 +24,26 @@ pub struct Sentinel {
     #[serde(flatten)]
     pub other: Option<Value>,
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::from_str;
+
+    #[test]
+    fn test_deserialize_sentinel() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/inventory/inventory_sentinel_test.json"
+        ));
+
+        let item: Sentinel = from_str(json_data).unwrap();
+
+        assert_eq!(
+            item.item_type,
+            "/Lotus/Types/Sentinels/SentinelPowersuits/TnSentinelCrossPowerSuit"
+        );
+        assert_eq!(item.xp.unwrap(), 18583058);
+    }
+}

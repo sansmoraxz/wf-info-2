@@ -1,0 +1,90 @@
+{
+  "Configs": [
+    {
+      "Skins": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "60d7882925963166484e8453",
+        "62aca5b2c248721ca54e390d",
+        "6291fc3b4732f422b66b1596",
+        "62aca64241b7db41272cc60a",
+        "6999ae36525366dee1094b81"
+      ],
+      "pricol": {
+        "m1": 22830172
+      }
+    },
+    {},
+    {}
+  ],
+  "CrewMembers": {
+    "SLOT_A": {
+      "ItemId": {
+        "$oid": "6942bcb55a22dac46308afab"
+      }
+    },
+    "SLOT_B": {
+      "ItemId": {
+        "$oid": "60d774eb853a3d18346e97d2"
+      }
+    },
+    "SLOT_C": {
+      "NemesisFingerprint": -4262881221222833042
+    }
+  },
+  "Customization": {
+    "CrewshipInterior": {
+      "Colors": {
+        "e1": -2134984017,
+        "en": 13708851,
+        "t0": 1908258,
+        "t1": 15724526,
+        "t2": 14336610,
+        "t3": 7105177
+      },
+      "ShipAttachments": {
+        "HOOD_ORNAMENT": ""
+      },
+      "SkinFlavourItem": ""
+    }
+  },
+  "ItemId": {
+    "$oid": "5f6f50472054e5147e59a267"
+  },
+  "ItemType": "/Lotus/Types/Game/CrewShip/Ships/RailJack",
+  "UpgradeVer": 101,
+  "Weapon": {
+    "PILOT": {
+      "PRIMARY_A": {
+        "ItemId": {
+          "$oid": "62a5d51e11aec94e8209a379"
+        },
+        "ItemType": "/Lotus/Weapons/CrewShip/Laser/Beam/VidarRailJackBeamWeaponTierC",
+        "cus": 0,
+        "mod": 0
+      },
+      "SECONDARY_A": {
+        "ItemId": {
+          "$oid": "629cea4d5ade400bf65f2e58"
+        },
+        "ItemType": "/Lotus/Weapons/CrewShip/Missiles/MissleLauncherWeaponTierC",
+        "cus": 0,
+        "mod": 0
+      }
+    },
+    "PORT_GUNS": {
+      "PRIMARY_A": {
+        "ItemId": {
+          "$oid": "6295151a986de4670668e0cb"
+        },
+        "ItemType": "/Lotus/Weapons/CrewShip/Laser/GatlingLaser/ZektiGatlingLaserTierC",
+        "cus": 0,
+        "mod": 0
+      }
+    }
+  }
+}

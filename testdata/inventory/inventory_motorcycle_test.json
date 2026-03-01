@@ -1,0 +1,52 @@
+{
+  "Configs": [
+    {
+      "Skins": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Motorcycle/MotorcycleRustSkin"
+      ],
+      "pricol": {
+        "en": -16777216,
+        "t0": 4013373,
+        "t1": 582113,
+        "t2": 10499664,
+        "t3": 16237701
+      }
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Motorcycle/MotorcycleDefaultSkin"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Motorcycle/MotorcycleDefaultSkin"
+      ]
+    }
+  ],
+  "ItemId": {
+    "$oid": "6761bdea04b3776c43018961"
+  },
+  "ItemType": "/Lotus/Types/Vehicles/Motorcycle/MotorcyclePowerSuit",
+  "UpgradeVer": 101
+}

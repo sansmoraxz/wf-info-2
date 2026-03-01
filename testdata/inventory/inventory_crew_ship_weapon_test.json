@@ -1,0 +1,9 @@
+{
+  "ItemId": {
+    "$oid": "60dc1dcb3343a81c04329a14"
+  },
+  "ItemType": "/Lotus/Weapons/CrewShip/ElectricTether/ZektiElectricTetherCannonTierC",
+  "UpgradeFingerprint": "{\"compat\":\"/Lotus/Weapons/CrewShip/ElectricTether/ZektiElectricTetherCannonTierC\",\"buffs\":[{\"Tag\":\"InnateFireRate\",\"Value\":1073741823}]}",
+  "UpgradeType": "/Lotus/Weapons/CrewShip/CrewShipInnateFireRateRandomMod",
+  "UpgradeVer": 101
+}

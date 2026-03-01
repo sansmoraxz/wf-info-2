@@ -1,0 +1,114 @@
+{
+  "Configs": [
+    {
+      "Skins": [
+        "/Lotus/Types/Game/KubrowPet/BodyTypes/KubrowPetRegularFemaleBodyCustomization",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Kubrows/Collars/KubrowCollarDefault",
+        "/Lotus/Types/Game/KubrowPet/Patterns/KubrowPetPatternD"
+      ],
+      "Upgrades": [
+        "6113add047c4c01dd9623947",
+        "5beeab4f57904a21e05bd751",
+        "5beeaa9257904a1f07558b5b",
+        "62a79723e7e5d37e0a1649cd",
+        "5df108ba57904a58ab26d0a3",
+        "",
+        "",
+        "",
+        "5beeaa763f8d4a2fc64b0972",
+        "5bed797257904aa3d2087dee"
+      ],
+      "pricol": {
+        "en": -5342137,
+        "t0": -8879476,
+        "t1": -11714234,
+        "t2": -11714234,
+        "t3": -5342137
+      }
+    },
+    {
+      "Skins": [
+        "/Lotus/Types/Game/KubrowPet/BodyTypes/KubrowPetRegularFemaleBodyCustomization",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Kubrows/Collars/KubrowCollarDefault",
+        "/Lotus/Types/Game/KubrowPet/Patterns/KubrowPetPatternD"
+      ],
+      "pricol": {
+        "en": -5342137,
+        "t0": -8879476,
+        "t1": -11714234,
+        "t2": -11714234,
+        "t3": -5342137
+      }
+    },
+    {
+      "Skins": [
+        "/Lotus/Types/Game/KubrowPet/BodyTypes/KubrowPetRegularFemaleBodyCustomization",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Kubrows/Collars/KubrowCollarDefault",
+        "/Lotus/Types/Game/KubrowPet/Patterns/KubrowPetPatternD"
+      ],
+      "pricol": {
+        "en": -5342137,
+        "t0": -8879476,
+        "t1": -11714234,
+        "t2": -11714234,
+        "t3": -5342137
+      }
+    }
+  ],
+  "Details": {
+    "DominantTraits": {
+      "AccentColor": "/Lotus/Types/Game/KubrowPet/Colors/KubrowPetColorMidA",
+      "BaseColor": "/Lotus/Types/Game/KubrowPet/Colors/KubrowPetColorMundaneF",
+      "BodyType": "/Lotus/Types/Game/KubrowPet/BodyTypes/KubrowPetRegularBodyType",
+      "EyeColor": "/Lotus/Types/Game/KubrowPet/Colors/KubrowPetColorEyesI",
+      "FurPattern": "/Lotus/Types/Game/KubrowPet/Patterns/KubrowPetPatternD",
+      "Personality": "/Lotus/Types/Game/KubrowPet/AdventurerKubrowPetPowerSuit",
+      "SecondaryColor": "/Lotus/Types/Game/KubrowPet/Colors/KubrowPetColorVibrantH",
+      "TertiaryColor": "/Lotus/Types/Game/KubrowPet/Colors/KubrowPetColorVibrantH"
+    },
+    "HasCollar": true,
+    "HatchDate": {
+      "$date": {
+        "$numberLong": "1539494048000"
+      }
+    },
+    "IsMale": false,
+    "IsPuppy": false,
+    "Name": "Sasha",
+    "PrintsRemaining": 0,
+    "RecessiveTraits": {
+      "AccentColor": "/Lotus/Types/Game/KubrowPet/Colors/KubrowPetColorMundaneG",
+      "BaseColor": "/Lotus/Types/Game/KubrowPet/Colors/KubrowPetColorVibrantD",
+      "BodyType": "/Lotus/Types/Game/KubrowPet/BodyTypes/KubrowPetThinBodyType",
+      "EyeColor": "/Lotus/Types/Game/KubrowPet/Colors/KubrowPetColorEyesH",
+      "FurPattern": "/Lotus/Types/Game/KubrowPet/Patterns/KubrowPetPatternA",
+      "Personality": "/Lotus/Types/Game/KubrowPet/FurtiveKubrowPetPowerSuit",
+      "SecondaryColor": "/Lotus/Types/Game/KubrowPet/Colors/KubrowPetColorMundaneC",
+      "TertiaryColor": "/Lotus/Types/Game/KubrowPet/Colors/KubrowPetColorVibrantD"
+    },
+    "Size": 1,
+    "Status": "STATUS_STASIS"
+  },
+  "Features": 1,
+  "ItemId": {
+    "$oid": "5bc1c2a03f8d4a828b23a387"
+  },
+  "ItemType": "/Lotus/Types/Game/KubrowPet/AdventurerKubrowPetPowerSuit",
+  "UpgradeVer": 101,
+  "XP": 1152188
+}

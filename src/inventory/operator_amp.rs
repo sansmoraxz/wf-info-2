@@ -33,3 +33,26 @@ pub struct OperatorAmp {
     #[serde(flatten)]
     pub other: Option<Value>,
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::from_str;
+
+    #[test]
+    fn test_deserialize_operatoramp() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/inventory/inventory_operator_amp_test.json"
+        ));
+
+        let item: OperatorAmp = from_str(json_data).unwrap();
+
+        assert_eq!(
+            item.item_type,
+            "/Lotus/Weapons/Sentients/OperatorAmplifiers/SentTrainingAmplifier/OperatorTrainingAmpWeapon"
+        );
+        assert_eq!(item.xp.unwrap(), 838159);
+    }
+}

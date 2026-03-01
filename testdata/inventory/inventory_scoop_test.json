@@ -1,0 +1,20 @@
+{
+  "Configs": [
+    {
+      "pricol": {
+        "en": -5410505,
+        "t0": -14274469,
+        "t1": -5665712,
+        "t2": -5410505,
+        "t3": -7368161
+      }
+    },
+    {},
+    {}
+  ],
+  "ItemId": {
+    "$oid": "5bc08473a38e4a12a663faa7"
+  },
+  "ItemType": "/Lotus/Weapons/Tenno/Speedball/SpeedballWeaponTest",
+  "UpgradeVer": 101
+}

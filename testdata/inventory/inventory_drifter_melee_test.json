@@ -1,0 +1,30 @@
+{
+  "Configs": [
+    {
+      "Skins": [
+        "",
+        "",
+        "696878675f1cc273480a9bb2"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/DualSwordHips"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/DualSwordHips"
+      ]
+    }
+  ],
+  "ItemId": {
+    "$oid": "64495da55c01c225730c2672"
+  },
+  "ItemType": "/Lotus/Types/Friendly/PlayerControllable/Weapons/DuviriDualSwords",
+  "UpgradeVer": 101
+}

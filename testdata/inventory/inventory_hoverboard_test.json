@@ -1,0 +1,46 @@
+{
+  "Configs": [
+    {
+      "Skins": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "60e886e111acca4c5b296999"
+      ],
+      "Upgrades": [
+        "",
+        "",
+        "",
+        "6942bdf74831a98bd7037af1",
+        "",
+        "",
+        "60e5c2c612c6c3236035a135",
+        "60e485d00709fd34c67f711e"
+      ]
+    },
+    {},
+    {}
+  ],
+  "ItemId": {
+    "$oid": "60e485b127d850114d41cb5a"
+  },
+  "ItemType": "/Lotus/Types/Vehicles/Hoverboard/HoverboardSuit",
+  "ModularParts": [
+    "/Lotus/Types/Vehicles/Hoverboard/HoverboardParts/PartComponents/HoverboardCorpusA/HoverboardCorpusAFront",
+    "/Lotus/Types/Vehicles/Hoverboard/HoverboardParts/PartComponents/HoverboardCorpusA/HoverboardCorpusAJet",
+    "/Lotus/Types/Vehicles/Hoverboard/HoverboardParts/PartComponents/HoverboardSolarisA/HoverboardSolarisADeck",
+    "/Lotus/Types/Vehicles/Hoverboard/HoverboardParts/PartComponents/HoverboardSolarisA/HoverboardSolarisAEngine"
+  ],
+  "UpgradeVer": 101,
+  "XP": 1365967
+}
