@@ -9,9 +9,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Introduced, Patchlog};
-use crate::itemdata::components::Component;
 use crate::itemdata::enums::{PetType, Polarity};
-use crate::itemdata::props::{CharacterStats, ItemDetailProps, ItemIdentityProps, TradableProps};
+use crate::itemdata::props::{
+    BuildableProps, CharacterStats, ItemDetailProps, ItemIdentityProps, TradableProps,
+};
 use crate::itemdata::traits::{Buildable, Droppable, Equippable, Item, WikiaLinked};
 
 pub type Root = Vec<PetEntry>;
@@ -76,14 +77,8 @@ pub struct PetComponent {
     pub trade: TradableProps,
     pub mastery_req: i64,
 
-    // Build fields (guaranteed for components)
-    pub build_price: i64,
-    pub build_quantity: i64,
-    pub build_time: i64,
-    #[serde(default)]
-    pub components: Vec<Component>,
-    pub consume_on_build: bool,
-    pub skip_build_time_price: i64,
+    #[serde(flatten)]
+    pub build: BuildableProps,
 
     // Weapon-like stats (guaranteed for components)
     pub critical_chance: i64,
@@ -220,31 +215,31 @@ impl Droppable for PetEntry {
 impl Buildable for PetEntry {
     fn build_price(&self) -> Option<i64> {
         match self {
-            PetEntry::Pistols(p) => Some(p.build_price),
+            PetEntry::Pistols(p) => p.build.build_price,
             _ => None,
         }
     }
     fn build_quantity(&self) -> Option<i64> {
         match self {
-            PetEntry::Pistols(p) => Some(p.build_quantity),
+            PetEntry::Pistols(p) => p.build.build_quantity,
             _ => None,
         }
     }
     fn build_time(&self) -> Option<i64> {
         match self {
-            PetEntry::Pistols(p) => Some(p.build_time),
+            PetEntry::Pistols(p) => p.build.build_time,
             _ => None,
         }
     }
     fn skip_build_time_price(&self) -> Option<i64> {
         match self {
-            PetEntry::Pistols(p) => Some(p.skip_build_time_price),
+            PetEntry::Pistols(p) => p.build.skip_build_time_price,
             _ => None,
         }
     }
     fn consume_on_build(&self) -> Option<bool> {
         match self {
-            PetEntry::Pistols(p) => Some(p.consume_on_build),
+            PetEntry::Pistols(p) => p.build.consume_on_build,
             _ => None,
         }
     }
@@ -261,9 +256,9 @@ impl Buildable for PetEntry {
     fn bp_cost(&self) -> Option<i64> {
         None
     }
-    fn components(&self) -> &[Component] {
+    fn components(&self) -> &[crate::itemdata::components::Component] {
         match self {
-            PetEntry::Pistols(p) => &p.components,
+            PetEntry::Pistols(p) => &p.build.components,
             _ => &[],
         }
     }
@@ -373,9 +368,9 @@ mod tests {
                 assert_eq!(p.identity.name, "Adlet Core");
                 assert_eq!(p.identity.category, "Pets");
                 assert!(!p.trade.tradable);
-                assert_eq!(p.build_price, 50000);
-                assert_eq!(p.build_quantity, 1);
-                assert_eq!(p.components.len(), 5);
+                assert_eq!(p.build.build_price, Some(50000));
+                assert_eq!(p.build.build_quantity, Some(1));
+                assert_eq!(p.build.components.len(), 5);
                 assert_eq!(p.total_damage, 0);
             }
             _ => panic!("Expected Pistols variant"),

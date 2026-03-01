@@ -30,7 +30,6 @@ pub struct Gear {
     pub item_count: Option<i64>,
     pub parents: Option<Vec<String>>,
 
-    // Droppable
     #[serde(default)]
     pub drops: Vec<Drop>,
     #[serde(default)]

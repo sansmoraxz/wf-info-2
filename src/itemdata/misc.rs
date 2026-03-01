@@ -5,10 +5,10 @@ use serde_json::Value;
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
-use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::{MiscType, Noise, Polarity, Rarity, Trigger};
+use crate::itemdata::enums::{MiscType, Polarity, Rarity};
 use crate::itemdata::props::{
-    BuildableProps, ItemDetailProps, ItemIdentityProps, TradableProps, WeaponTypeStats, WikiaProps,
+    BuildableProps, ComponentWeapon, ItemDetailProps, ItemIdentityProps, MeleeProps, PrimeProps,
+    TradableProps, WeaponTypeStats, WikiaProps,
 };
 use crate::itemdata::traits::{Buildable, Droppable, Item, WikiaLinked};
 
@@ -40,48 +40,11 @@ pub struct Misc {
     pub parents: Vec<String>,
     pub exclude_from_codex: Option<bool>,
 
-    // Weapon stats (for weapon-like misc items)
-    pub damage: Option<DamageBreakdown>,
-    #[serde(default)]
-    pub damage_per_shot: Vec<f64>,
-    pub total_damage: Option<f64>,
-    pub critical_chance: Option<f64>,
-    pub critical_multiplier: Option<f64>,
-    pub proc_chance: Option<f64>,
-    pub fire_rate: Option<f64>,
-    #[serde(default)]
-    pub attacks: Vec<Attack>,
+    #[serde(flatten)]
+    pub weapon: ComponentWeapon,
+    #[serde(flatten)]
+    pub melee: MeleeProps,
 
-    // Gun-specific
-    pub accuracy: Option<f64>,
-    pub magazine_size: Option<i64>,
-    pub reload_time: Option<f64>,
-    pub multishot: Option<i64>,
-    #[serde(default)]
-    pub trigger: Option<Trigger>,
-    #[serde(default)]
-    pub noise: Option<Noise>,
-
-    // Melee-specific
-    pub blocking_angle: Option<i64>,
-    pub combo_duration: Option<i64>,
-    pub follow_through: Option<f64>,
-    pub range: Option<f64>,
-    pub slam_attack: Option<i64>,
-    pub slam_radial_damage: Option<i64>,
-    pub slam_radius: Option<i64>,
-    pub slide_attack: Option<i64>,
-    pub heavy_attack_damage: Option<i64>,
-    pub heavy_slam_attack: Option<i64>,
-    pub heavy_slam_radial_damage: Option<i64>,
-    pub heavy_slam_radius: Option<i64>,
-    #[serde(default)]
-    pub stance_polarity: Option<Polarity>,
-    pub wind_up: Option<f64>,
-
-    // Disposition
-    pub disposition: Option<i64>,
-    pub omega_attenuation: Option<f64>,
     pub prime_omega_attenuation: Option<f64>,
 
     // Equippable
@@ -90,7 +53,8 @@ pub struct Misc {
     pub polarities: Vec<Polarity>,
 
     // Prime/vault
-    pub vaulted: Option<bool>,
+    #[serde(flatten)]
+    pub prime: PrimeProps,
 
     pub product_category: Option<String>,
 
@@ -110,7 +74,6 @@ pub struct Misc {
     #[serde(default)]
     pub specialities: Vec<Value>, // NOTE: observed to be empty array or null
 
-    // Droppable
     #[serde(default)]
     pub drops: Vec<Drop>,
     #[serde(default)]
@@ -134,29 +97,30 @@ impl Misc {
     /// `WeaponTypeStats::Melee` for melee-like misc items,
     /// or `WeaponTypeStats::None` for non-weapon items.
     pub fn weapon_type_stats(&self) -> WeaponTypeStats {
+        let w = self.weapon.as_armed();
         WeaponTypeStats::detect(
-            self.accuracy,
-            self.magazine_size,
-            self.reload_time,
-            self.multishot,
-            self.noise.clone(),
-            self.trigger.clone(),
+            w.and_then(|d| d.accuracy),
+            w.and_then(|d| d.magazine_size),
+            w.and_then(|d| d.reload_time),
+            w.and_then(|d| d.multishot),
+            w.and_then(|d| d.noise.clone()),
+            w.and_then(|d| d.trigger.clone()),
             None, // projectile
             None, // flight
-            self.blocking_angle,
-            self.combo_duration,
-            self.follow_through,
-            self.range,
-            self.stance_polarity.clone(),
-            self.slam_attack,
-            self.slam_radial_damage,
-            self.slam_radius,
-            self.slide_attack,
-            self.heavy_attack_damage,
-            self.heavy_slam_attack,
-            self.heavy_slam_radial_damage,
-            self.heavy_slam_radius,
-            self.wind_up,
+            self.melee.blocking_angle,
+            self.melee.combo_duration,
+            self.melee.follow_through,
+            self.melee.range,
+            self.melee.stance_polarity.clone(),
+            self.melee.slam_attack,
+            self.melee.slam_radial_damage,
+            self.melee.slam_radius,
+            self.melee.slide_attack,
+            self.melee.heavy_attack_damage,
+            self.melee.heavy_slam_attack,
+            self.melee.heavy_slam_radial_damage,
+            self.melee.heavy_slam_radius,
+            self.melee.wind_up,
         )
     }
 

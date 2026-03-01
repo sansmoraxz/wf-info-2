@@ -30,7 +30,6 @@ pub struct Relic {
     pub rewards: Vec<Value>, // observed to be empty array
     pub exclude_from_codex: Option<bool>,
 
-    // Droppable
     #[serde(default)]
     pub drops: Vec<Drop>,
     #[serde(default)]

@@ -7,8 +7,8 @@ use crate::itemdata::common::Patchlog;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{ArchMeleeProductCategory, ArchMeleeType, Polarity, Slot};
 use crate::itemdata::props::{
-    BuildableProps, EquippableProps, ItemDetailProps, ItemIdentityProps, PrimeProps, TradableProps,
-    WeaponProps, WikiaProps,
+    BuildableProps, EquippableProps, ItemDetailProps, ItemIdentityProps, MeleeProps, PrimeProps,
+    TradableProps, WeaponProps, WikiaProps,
 };
 use crate::itemdata::traits::{
     Buildable, Equippable, Item, MeleeWeapon, Prime, Weapon, WikiaLinked,
@@ -31,20 +31,9 @@ pub struct ArchMelee {
     // Weapon stats
     #[serde(flatten)]
     pub weapon: WeaponProps,
+    #[serde(flatten)]
+    pub melee: MeleeProps,
 
-    // Melee-specific (always present 8/8; non-Optional for ArchMelee)
-    pub blocking_angle: i64,
-    pub combo_duration: i64,
-    pub follow_through: f64,
-    pub range: f64,
-    pub slam_attack: i64,
-    pub slam_radial_damage: i64,
-    pub slam_radius: i64,
-    pub slide_attack: i64,
-    pub heavy_attack_damage: i64,
-    pub heavy_slam_attack: i64,
-
-    // Equippable
     #[serde(flatten)]
     pub equip: EquippableProps,
 
@@ -53,7 +42,6 @@ pub struct ArchMelee {
     #[serde(default)]
     pub patchlogs: Vec<Patchlog>,
 
-    // Grouped props
     #[serde(flatten)]
     pub build: BuildableProps,
     #[serde(flatten)]
@@ -193,25 +181,25 @@ impl Weapon for ArchMelee {
 
 impl MeleeWeapon for ArchMelee {
     fn blocking_angle(&self) -> Option<i64> {
-        Some(self.blocking_angle)
+        self.melee.blocking_angle
     }
     fn combo_duration(&self) -> Option<i64> {
-        Some(self.combo_duration)
+        self.melee.combo_duration
     }
     fn follow_through(&self) -> Option<f64> {
-        Some(self.follow_through)
+        self.melee.follow_through
     }
     fn range(&self) -> Option<f64> {
-        Some(self.range)
+        self.melee.range
     }
     fn stance_polarity(&self) -> Option<&str> {
-        None
+        self.melee.stance_polarity.as_ref().map(|p| p.as_str())
     }
     fn slam_attack(&self) -> Option<i64> {
-        Some(self.slam_attack)
+        self.melee.slam_attack
     }
     fn heavy_attack_damage(&self) -> Option<i64> {
-        Some(self.heavy_attack_damage)
+        self.melee.heavy_attack_damage
     }
 }
 
@@ -253,7 +241,7 @@ mod tests {
         assert_eq!(rec.weapon.damage_per_shot.len(), 20);
 
         // Melee stats
-        assert_eq!(rec.blocking_angle, 90);
+        assert_eq!(rec.melee.blocking_angle, Some(90));
 
         // Buildable
         assert_eq!(rec.build.build_price, Some(25000));
@@ -271,7 +259,7 @@ mod tests {
         assert_eq!(rec.identity.name, "Centaur");
         assert!((rec.weapon.total_damage - 376.0).abs() < 1.0);
         assert!((rec.weapon.critical_chance - 0.25).abs() < 0.01);
-        assert_eq!(rec.blocking_angle, 90);
+        assert_eq!(rec.melee.blocking_angle, Some(90));
     }
 
     #[test]
@@ -285,6 +273,6 @@ mod tests {
         assert_eq!(rec.identity.name, "Agkuza");
         assert!((rec.weapon.total_damage - 436.0).abs() < 1.0);
         assert!((rec.weapon.critical_chance - 0.05).abs() < 0.01);
-        assert_eq!(rec.blocking_angle, 90);
+        assert_eq!(rec.melee.blocking_angle, Some(90));
     }
 }

@@ -70,7 +70,6 @@ pub struct WarframeData {
     #[serde(default)]
     pub exalted: Vec<String>,
 
-    // Droppable
     #[serde(default)]
     pub drops: Vec<Drop>,
     #[serde(default)]
@@ -103,14 +102,8 @@ pub struct NecramechData {
     #[serde(default)]
     pub abilities: Vec<Ability>,
 
-    // Buildable (guaranteed for MechSuits — non-optional)
-    pub build_price: i64,
-    pub build_quantity: i64,
-    pub build_time: i64,
-    pub skip_build_time_price: i64,
-    pub consume_on_build: bool,
-    #[serde(default)]
-    pub components: Vec<Component>,
+    #[serde(flatten)]
+    pub build: BuildableProps,
 
     #[serde(default)]
     pub exalted: Vec<String>,
@@ -234,35 +227,35 @@ impl Buildable for WarframeEntry {
     fn build_price(&self) -> Option<i64> {
         match self {
             WarframeEntry::Suits(w) => w.build.build_price,
-            WarframeEntry::MechSuits(w) => Some(w.build_price),
+            WarframeEntry::MechSuits(w) => w.build.build_price,
             WarframeEntry::Helminth(_) => None,
         }
     }
     fn build_quantity(&self) -> Option<i64> {
         match self {
             WarframeEntry::Suits(w) => w.build.build_quantity,
-            WarframeEntry::MechSuits(w) => Some(w.build_quantity),
+            WarframeEntry::MechSuits(w) => w.build.build_quantity,
             WarframeEntry::Helminth(_) => None,
         }
     }
     fn build_time(&self) -> Option<i64> {
         match self {
             WarframeEntry::Suits(w) => w.build.build_time,
-            WarframeEntry::MechSuits(w) => Some(w.build_time),
+            WarframeEntry::MechSuits(w) => w.build.build_time,
             WarframeEntry::Helminth(_) => None,
         }
     }
     fn skip_build_time_price(&self) -> Option<i64> {
         match self {
             WarframeEntry::Suits(w) => w.build.skip_build_time_price,
-            WarframeEntry::MechSuits(w) => Some(w.skip_build_time_price),
+            WarframeEntry::MechSuits(w) => w.build.skip_build_time_price,
             WarframeEntry::Helminth(_) => None,
         }
     }
     fn consume_on_build(&self) -> Option<bool> {
         match self {
             WarframeEntry::Suits(w) => w.build.consume_on_build,
-            WarframeEntry::MechSuits(w) => Some(w.consume_on_build),
+            WarframeEntry::MechSuits(w) => w.build.consume_on_build,
             WarframeEntry::Helminth(_) => None,
         }
     }
@@ -288,7 +281,7 @@ impl Buildable for WarframeEntry {
     fn components(&self) -> &[Component] {
         match self {
             WarframeEntry::Suits(w) => &w.build.components,
-            WarframeEntry::MechSuits(w) => &w.components,
+            WarframeEntry::MechSuits(w) => &w.build.components,
             WarframeEntry::Helminth(_) => &[],
         }
     }
@@ -513,8 +506,8 @@ mod tests {
                 assert_eq!(w.stats.armor, 480);
                 assert_eq!(w.stats.power, 175);
                 assert_eq!(w.abilities.len(), 4);
-                assert_eq!(w.build_price, 25000);
-                assert_eq!(w.components.len(), 5);
+                assert_eq!(w.build.build_price, Some(25000));
+                assert_eq!(w.build.components.len(), 5);
             }
             _ => panic!("Expected MechSuits variant"),
         }
