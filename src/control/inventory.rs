@@ -33,6 +33,7 @@ pub(crate) struct LoadInventoryParams {
     pub raw: Option<String>,
     pub save: Option<bool>,
     pub source: Option<String>,
+    pub encrypted: Option<bool>,
 }
 
 pub(crate) async fn handle_inventory_load(params: Option<Value>) -> Result<Value> {
@@ -45,11 +46,19 @@ pub(crate) async fn handle_inventory_load(params: Option<Value>) -> Result<Value
         ));
     }
 
+    let encrypted = params.encrypted.unwrap_or(false);
     let inventory = if let Some(path) = params.path {
-        let raw = tokio::fs::read_to_string(&path)
-            .await
-            .with_context(|| format!("Failed to read inventory file {}", path))?;
-        serde_json::from_str(&raw).context("Failed to parse inventory JSON")?
+        if encrypted {
+            let data = tokio::fs::read(&path)
+                .await
+                .with_context(|| format!("Failed to read inventory file {}", path))?;
+            storage::decrypt_inventory_bytes(&data)?
+        } else {
+            let raw = tokio::fs::read_to_string(&path)
+                .await
+                .with_context(|| format!("Failed to read inventory file {}", path))?;
+            serde_json::from_str(&raw).context("Failed to parse inventory JSON")?
+        }
     } else if let Some(raw) = params.raw {
         serde_json::from_str(&raw).context("Failed to parse inventory JSON")?
     } else if let Some(json) = params.json {
@@ -92,6 +101,7 @@ pub(crate) struct FilterParams {
     pub offset: Option<usize>,
     pub include_details: Option<bool>,
     pub path: Option<String>,
+    pub encrypted: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Clone, Copy)]
@@ -114,14 +124,20 @@ pub(crate) struct CountFilter {
 pub(crate) async fn handle_inventory_filter(params: Option<Value>) -> Result<Value> {
     let params: FilterParams = parse_params(params)?;
 
+    let encrypted = params.encrypted.unwrap_or(false);
     let (inventory, used_custom_path) = if let Some(path) = params.path.clone() {
-        let raw = tokio::fs::read_to_string(&path)
-            .await
-            .with_context(|| format!("Failed to read inventory file {}", path))?;
-        (
-            serde_json::from_str(&raw).context("Failed to parse inventory JSON")?,
-            true,
-        )
+        let inv = if encrypted {
+            let data = tokio::fs::read(&path)
+                .await
+                .with_context(|| format!("Failed to read inventory file {}", path))?;
+            storage::decrypt_inventory_bytes(&data)?
+        } else {
+            let raw = tokio::fs::read_to_string(&path)
+                .await
+                .with_context(|| format!("Failed to read inventory file {}", path))?;
+            serde_json::from_str(&raw).context("Failed to parse inventory JSON")?
+        };
+        (inv, true)
     } else {
         (storage::read_inventory()?, false)
     };
