@@ -3,9 +3,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
-use crate::itemdata::common::{Ability, Introduced, Patchlog};
+use crate::itemdata::common::{Ability, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::enums::{ArchwingProductCategory, Polarity, Slot};
+use crate::itemdata::props::{CharacterStats, PrimeProps, WikiaProps};
 use crate::itemdata::traits::{
     Buildable, Character, Equippable, HasAbilities, Item, Prime, WikiaLinked,
 };
@@ -28,15 +29,6 @@ pub struct Archwing {
     pub tradable: bool,
     pub masterable: bool,
 
-    // Character stats
-    pub health: i64,
-    pub shield: i64,
-    pub armor: i64,
-    pub power: i64,
-    pub stamina: i64,
-    pub sprint: Option<f64>,
-    pub sprint_speed: f64,
-
     // Archwing-specific
     #[serde(default)]
     pub abilities: Vec<Ability>,
@@ -56,24 +48,19 @@ pub struct Archwing {
     // Equippable
     pub polarities: Option<Vec<Polarity>>,
 
-    // Prime/vault
-    #[serde(default)]
-    pub is_prime: bool,
-    pub vaulted: Option<bool>,
-    pub vault_date: Option<String>,
-    pub estimated_vault_date: Option<String>,
-
-    // Wikia
-    pub wiki_available: Option<bool>,
-    pub wikia_url: Option<String>,
-    pub wikia_thumbnail: Option<String>,
-    pub introduced: Option<Introduced>,
-    pub release_date: Option<String>,
     pub product_category: ArchwingProductCategory,
 
     // Droppable
     #[serde(default)]
     pub patchlogs: Vec<Patchlog>,
+
+    // Grouped props
+    #[serde(flatten)]
+    pub stats: CharacterStats,
+    #[serde(flatten)]
+    pub prime: PrimeProps,
+    #[serde(flatten)]
+    pub wikia: WikiaProps,
 }
 
 impl ProductCategory for Archwing {
@@ -141,55 +128,55 @@ impl Buildable for Archwing {
 
 impl Prime for Archwing {
     fn is_prime(&self) -> bool {
-        self.is_prime
+        self.prime.is_prime
     }
     fn vaulted(&self) -> Option<bool> {
-        self.vaulted
+        self.prime.vaulted
     }
     fn vault_date(&self) -> Option<&str> {
-        self.vault_date.as_deref()
+        self.prime.vault_date.as_deref()
     }
     fn estimated_vault_date(&self) -> Option<&str> {
-        self.estimated_vault_date.as_deref()
+        self.prime.estimated_vault_date.as_deref()
     }
 }
 
 impl WikiaLinked for Archwing {
     fn wiki_available(&self) -> Option<bool> {
-        self.wiki_available
+        self.wikia.wiki_available
     }
     fn wikia_url(&self) -> Option<&str> {
-        self.wikia_url.as_deref()
+        self.wikia.wikia_url.as_deref()
     }
     fn wikia_thumbnail(&self) -> Option<&str> {
-        self.wikia_thumbnail.as_deref()
+        self.wikia.wikia_thumbnail.as_deref()
     }
-    fn introduced(&self) -> Option<&Introduced> {
-        self.introduced.as_ref()
+    fn introduced(&self) -> Option<&crate::itemdata::common::Introduced> {
+        self.wikia.introduced.as_ref()
     }
     fn release_date(&self) -> Option<&str> {
-        self.release_date.as_deref()
+        self.wikia.release_date.as_deref()
     }
 }
 
 impl Character for Archwing {
     fn health(&self) -> i64 {
-        self.health
+        self.stats.health
     }
     fn shield(&self) -> i64 {
-        self.shield
+        self.stats.shield
     }
     fn armor(&self) -> i64 {
-        self.armor
+        self.stats.armor
     }
     fn power(&self) -> i64 {
-        self.power
+        self.stats.power
     }
     fn stamina(&self) -> i64 {
-        self.stamina
+        self.stats.stamina
     }
     fn sprint_speed(&self) -> Option<f64> {
-        Some(self.sprint_speed)
+        self.stats.sprint_speed
     }
 }
 

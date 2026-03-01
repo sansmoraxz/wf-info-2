@@ -1,7 +1,4 @@
 //! Common types shared across all item categories.
-//!
-//! These types were previously duplicated in every itemdata module.
-//! Now they are consolidated here as the single source of truth.
 
 use serde::{Deserialize, Deserializer, Serialize};
 

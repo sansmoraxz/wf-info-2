@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::Patchlog;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::{ArchGunProductCategory, Noise, Polarity, Slot, Trigger};
-use crate::itemdata::props::{BuildableProps, PrimeProps, WikiaProps};
+use crate::itemdata::enums::{ArchGunProductCategory, Polarity, Slot};
+use crate::itemdata::props::{BuildableProps, EquippableProps, GunProps, PrimeProps, WeaponProps, WikiaProps};
 use crate::itemdata::traits::{
     Buildable, Equippable, Item, Prime, RangedWeapon, Weapon, WikiaLinked,
 };
@@ -30,33 +30,16 @@ pub struct ArchGun {
     pub masterable: bool,
 
     // Weapon stats
-    pub accuracy: f64,
-    pub critical_chance: f64,
-    pub critical_multiplier: f64,
-    pub damage: DamageBreakdown,
-    #[serde(default)]
-    pub damage_per_shot: Vec<f64>,
-    pub disposition: Option<i64>,
-    pub fire_rate: f64,
-    pub multishot: i64,
-    #[serde(default)]
-    pub noise: Noise,
-    pub omega_attenuation: f64,
-    pub proc_chance: f64,
-    pub total_damage: f64,
-    #[serde(default)]
-    pub trigger: Trigger,
-    #[serde(default)]
-    pub attacks: Vec<Attack>,
+    #[serde(flatten)]
+    pub weapon: WeaponProps,
 
     // Gun-specific
-    pub magazine_size: i64,
-    pub reload_time: f64,
+    #[serde(flatten)]
+    pub gun: GunProps,
 
     // Equippable
-    #[serde(default)]
-    pub polarities: Vec<Polarity>,
-    pub slot: Slot,
+    #[serde(flatten)]
+    pub equip: EquippableProps,
 
     pub product_category: ArchGunProductCategory,
     pub max_level_cap: Option<i64>,
@@ -172,64 +155,64 @@ impl WikiaLinked for ArchGun {
 
 impl Weapon for ArchGun {
     fn critical_chance(&self) -> f64 {
-        self.critical_chance
+        self.weapon.critical_chance
     }
     fn critical_multiplier(&self) -> f64 {
-        self.critical_multiplier
+        self.weapon.critical_multiplier
     }
     fn damage(&self) -> Option<&DamageBreakdown> {
-        Some(&self.damage)
+        self.weapon.damage.as_ref()
     }
     fn damage_per_shot(&self) -> &[f64] {
-        &self.damage_per_shot
+        &self.weapon.damage_per_shot
     }
     fn total_damage(&self) -> f64 {
-        self.total_damage
+        self.weapon.total_damage
     }
     fn proc_chance(&self) -> f64 {
-        self.proc_chance
+        self.weapon.proc_chance
     }
     fn fire_rate(&self) -> f64 {
-        self.fire_rate
+        self.weapon.fire_rate
     }
     fn disposition(&self) -> Option<i64> {
-        self.disposition
+        self.weapon.disposition
     }
     fn omega_attenuation(&self) -> f64 {
-        self.omega_attenuation
+        self.weapon.omega_attenuation
     }
     fn attacks(&self) -> &[Attack] {
-        &self.attacks
+        &self.weapon.attacks
     }
 }
 
 impl RangedWeapon for ArchGun {
     fn accuracy(&self) -> f64 {
-        self.accuracy
+        self.gun.accuracy
     }
     fn multishot(&self) -> i64 {
-        self.multishot
+        self.gun.multishot
     }
     fn noise(&self) -> &str {
-        self.noise.as_str()
+        self.gun.noise.as_str()
     }
     fn trigger(&self) -> &str {
-        self.trigger.as_str()
+        self.gun.trigger.as_str()
     }
     fn magazine_size(&self) -> Option<i64> {
-        Some(self.magazine_size)
+        self.gun.magazine_size
     }
     fn reload_time(&self) -> f64 {
-        self.reload_time
+        self.gun.reload_time
     }
 }
 
 impl Equippable for ArchGun {
     fn polarities(&self) -> &[Polarity] {
-        &self.polarities
+        &self.equip.polarities
     }
     fn slot(&self) -> Option<&Slot> {
-        Some(&self.slot)
+        self.equip.slot.as_ref()
     }
 }
 

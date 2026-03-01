@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::common::{Introduced, deserialize_option_number_to_f64};
 use crate::itemdata::components::Component;
-use crate::itemdata::damage::DamageBreakdown;
+use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{Noise, Polarity, Slot, Trigger};
 
 /// Properties for buildable/craftable items.
@@ -60,56 +60,36 @@ pub struct EquippableProps {
     pub slot: Option<Slot>,
 }
 
-/// Base weapon attack properties.
+/// Base weapon stats shared by all weapon types (matches `Weapon` trait).
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WeaponProps {
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub accuracy: Option<f64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub critical_chance: Option<f64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub critical_multiplier: Option<f64>,
-
+    pub critical_chance: f64,
+    pub critical_multiplier: f64,
     pub damage: Option<DamageBreakdown>,
-
     #[serde(default)]
     pub damage_per_shot: Vec<f64>,
-
     pub disposition: Option<i64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub fire_rate: Option<f64>,
-
-    pub multishot: Option<i64>,
-
+    pub fire_rate: f64,
+    pub omega_attenuation: f64,
+    pub proc_chance: f64,
+    pub total_damage: f64,
     #[serde(default)]
-    pub noise: Option<Noise>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub omega_attenuation: Option<f64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub proc_chance: Option<f64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub total_damage: Option<f64>,
-
-    #[serde(default)]
-    pub trigger: Option<Trigger>,
+    pub attacks: Vec<Attack>,
 }
 
-/// Properties specific to ranged weapons (guns).
+/// Properties specific to ranged weapons.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GunProps {
+    pub accuracy: f64,
+    pub multishot: i64,
+    #[serde(default)]
+    pub noise: Noise,
+    #[serde(default)]
+    pub trigger: Trigger,
     pub magazine_size: Option<i64>,
-
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
-    pub reload_time: Option<f64>,
-
+    pub reload_time: f64,
     pub projectile: Option<String>,
     pub flight: Option<i64>,
 }
@@ -345,16 +325,19 @@ mod tests {
     #[test]
     fn test_weapon_props() {
         let json = r#"{
-            "accuracy": 28.6,
             "criticalChance": 0.2,
             "criticalMultiplier": 2.0,
             "fireRate": 8.0,
-            "procChance": 0.14
+            "omegaAttenuation": 1.0,
+            "procChance": 0.14,
+            "totalDamage": 100.0
         }"#;
 
         let props: WeaponProps = serde_json::from_str(json).unwrap();
-        assert!((props.accuracy.unwrap() - 28.6).abs() < f64::EPSILON);
-        assert!((props.critical_chance.unwrap() - 0.2).abs() < f64::EPSILON);
+        assert!((props.critical_chance - 0.2).abs() < f64::EPSILON);
+        assert!((props.fire_rate - 8.0).abs() < f64::EPSILON);
+        assert!(props.damage.is_none());
+        assert!(props.disposition.is_none());
     }
 
     #[test]

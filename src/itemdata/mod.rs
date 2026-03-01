@@ -1,4 +1,5 @@
-// Shared types - import from these modules instead of defining locally
+//! Shared types - import from these modules instead of defining locally
+
 pub mod common;
 pub mod components;
 pub mod damage;

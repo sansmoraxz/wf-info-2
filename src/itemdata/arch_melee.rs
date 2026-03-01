@@ -6,7 +6,7 @@ use crate::itemdata::ProductCategory;
 use crate::itemdata::common::Patchlog;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{ArchMeleeProductCategory, Polarity, Slot};
-use crate::itemdata::props::{BuildableProps, PrimeProps, WikiaProps};
+use crate::itemdata::props::{BuildableProps, EquippableProps, PrimeProps, WeaponProps, WikiaProps};
 use crate::itemdata::traits::{
     Buildable, Equippable, Item, MeleeWeapon, Prime, Weapon, WikiaLinked,
 };
@@ -30,16 +30,8 @@ pub struct ArchMelee {
     pub masterable: bool,
 
     // Weapon stats
-    pub damage: DamageBreakdown,
-    #[serde(default)]
-    pub damage_per_shot: Vec<f64>,
-    pub total_damage: f64,
-    pub critical_chance: f64,
-    pub critical_multiplier: f64,
-    pub proc_chance: f64,
-    pub fire_rate: f64,
-    #[serde(default)]
-    pub attacks: Vec<Attack>,
+    #[serde(flatten)]
+    pub weapon: WeaponProps,
 
     // Melee-specific (always present 8/8; non-Optional for ArchMelee)
     pub blocking_angle: i64,
@@ -53,14 +45,9 @@ pub struct ArchMelee {
     pub heavy_attack_damage: i64,
     pub heavy_slam_attack: i64,
 
-    // Disposition
-    pub disposition: i64,
-    pub omega_attenuation: f64,
-
     // Equippable
-    pub slot: Slot,
-    #[serde(default)]
-    pub polarities: Vec<Polarity>,
+    #[serde(flatten)]
+    pub equip: EquippableProps,
 
     pub product_category: ArchMeleeProductCategory,
 
@@ -175,34 +162,34 @@ impl WikiaLinked for ArchMelee {
 
 impl Weapon for ArchMelee {
     fn critical_chance(&self) -> f64 {
-        self.critical_chance
+        self.weapon.critical_chance
     }
     fn critical_multiplier(&self) -> f64 {
-        self.critical_multiplier
+        self.weapon.critical_multiplier
     }
     fn damage(&self) -> Option<&DamageBreakdown> {
-        Some(&self.damage)
+        self.weapon.damage.as_ref()
     }
     fn damage_per_shot(&self) -> &[f64] {
-        &self.damage_per_shot
+        &self.weapon.damage_per_shot
     }
     fn total_damage(&self) -> f64 {
-        self.total_damage
+        self.weapon.total_damage
     }
     fn proc_chance(&self) -> f64 {
-        self.proc_chance
+        self.weapon.proc_chance
     }
     fn fire_rate(&self) -> f64 {
-        self.fire_rate
+        self.weapon.fire_rate
     }
     fn disposition(&self) -> Option<i64> {
-        Some(self.disposition)
+        self.weapon.disposition
     }
     fn omega_attenuation(&self) -> f64 {
-        self.omega_attenuation
+        self.weapon.omega_attenuation
     }
     fn attacks(&self) -> &[Attack] {
-        &self.attacks
+        &self.weapon.attacks
     }
 }
 
@@ -232,10 +219,10 @@ impl MeleeWeapon for ArchMelee {
 
 impl Equippable for ArchMelee {
     fn polarities(&self) -> &[Polarity] {
-        &self.polarities
+        &self.equip.polarities
     }
     fn slot(&self) -> Option<&Slot> {
-        Some(&self.slot)
+        self.equip.slot.as_ref()
     }
 }
 

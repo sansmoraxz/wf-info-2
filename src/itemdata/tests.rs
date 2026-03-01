@@ -239,7 +239,7 @@ fn test_map_warframe_inventory() {
 
     let arr: itemdata::warframe::Root = serde_json::from_str(&raw).unwrap();
 
-    let info_idx: HashMap<String, itemdata::warframe::Warframe> = arr
+    let info_idx: HashMap<String, itemdata::warframe::WarframeEntry> = arr
         .into_iter()
         .map(|item| {
             let key = item.unique_name().to_string();
@@ -257,13 +257,13 @@ fn test_map_warframe_inventory() {
     #[allow(dead_code)]
     #[derive(Debug)]
     struct Data {
-        info: itemdata::warframe::Warframe,
+        info: itemdata::warframe::WarframeEntry,
         inventory: Option<inventory::suit::Suit>,
     }
 
     let data: Vec<Data> = info_idx
         .iter()
-        .map(|(key, info): (&String, &itemdata::warframe::Warframe)| {
+        .map(|(key, info): (&String, &itemdata::warframe::WarframeEntry)| {
             let inv_data = inv_index.get(key).cloned();
             Data {
                 info: info.clone(),
