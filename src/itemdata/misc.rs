@@ -7,7 +7,9 @@ use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{Noise, Polarity, Rarity, Trigger};
-use crate::itemdata::props::{BuildableProps, WeaponTypeStats, WikiaProps};
+use crate::itemdata::props::{
+    BuildableProps, ItemDetailProps, ItemIdentityProps, TradableProps, WeaponTypeStats, WikiaProps,
+};
 use crate::itemdata::traits::{Buildable, Droppable, Item, WikiaLinked};
 
 pub type Root = Vec<Misc>;
@@ -15,18 +17,14 @@ pub type Root = Vec<Misc>;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Misc {
-    // Core identity
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub image_name: Option<String>,
-    pub description: Option<String>,
-
-    // Tradable
-    pub tradable: bool,
-    pub masterable: bool,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
 
     // Misc-specific
     pub show_in_inventory: Option<bool>,
@@ -180,25 +178,25 @@ impl Misc {
 
 impl Item for Misc {
     fn unique_name(&self) -> &str {
-        &self.unique_name
+        &self.identity.unique_name
     }
     fn name(&self) -> &str {
-        &self.name
+        &self.identity.name
     }
     fn category(&self) -> &str {
-        &self.category
+        &self.identity.category
     }
     fn type_field(&self) -> &str {
         &self.type_field
     }
     fn image_name(&self) -> Option<&str> {
-        self.image_name.as_deref()
+        self.detail.image_name.as_deref()
     }
     fn tradable(&self) -> bool {
-        self.tradable
+        self.trade.tradable
     }
     fn masterable(&self) -> bool {
-        self.masterable
+        self.trade.masterable
     }
     fn patchlogs(&self) -> &[Patchlog] {
         &self.patchlogs
@@ -274,7 +272,7 @@ mod tests {
         let rec: Misc = from_str(json_data).unwrap();
 
         assert_eq!(
-            rec.unique_name,
+            rec.identity.unique_name,
             "/Lotus/Types/Gameplay/NarmerSorties/ArchonCrystalBorealMythic"
         );
     }

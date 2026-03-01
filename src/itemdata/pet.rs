@@ -11,7 +11,7 @@ use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::enums::Polarity;
-use crate::itemdata::props::CharacterStats;
+use crate::itemdata::props::{CharacterStats, ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::itemdata::traits::{Buildable, Droppable, Equippable, Item, WikiaLinked};
 
 pub type Root = Vec<PetEntry>;
@@ -32,15 +32,14 @@ pub enum PetEntry {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KubrowPet {
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub image_name: String,
-    pub description: String,
-    pub tradable: bool,
-    pub masterable: bool,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
     pub mastery_req: i64,
 
     #[serde(default)]
@@ -67,15 +66,14 @@ pub struct KubrowPet {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PetComponent {
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub image_name: String,
-    pub description: String,
-    pub tradable: bool,
-    pub masterable: bool,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
     pub mastery_req: i64,
 
     // Build fields (guaranteed for components)
@@ -106,15 +104,14 @@ pub struct PetComponent {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WarframeCompanion {
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub image_name: String,
-    pub description: String,
-    pub tradable: bool,
-    pub masterable: bool,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
     pub mastery_req: i64,
 
     #[serde(default)]
@@ -154,23 +151,23 @@ impl ProductCategory for PetEntry {
 impl Item for PetEntry {
     fn unique_name(&self) -> &str {
         match self {
-            PetEntry::KubrowPets(p) => &p.unique_name,
-            PetEntry::Pistols(p) => &p.unique_name,
-            PetEntry::SpecialItems(p) => &p.unique_name,
+            PetEntry::KubrowPets(p) => &p.identity.unique_name,
+            PetEntry::Pistols(p) => &p.identity.unique_name,
+            PetEntry::SpecialItems(p) => &p.identity.unique_name,
         }
     }
     fn name(&self) -> &str {
         match self {
-            PetEntry::KubrowPets(p) => &p.name,
-            PetEntry::Pistols(p) => &p.name,
-            PetEntry::SpecialItems(p) => &p.name,
+            PetEntry::KubrowPets(p) => &p.identity.name,
+            PetEntry::Pistols(p) => &p.identity.name,
+            PetEntry::SpecialItems(p) => &p.identity.name,
         }
     }
     fn category(&self) -> &str {
         match self {
-            PetEntry::KubrowPets(p) => &p.category,
-            PetEntry::Pistols(p) => &p.category,
-            PetEntry::SpecialItems(p) => &p.category,
+            PetEntry::KubrowPets(p) => &p.identity.category,
+            PetEntry::Pistols(p) => &p.identity.category,
+            PetEntry::SpecialItems(p) => &p.identity.category,
         }
     }
     fn type_field(&self) -> &str {
@@ -182,23 +179,23 @@ impl Item for PetEntry {
     }
     fn image_name(&self) -> Option<&str> {
         match self {
-            PetEntry::KubrowPets(p) => Some(&p.image_name),
-            PetEntry::Pistols(p) => Some(&p.image_name),
-            PetEntry::SpecialItems(p) => Some(&p.image_name),
+            PetEntry::KubrowPets(p) => p.detail.image_name.as_deref(),
+            PetEntry::Pistols(p) => p.detail.image_name.as_deref(),
+            PetEntry::SpecialItems(p) => p.detail.image_name.as_deref(),
         }
     }
     fn tradable(&self) -> bool {
         match self {
-            PetEntry::KubrowPets(p) => p.tradable,
-            PetEntry::Pistols(p) => p.tradable,
-            PetEntry::SpecialItems(p) => p.tradable,
+            PetEntry::KubrowPets(p) => p.trade.tradable,
+            PetEntry::Pistols(p) => p.trade.tradable,
+            PetEntry::SpecialItems(p) => p.trade.tradable,
         }
     }
     fn masterable(&self) -> bool {
         match self {
-            PetEntry::KubrowPets(p) => p.masterable,
-            PetEntry::Pistols(p) => p.masterable,
-            PetEntry::SpecialItems(p) => p.masterable,
+            PetEntry::KubrowPets(p) => p.trade.masterable,
+            PetEntry::Pistols(p) => p.trade.masterable,
+            PetEntry::SpecialItems(p) => p.trade.masterable,
         }
     }
     fn patchlogs(&self) -> &[Patchlog] {
@@ -340,7 +337,7 @@ mod tests {
         match &rec {
             PetEntry::KubrowPets(p) => {
                 assert_eq!(
-                    p.unique_name,
+                    p.identity.unique_name,
                     "/Lotus/Types/Game/CatbrowPet/MirrorCatbrowPetPowerSuit"
                 );
                 assert_eq!(p.stats.health, 310);

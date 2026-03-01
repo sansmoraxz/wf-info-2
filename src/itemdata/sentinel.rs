@@ -6,7 +6,8 @@ use crate::itemdata::ProductCategory;
 use crate::itemdata::common::Patchlog;
 use crate::itemdata::enums::{Polarity, SentinelProductCategory, Slot};
 use crate::itemdata::props::{
-    BuildableProps, CharacterStats, EquippableProps, PrimeProps, WikiaProps,
+    BuildableProps, CharacterStats, EquippableProps, ItemDetailProps, ItemIdentityProps,
+    PrimeProps, TradableProps, WikiaProps,
 };
 use crate::itemdata::traits::{Buildable, Character, Equippable, Item, Prime, WikiaLinked};
 
@@ -15,18 +16,14 @@ pub type Root = Vec<Sentinel>;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Sentinel {
-    // Core identity
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub image_name: String,
-    pub description: String,
-
-    // Tradable
-    pub tradable: bool,
-    pub masterable: bool,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
 
     pub product_category: SentinelProductCategory,
 
@@ -55,25 +52,25 @@ impl ProductCategory for Sentinel {
 
 impl Item for Sentinel {
     fn unique_name(&self) -> &str {
-        &self.unique_name
+        &self.identity.unique_name
     }
     fn name(&self) -> &str {
-        &self.name
+        &self.identity.name
     }
     fn category(&self) -> &str {
-        &self.category
+        &self.identity.category
     }
     fn type_field(&self) -> &str {
         &self.type_field
     }
     fn image_name(&self) -> Option<&str> {
-        Some(&self.image_name)
+        self.detail.image_name.as_deref()
     }
     fn tradable(&self) -> bool {
-        self.tradable
+        self.trade.tradable
     }
     fn masterable(&self) -> bool {
-        self.masterable
+        self.trade.masterable
     }
     fn patchlogs(&self) -> &[Patchlog] {
         &self.patchlogs
@@ -188,7 +185,7 @@ mod tests {
         let rec: Sentinel = from_str(json_data).unwrap();
 
         assert_eq!(
-            rec.unique_name,
+            rec.identity.unique_name,
             "/Lotus/Types/Sentinels/SentinelPowersuits/CarrierPowerSuit"
         );
     }

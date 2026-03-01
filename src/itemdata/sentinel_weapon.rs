@@ -7,7 +7,8 @@ use crate::itemdata::common::Patchlog;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{Noise, Polarity, SentinelWeaponProductCategory, Slot, Trigger};
 use crate::itemdata::props::{
-    BuildableProps, EquippableProps, PrimeProps, WeaponProps, WeaponTypeStats, WikiaProps,
+    BuildableProps, EquippableProps, ItemDetailProps, ItemIdentityProps, PrimeProps, TradableProps,
+    WeaponProps, WeaponTypeStats, WikiaProps,
 };
 use crate::itemdata::traits::{Buildable, Equippable, Item, Prime, Weapon, WikiaLinked};
 
@@ -16,18 +17,14 @@ pub type Root = Vec<SentinelWeapon>;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SentinelWeapon {
-    // Core identity
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub image_name: String,
-    pub description: String,
-
-    // Tradable
-    pub tradable: bool,
-    pub masterable: bool,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
 
     // Weapon stats
     #[serde(flatten)]
@@ -122,25 +119,25 @@ impl SentinelWeapon {
 
 impl Item for SentinelWeapon {
     fn unique_name(&self) -> &str {
-        &self.unique_name
+        &self.identity.unique_name
     }
     fn name(&self) -> &str {
-        &self.name
+        &self.identity.name
     }
     fn category(&self) -> &str {
-        &self.category
+        &self.identity.category
     }
     fn type_field(&self) -> &str {
         &self.type_field
     }
     fn image_name(&self) -> Option<&str> {
-        Some(&self.image_name)
+        self.detail.image_name.as_deref()
     }
     fn tradable(&self) -> bool {
-        self.tradable
+        self.trade.tradable
     }
     fn masterable(&self) -> bool {
-        self.masterable
+        self.trade.masterable
     }
     fn patchlogs(&self) -> &[Patchlog] {
         &self.patchlogs
@@ -267,7 +264,7 @@ mod tests {
         let rec: SentinelWeapon = from_str(json_data).unwrap();
 
         assert_eq!(
-            rec.unique_name,
+            rec.identity.unique_name,
             "/Lotus/Types/Friendly/Pets/ZanukaPets/ZanukaPetMeleeWeaponIP"
         );
     }

@@ -12,7 +12,9 @@ use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Ability, Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
 use crate::itemdata::enums::{Polarity, Sex, Slot};
-use crate::itemdata::props::{BuildableProps, CharacterStats, PrimeProps};
+use crate::itemdata::props::{
+    BuildableProps, CharacterStats, ItemDetailProps, ItemIdentityProps, PrimeProps, TradableProps,
+};
 use crate::itemdata::traits::{
     Buildable, Character, Droppable, Equippable, HasAbilities, Item, Prime, WikiaLinked,
 };
@@ -36,15 +38,14 @@ pub enum WarframeEntry {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WarframeData {
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub image_name: String,
-    pub description: String,
-    pub tradable: bool,
-    pub masterable: bool,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
     pub mastery_req: i64,
     pub product_category: String,
 
@@ -88,15 +89,14 @@ pub struct WarframeData {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NecramechData {
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub image_name: String,
-    pub description: String,
-    pub tradable: bool,
-    pub masterable: bool,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
     pub mastery_req: i64,
     pub product_category: String,
 
@@ -128,13 +128,14 @@ pub struct NecramechData {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HelminthData {
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub tradable: bool,
-    pub masterable: bool,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
 
     #[serde(default)]
     pub abilities: Vec<Ability>,
@@ -163,23 +164,23 @@ impl ProductCategory for WarframeEntry {
 impl Item for WarframeEntry {
     fn unique_name(&self) -> &str {
         match self {
-            WarframeEntry::Suits(w) => &w.unique_name,
-            WarframeEntry::MechSuits(w) => &w.unique_name,
-            WarframeEntry::Helminth(w) => &w.unique_name,
+            WarframeEntry::Suits(w) => &w.identity.unique_name,
+            WarframeEntry::MechSuits(w) => &w.identity.unique_name,
+            WarframeEntry::Helminth(w) => &w.identity.unique_name,
         }
     }
     fn name(&self) -> &str {
         match self {
-            WarframeEntry::Suits(w) => &w.name,
-            WarframeEntry::MechSuits(w) => &w.name,
-            WarframeEntry::Helminth(w) => &w.name,
+            WarframeEntry::Suits(w) => &w.identity.name,
+            WarframeEntry::MechSuits(w) => &w.identity.name,
+            WarframeEntry::Helminth(w) => &w.identity.name,
         }
     }
     fn category(&self) -> &str {
         match self {
-            WarframeEntry::Suits(w) => &w.category,
-            WarframeEntry::MechSuits(w) => &w.category,
-            WarframeEntry::Helminth(w) => &w.category,
+            WarframeEntry::Suits(w) => &w.identity.category,
+            WarframeEntry::MechSuits(w) => &w.identity.category,
+            WarframeEntry::Helminth(w) => &w.identity.category,
         }
     }
     fn type_field(&self) -> &str {
@@ -191,23 +192,23 @@ impl Item for WarframeEntry {
     }
     fn image_name(&self) -> Option<&str> {
         match self {
-            WarframeEntry::Suits(w) => Some(&w.image_name),
-            WarframeEntry::MechSuits(w) => Some(&w.image_name),
-            WarframeEntry::Helminth(_) => None,
+            WarframeEntry::Suits(w) => w.detail.image_name.as_deref(),
+            WarframeEntry::MechSuits(w) => w.detail.image_name.as_deref(),
+            WarframeEntry::Helminth(w) => w.detail.image_name.as_deref(),
         }
     }
     fn tradable(&self) -> bool {
         match self {
-            WarframeEntry::Suits(w) => w.tradable,
-            WarframeEntry::MechSuits(w) => w.tradable,
-            WarframeEntry::Helminth(w) => w.tradable,
+            WarframeEntry::Suits(w) => w.trade.tradable,
+            WarframeEntry::MechSuits(w) => w.trade.tradable,
+            WarframeEntry::Helminth(w) => w.trade.tradable,
         }
     }
     fn masterable(&self) -> bool {
         match self {
-            WarframeEntry::Suits(w) => w.masterable,
-            WarframeEntry::MechSuits(w) => w.masterable,
-            WarframeEntry::Helminth(w) => w.masterable,
+            WarframeEntry::Suits(w) => w.trade.masterable,
+            WarframeEntry::MechSuits(w) => w.trade.masterable,
+            WarframeEntry::Helminth(w) => w.trade.masterable,
         }
     }
     fn patchlogs(&self) -> &[Patchlog] {
@@ -434,7 +435,10 @@ mod tests {
 
         match &rec {
             WarframeEntry::Suits(w) => {
-                assert_eq!(w.unique_name, "/Lotus/Powersuits/Priest/HarrowPrime");
+                assert_eq!(
+                    w.identity.unique_name,
+                    "/Lotus/Powersuits/Priest/HarrowPrime"
+                );
                 assert_eq!(w.sex, Sex::Male);
             }
             _ => panic!("Expected Suits variant"),

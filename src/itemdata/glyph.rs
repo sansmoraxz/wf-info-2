@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
+use crate::itemdata::props::{ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::itemdata::traits::{Droppable, Item};
 
 pub type Root = Vec<Glyph>;
@@ -11,15 +12,15 @@ pub type Root = Vec<Glyph>;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Glyph {
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub image_name: String,
-    pub description: String,
-    pub tradable: bool,
-    pub masterable: bool,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
+
     pub exclude_from_codex: Option<bool>,
     #[serde(default)]
     pub drops: Vec<Drop>,
@@ -35,25 +36,25 @@ impl ProductCategory for Glyph {
 
 impl Item for Glyph {
     fn unique_name(&self) -> &str {
-        &self.unique_name
+        &self.identity.unique_name
     }
     fn name(&self) -> &str {
-        &self.name
+        &self.identity.name
     }
     fn category(&self) -> &str {
-        &self.category
+        &self.identity.category
     }
     fn type_field(&self) -> &str {
         &self.type_field
     }
     fn image_name(&self) -> Option<&str> {
-        Some(&self.image_name)
+        self.detail.image_name.as_deref()
     }
     fn tradable(&self) -> bool {
-        self.tradable
+        self.trade.tradable
     }
     fn masterable(&self) -> bool {
-        self.masterable
+        self.trade.masterable
     }
     fn patchlogs(&self) -> &[Patchlog] {
         &self.patchlogs
@@ -81,7 +82,7 @@ mod tests {
         let rec: Glyph = from_str(json_data).unwrap();
 
         assert_eq!(
-            rec.unique_name,
+            rec.identity.unique_name,
             "/Lotus/Types/StoreItems/AvatarImages/FanChannel/AvatarImageChromaPrimePartner"
         );
     }

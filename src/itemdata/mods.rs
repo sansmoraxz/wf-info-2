@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, LevelStat, Patchlog};
 use crate::itemdata::enums::{ModCategory, Polarity, Rarity};
-use crate::itemdata::props::WikiaProps;
+use crate::itemdata::props::{ItemDetailProps, ItemIdentityProps, TradableProps, WikiaProps};
 use crate::itemdata::traits::{Droppable, Item, WikiaLinked};
 
 pub type Root = Vec<Mod>;
@@ -13,18 +13,14 @@ pub type Root = Vec<Mod>;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Mod {
-    // Core identity
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
     pub type_field: String,
-    pub image_name: String,
-    pub description: Option<String>,
-
-    // Tradable
-    pub tradable: bool,
-    pub masterable: bool,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
 
     // Mod-specific
     pub base_drain: Option<i64>,
@@ -130,25 +126,25 @@ impl Mod {
 
 impl Item for Mod {
     fn unique_name(&self) -> &str {
-        &self.unique_name
+        &self.identity.unique_name
     }
     fn name(&self) -> &str {
-        &self.name
+        &self.identity.name
     }
     fn category(&self) -> &str {
-        &self.category
+        &self.identity.category
     }
     fn type_field(&self) -> &str {
         &self.type_field
     }
     fn image_name(&self) -> Option<&str> {
-        Some(&self.image_name)
+        self.detail.image_name.as_deref()
     }
     fn tradable(&self) -> bool {
-        self.tradable
+        self.trade.tradable
     }
     fn masterable(&self) -> bool {
-        self.masterable
+        self.trade.masterable
     }
     fn patchlogs(&self) -> &[Patchlog] {
         &self.patchlogs
@@ -233,7 +229,7 @@ mod tests {
         let m: Mod = from_str(json_data).unwrap();
 
         assert_eq!(
-            m.unique_name,
+            m.identity.unique_name,
             "/Lotus/Upgrades/Mods/Sets/Amar/AmarWarframeMod"
         );
         assert_eq!(
@@ -251,14 +247,16 @@ mod tests {
 
         let m: Mod = from_str(json_data).unwrap();
 
-        assert_eq!(m.unique_name, "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod");
+        assert_eq!(
+            m.identity.unique_name,
+            "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod"
+        );
         assert_eq!(m.num_upgrades_in_set, Some(3));
     }
 
     #[test]
     fn test_mod_category_regular() {
         let m = Mod {
-            name: "Serration".to_string(),
             level_stats: vec![],
             ..Default::default()
         };
@@ -273,7 +271,6 @@ mod tests {
     #[test]
     fn test_mod_category_set_member() {
         let m = Mod {
-            name: "Amar's Anguish".to_string(),
             mod_set: Some("/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod".to_string()),
             ..Default::default()
         };
@@ -294,7 +291,6 @@ mod tests {
     #[test]
     fn test_mod_category_set_definition() {
         let m = Mod {
-            name: "Amarsetmod".to_string(),
             num_upgrades_in_set: Some(3),
             stats: vec!["Bonus 1".to_string(), "Bonus 2".to_string()],
             ..Default::default()
@@ -313,7 +309,6 @@ mod tests {
     #[test]
     fn test_mod_category_riven() {
         let m = Mod {
-            name: "Rifle Riven Mod".to_string(),
             available_challenges: vec![AvailableChallenge {
                 full_name: "Test Challenge".to_string(),
                 description: "Complete test".to_string(),

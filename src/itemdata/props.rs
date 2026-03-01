@@ -11,6 +11,32 @@ use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{Noise, Polarity, Slot, Trigger};
 
+/// Core identity fields present on every item type.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemIdentityProps {
+    pub unique_name: String,
+    pub name: String,
+    pub category: String,
+}
+
+/// Tradability and mastery properties.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TradableProps {
+    pub tradable: bool,
+    #[serde(default)]
+    pub masterable: bool,
+}
+
+/// Optional detail fields (image and description).
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ItemDetailProps {
+    pub image_name: Option<String>,
+    pub description: Option<String>,
+}
+
 /// Properties for buildable/craftable items.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
