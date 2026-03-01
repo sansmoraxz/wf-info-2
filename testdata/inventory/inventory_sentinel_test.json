@@ -1,0 +1,55 @@
+{
+  "Configs": [
+    {
+      "Upgrades": [
+        "",
+        "",
+        "",
+        "5bed797257904aa3d2087dee",
+        "/Lotus/Types/Sentinels/SentinelPrecepts/Guardian",
+        "",
+        "",
+        "",
+        "5be51f283f8d4a03745ccd97",
+        "5be51f463f8d4a048823abef"
+      ],
+      "attcol": {
+        "en": -1310873,
+        "t0": -7208960,
+        "t1": -47610,
+        "t2": -51194,
+        "t3": -13312
+      }
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Sentinels/Skins/Defaults/DefaultTaxonSkin"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Sentinels/Skins/Defaults/DefaultTaxonSkin"
+      ]
+    }
+  ],
+  "ItemId": {
+    "$oid": "5bc2ef683f8d4ab51b364333"
+  },
+  "ItemType": "/Lotus/Types/Sentinels/SentinelPowersuits/TnSentinelCrossPowerSuit",
+  "UpgradeVer": 101,
+  "XP": 18583058
+}

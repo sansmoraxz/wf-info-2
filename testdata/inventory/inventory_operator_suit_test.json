@@ -1,0 +1,415 @@
+{
+  "Configs": [
+    {
+      "OperatorAmp": {
+        "$oid": "000000000000000000000000"
+      },
+      "Skins": [
+        "/Lotus/Upgrades/Skins/Operator/Heads/HeadIRemastered",
+        "/Lotus/Upgrades/Skins/Operator/Bodies/FemaleBody",
+        "/Lotus/Upgrades/Skins/Operator/Hair/HairAdultN",
+        "/Lotus/Upgrades/Skins/Operator/FacialMarkings/NewFacialMarkingNone",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/Hoods/NoHood",
+        "60fff3998140fc3fac498b6f",
+        "60fff3998140fc3fac498b72",
+        "60fff3998140fc3fac498b71",
+        "/Lotus/Upgrades/Skins/Voices/OperatorVoiceDItem",
+        "/Lotus/Upgrades/Skins/Operator/Skirts/NoSkirt",
+        "/Lotus/Upgrades/Skins/Operator/AnimationSets/MaduraiAnims",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/Heads/HeadCRemastered",
+        "",
+        "",
+        "61166bbcdd5fbb797a4a7f6e",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/EyeBrows/EyeBrowCH",
+        "/Lotus/Upgrades/Skins/Operator/MakeupMasks/MakeupMaskH",
+        "/Lotus/Upgrades/Skins/Operator/Heads/LegacyAlbedo"
+      ],
+      "Upgrades": [
+        "6127bf2e8a55f41ac920582f",
+        "6283b4ff99534c10ac5c2411"
+      ],
+      "attcol": {
+        "e1": -12433117,
+        "en": -9749676
+      },
+      "cloth": {
+        "en": -3068365,
+        "t1": -6477989,
+        "t2": -10584527
+      },
+      "eyecol": {
+        "e1": -8114125,
+        "en": 102778,
+        "m1": -16777216,
+        "t0": -154075,
+        "t1": -10073798
+      },
+      "facial": {
+        "e1": 2090893685,
+        "t0": -15265263,
+        "t1": -14803423,
+        "t2": -10739165,
+        "t3": -11494555
+      },
+      "sigcol": {
+        "en": -2142061948,
+        "t0": 13708851,
+        "t1": 8453632
+      }
+    },
+    {
+      "Skins": [
+        "/Lotus/Upgrades/Skins/Operator/Heads/HeadIRemastered",
+        "/Lotus/Upgrades/Skins/Operator/Bodies/FemaleBody",
+        "5f7b9a959d42797b782f5870",
+        "/Lotus/Upgrades/Skins/Operator/FacialMarkings/NewFacialMarkingNone",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/Hoods/NoHood",
+        "64fa202fe9e21e55cf011c67",
+        "64fa202fe9e21e55cf011c6b",
+        "64fa202fe9e21e55cf011c69",
+        "/Lotus/Upgrades/Skins/Voices/OperatorVoiceDItem",
+        "64fa202fe9e21e55cf011c6a",
+        "/Lotus/Upgrades/Skins/Operator/AnimationSets/MaduraiAnims",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/Heads/HeadCRemastered",
+        "",
+        "",
+        "60e3112bf8a46031d07ea24d",
+        "/Lotus/Upgrades/Skins/TextureOverrides/Bronze",
+        "/Lotus/Upgrades/Skins/TextureOverrides/MarbleShell",
+        "/Lotus/Upgrades/Skins/TextureOverrides/IncompletePaintjob",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/EyeBrows/EyeBrowCH",
+        "/Lotus/Upgrades/Skins/Operator/MakeupMasks/MakeupMaskC",
+        "/Lotus/Upgrades/Skins/Operator/Heads/LegacyAlbedo"
+      ],
+      "Upgrades": [
+        "6283b4ff99534c10ac5c2411",
+        "6127bf2e8a55f41ac920582f"
+      ],
+      "attcol": {
+        "e1": -13754307,
+        "en": -15251103,
+        "t0": -13291196,
+        "t1": -12708072,
+        "t2": -2986467,
+        "t3": -11981275
+      },
+      "cloth": {
+        "e1": -14474986,
+        "en": -5487050,
+        "m0": -15462135,
+        "m1": -1324838,
+        "t0": -12499676,
+        "t1": -13430224,
+        "t2": -357043,
+        "t3": -11981275
+      },
+      "eyecol": {
+        "e1": -8114125,
+        "en": 102778,
+        "m1": -16777216,
+        "t0": -154075,
+        "t1": -10073798
+      },
+      "facial": {
+        "e1": 2090893685,
+        "en": -7885729,
+        "t0": -12185583,
+        "t1": -11001302,
+        "t2": -11775359,
+        "t3": -6458808
+      },
+      "pricol": {
+        "e1": -362710,
+        "en": 1531257470,
+        "m0": -967891849,
+        "m1": 1444116992,
+        "t0": -6924680,
+        "t1": -14936555,
+        "t2": -8793144,
+        "t3": -6716816
+      },
+      "sigcol": {
+        "e1": -2147450752,
+        "en": -2133280128,
+        "t1": 807928365
+      }
+    },
+    {
+      "Skins": [
+        "/Lotus/Upgrades/Skins/Operator/Heads/HeadIRemastered",
+        "/Lotus/Upgrades/Skins/Operator/Bodies/FemaleBody",
+        "6968784a315f95beb7059e79",
+        "/Lotus/Upgrades/Skins/Operator/FacialMarkings/NewFacialMarkingNone",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/Hoods/NoHood",
+        "5f69aa7426bc5d0f1c1e2b3c",
+        "5f69aa7426bc5d0f1c1e2b44",
+        "5f69aa7426bc5d0f1c1e2b40",
+        "/Lotus/Upgrades/Skins/Voices/OperatorVoiceDItem",
+        "5f69aa7426bc5d0f1c1e2b43",
+        "/Lotus/Upgrades/Skins/Operator/AnimationSets/UnairuAnims",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/Heads/HeadCRemastered",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/TextureOverrides/MarbleShell",
+        "/Lotus/Upgrades/Skins/TextureOverrides/Bronze",
+        "/Lotus/Upgrades/Skins/TextureOverrides/MattePaint",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/EyeBrows/EyeBrowCH",
+        "693e4ef8e03138b0f7044d8b",
+        "/Lotus/Upgrades/Skins/Operator/Heads/LegacyAlbedo"
+      ],
+      "Upgrades": [
+        "/Lotus/Upgrades/CosmeticEnhancers/OperatorArmour/HealthOnOperatorMode",
+        "5f6f2d147d00663b7a4d7ad2"
+      ],
+      "cloth": {
+        "m0": -2345427,
+        "m1": -11208072,
+        "t0": -12185583,
+        "t1": -15984606,
+        "t2": -6388109
+      },
+      "eyecol": {
+        "e1": -8114125,
+        "en": 102778,
+        "m1": -16777216,
+        "t0": -154075,
+        "t1": -10073798
+      },
+      "facial": {
+        "e1": 2090893685
+      },
+      "pricol": {
+        "en": -4978688,
+        "m0": -13164499,
+        "m1": -2405350
+      }
+    },
+    {
+      "Skins": [
+        "/Lotus/Upgrades/Skins/Operator/Heads/HeadIRemastered",
+        "/Lotus/Upgrades/Skins/Operator/Bodies/FemaleBody",
+        "68ffb6d1df47753c6f09a0e9",
+        "/Lotus/Upgrades/Skins/Operator/FacialMarkings/NewFacialMarkingNone",
+        "",
+        "64495da55c01c225730c2677",
+        "64495da55c01c225730c267a",
+        "64495da55c01c225730c2674",
+        "64495da65c01c225730c267f",
+        "/Lotus/Upgrades/Skins/Voices/OperatorVoiceDItem",
+        "64495da65c01c225730c267d",
+        "/Lotus/Upgrades/Skins/Operator/AnimationSets/VazarinAnims",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/Heads/HeadCRemastered",
+        "",
+        "",
+        "",
+        "663f414a68c9b395240fd668",
+        "/Lotus/Upgrades/Skins/TextureOverrides/Rubber",
+        "/Lotus/Upgrades/Skins/TextureOverrides/GlossyPlastic",
+        "/Lotus/Upgrades/Skins/TextureOverrides/Rubber",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/EyeBrows/EyeBrowCH",
+        "693e4f149b8be866030d8702",
+        "/Lotus/Upgrades/Skins/Operator/Heads/LegacyAlbedo"
+      ],
+      "attcol": {
+        "e1": -12433117,
+        "en": -9749676
+      },
+      "cloth": {
+        "t0": -2716305
+      },
+      "eyecol": {
+        "e1": -8114125,
+        "en": 102778,
+        "m1": -16777216,
+        "t0": -154075,
+        "t1": -10073798
+      },
+      "facial": {
+        "e1": 2090893685,
+        "en": -2516918,
+        "t0": -361937,
+        "t1": -6009570,
+        "t2": -10925249,
+        "t3": -2710126
+      },
+      "sigcol": {
+        "en": -2142061948,
+        "t0": 13708851,
+        "t1": 8453632
+      }
+    },
+    {
+      "Skins": [
+        "/Lotus/Upgrades/Skins/Operator/Heads/HeadIRemastered",
+        "/Lotus/Upgrades/Skins/Operator/Bodies/FemaleBody",
+        "6942ce5f8b1fe2065702aaea",
+        "/Lotus/Upgrades/Skins/Operator/FacialMarkings/NewFacialMarkingNone",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/Hoods/NoHood",
+        "6968b35c57a494aed2093150",
+        "6968b35c57a494aed2093156",
+        "6968b35c57a494aed2093154",
+        "/Lotus/Upgrades/Skins/Voices/OperatorVoiceDItem",
+        "/Lotus/Upgrades/Skins/Operator/Skirts/NoSkirt",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/Heads/HeadCRemastered",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/EyeBrows/EyeBrowCH",
+        "/Lotus/Upgrades/Skins/Operator/MakeupMasks/MakeupMaskD",
+        "/Lotus/Upgrades/Skins/Operator/Heads/LegacyAlbedo"
+      ],
+      "Upgrades": [
+        "5f6f2d147d00663b7a4d7ad2",
+        "/Lotus/Upgrades/CosmeticEnhancers/OperatorArmour/HealOnTransferenceOut"
+      ],
+      "cloth": {
+        "e1": -4811935,
+        "en": -15846795,
+        "t0": -11382965,
+        "t1": -4950085,
+        "t2": -16724774,
+        "t3": -8194150
+      },
+      "eyecol": {
+        "e1": -8114125,
+        "en": 102778,
+        "m1": -16777216,
+        "t0": -154075,
+        "t1": -10073798
+      },
+      "facial": {
+        "e1": 2090893685,
+        "en": -1,
+        "t0": -15302656,
+        "t1": -2084725,
+        "t2": -2710126,
+        "t3": -13020769
+      },
+      "pricol": {
+        "e1": -7684673,
+        "en": -12631221,
+        "m0": -12632794,
+        "m1": -803617
+      },
+      "sigcol": {
+        "en": -2142061948,
+        "t1": 8453632
+      }
+    },
+    {
+      "Skins": [
+        "/Lotus/Upgrades/Skins/Operator/Heads/HeadCRemastered",
+        "/Lotus/Upgrades/Skins/Operator/Bodies/FemaleBody",
+        "/Lotus/Upgrades/Skins/Operator/Hair/HairSLong",
+        "/Lotus/Upgrades/Skins/Operator/FacialMarkings/NewFacialMarkingNone",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/Hoods/HoodA",
+        "/Lotus/Upgrades/Skins/Operator/BodySuits/BodySuitA",
+        "/Lotus/Upgrades/Skins/Operator/Sleeves/SleevesA",
+        "/Lotus/Upgrades/Skins/Operator/Leggings/LeggingsA",
+        "/Lotus/Upgrades/Skins/Voices/OperatorVoiceDItem",
+        "/Lotus/Upgrades/Skins/Operator/Skirts/NoSkirt",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/Heads/HeadCRemastered",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Operator/MakeupMasks/MakeupMaskH",
+        "/Lotus/Upgrades/Skins/Operator/Heads/LegacyAlbedo"
+      ],
+      "eyecol": {
+        "en": 93440,
+        "t0": 5008595
+      },
+      "facial": {
+        "e1": 217435582
+      },
+      "pricol": {
+        "e1": -15328716,
+        "en": -15328716,
+        "m0": -2857330,
+        "m1": -2857330
+      }
+    }
+  ],
+  "ItemId": {
+    "$oid": "6939b1bb940de2caed0a35b1"
+  },
+  "ItemType": "/Lotus/Powersuits/Operator/ChildOperatorSuitRemaster",
+  "UpgradeVer": 101
+}

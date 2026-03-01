@@ -1,0 +1,75 @@
+{
+  "AssignedRole": 3,
+  "Configs": [
+    {
+      "Skins": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "6086aeea4c010b700200b04c",
+        "",
+        "5d6e21d157904a7c84293bf2",
+        "5c224e0757904a69452099b0",
+        "5c224e0757904a69452099b2"
+      ],
+      "attcol": {
+        "m0": -11286148,
+        "m1": -11286148,
+        "t0": -1376256,
+        "t1": -14868958,
+        "t2": -9006015,
+        "t3": -10475247
+      },
+      "eyecol": {
+        "m0": -11286148,
+        "m1": -11286148,
+        "t0": -3068365,
+        "t1": -15651816,
+        "t2": -9861320,
+        "t3": -10475247
+      },
+      "pricol": {
+        "m0": -11286148,
+        "m1": -11286148,
+        "t0": -3068365,
+        "t1": -15651816,
+        "t2": -9861320,
+        "t3": -10475247
+      }
+    },
+    {},
+    {}
+  ],
+  "ItemId": {
+    "$oid": "60d774eb853a3d18346e97d2"
+  },
+  "ItemType": "/Lotus/Types/Game/CrewShip/CrewMember/NewLokaCrewMemberGenerator",
+  "NemesisFingerprint": 0,
+  "PowersuitType": "/Lotus/Powersuits/NpcPowersuits/CrewMemberFemaleSuit",
+  "Seed": 54183829887489269,
+  "SkillEfficiency": {
+    "COMBAT": {
+      "Assigned": 0
+    },
+    "ENGINEERING": {
+      "Assigned": 0
+    },
+    "GUNNERY": {
+      "Assigned": 2
+    },
+    "PILOTING": {
+      "Assigned": 1
+    },
+    "SURVIVABILITY": {
+      "Assigned": 0
+    }
+  },
+  "WeaponConfigIdx": 0,
+  "WeaponId": {
+    "$oid": "5c23bc5b3f8d4a2e78206925"
+  },
+  "XP": 0
+}

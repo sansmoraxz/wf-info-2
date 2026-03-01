@@ -1,0 +1,32 @@
+{
+  "Configs": [
+    {
+      "Upgrades": [
+        "60e4445b8e881e5bc129af7c",
+        "",
+        "",
+        "",
+        "/Lotus/Types/Sentinels/SentinelPrecepts/CoolantLeak",
+        "5c31c0e657904abb0b7d7361",
+        "",
+        "",
+        "",
+        "5be51f463f8d4a048823abef"
+      ]
+    },
+    {},
+    {}
+  ],
+  "ItemId": {
+    "$oid": "60e443a551075e1e7c4a110d"
+  },
+  "ItemType": "/Lotus/Types/Friendly/Pets/MoaPets/MoaPetPowerSuit",
+  "ModularParts": [
+    "/Lotus/Types/Friendly/Pets/MoaPets/MoaPetParts/MoaPetEngineArcotek",
+    "/Lotus/Types/Friendly/Pets/MoaPets/MoaPetParts/MoaPetHeadLambeo",
+    "/Lotus/Types/Friendly/Pets/MoaPets/MoaPetParts/MoaPetLegA",
+    "/Lotus/Types/Friendly/Pets/MoaPets/MoaPetParts/MoaPetPayloadAegron"
+  ],
+  "UpgradeVer": 101,
+  "XP": 904219
+}

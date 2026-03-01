@@ -1,0 +1,56 @@
+{
+  "AbilityOverride": {
+    "Ability": "",
+    "Index": 0
+  },
+  "ItemId": {
+    "$oid": "000000000000000000000000"
+  },
+  "OperatorAmp": {
+    "$oid": "000000000000000000000000"
+  },
+  "Skins": [
+    "/Lotus/Upgrades/Skins/Operator/Heads/FemaleHeadF",
+    "/Lotus/Upgrades/Skins/Operator/Bodies/FemaleBody",
+    "/Lotus/Upgrades/Skins/Operator/Hair/HairSLong",
+    "",
+    "",
+    "/Lotus/Upgrades/Skins/Operator/Hoods/NoHood",
+    "/Lotus/Upgrades/Skins/Operator/BodySuits/BodySuitInfestedA",
+    "/Lotus/Upgrades/Skins/Operator/Sleeves/SleevesInfestedA",
+    "/Lotus/Upgrades/Skins/Operator/Leggings/LeggingsInfestedA",
+    "/Lotus/Upgrades/Skins/Voices/OperatorVoiceDItem",
+    "/Lotus/Upgrades/Skins/Operator/Skirts/NoSkirt",
+    "/Lotus/Upgrades/Skins/Operator/AnimationSets/VazarinAnims",
+    "",
+    "/Lotus/Upgrades/Skins/Operator/Heads/FemaleHeadB"
+  ],
+  "Upgrades": [
+    "6127bf2e8a55f41ac920582f",
+    "6283b4ff99534c10ac5c2411"
+  ],
+  "attcol": {
+    "e1": -12433117,
+    "en": -9749676
+  },
+  "cloth": {
+    "en": -3068365,
+    "t1": -6477989,
+    "t2": -10584527,
+    "t3": -15651816
+  },
+  "eyecol": {
+    "t0": 5008595,
+    "t2": 93440
+  },
+  "pricol": {
+    "t0": -668226,
+    "t1": -2857330,
+    "t2": -15328716
+  },
+  "sigcol": {
+    "en": -2142061948,
+    "t0": 13708851,
+    "t1": 8453632
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "Configs": [
+    {
+      "Upgrades": [
+        "5be964f2a38e4a89dd290c58",
+        "5be964df3f8d4a0d675aa93d",
+        "5bc36353a38e4a829d3df556",
+        "5be873b357904ab85104e164",
+        "5be96c7aa38e4aac573fe599",
+        "",
+        "5bc363d057904a5ddb3c17be",
+        "5bc24750a38e4a0dcd0a0e2c"
+      ],
+      "pricol": {
+        "en": -11157550,
+        "t0": -15979964,
+        "t1": -6009570,
+        "t2": -12607561,
+        "t3": -1522815
+      }
+    },
+    {},
+    {}
+  ],
+  "Features": 1,
+  "ItemId": {
+    "$oid": "5bc888d357904a31000bf9c5"
+  },
+  "ItemType": "/Lotus/Powersuits/Excalibur/DoomSword",
+  "UpgradeVer": 101,
+  "XP": 2212912
+}

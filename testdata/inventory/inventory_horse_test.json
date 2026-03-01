@@ -1,0 +1,47 @@
+{
+  "Configs": [
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Horse/ErsatzHorseTailDefault",
+        "",
+        "",
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/Horse/ErsatzBodySkinDefault"
+      ],
+      "attcol": {
+        "m0": -5127732,
+        "t0": -7164076,
+        "t1": -2444067,
+        "t2": -3644636,
+        "t3": -12509069
+      },
+      "pricol": {
+        "m0": -5127732,
+        "t0": -7164076,
+        "t1": -2444067,
+        "t2": -3644636,
+        "t3": -12509069
+      }
+    },
+    {
+      "Skins": [
+        "",
+        "/Lotus/Upgrades/Skins/Armor/WarframeDefaults/EmptyCustomization"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "/Lotus/Upgrades/Skins/Armor/WarframeDefaults/EmptyCustomization"
+      ]
+    }
+  ],
+  "ItemId": {
+    "$oid": "64495da55c01c225730c2673"
+  },
+  "ItemType": "/Lotus/Types/NeutralCreatures/ErsatzHorse/ErsatzHorsePowerSuit",
+  "UpgradeVer": 101
+}

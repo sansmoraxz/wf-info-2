@@ -1,0 +1,64 @@
+{
+  "Configs": [
+    {
+      "Name": "Hacking",
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/DataKnife"
+      ],
+      "Upgrades": [
+        "/Lotus/Upgrades/Mods/DataSpike/Assassin/OnExecutionParkourSpeedMod",
+        "/Lotus/Upgrades/Mods/DataSpike/Cipher/OnHackInvisMod",
+        "5bf305f53f8d4a040130261a",
+        "",
+        "62a4a5c03c31c93e5d4aeef3"
+      ]
+    },
+    {
+      "Name": "Combat",
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/DataKnife"
+      ],
+      "Upgrades": [
+        "/Lotus/Upgrades/Mods/DataSpike/Assassin/OnExecutionHealthDropMod",
+        "/Lotus/Upgrades/Mods/DataSpike/Assassin/OnExecutionBlindMod",
+        "/Lotus/Upgrades/Mods/DataSpike/Assassin/OnExecutionAmmoMod",
+        "69a2edae165ce3bb360b7bb6",
+        "69949ba77d6999c0e4059526",
+        "69937a52ced544d742078b8d"
+      ],
+      "pricol": {
+        "e1": -1337538,
+        "en": -32000,
+        "m0": -40703,
+        "m1": -40703,
+        "t0": -10399439,
+        "t1": -1253968,
+        "t2": -13422030,
+        "t3": -1260454
+      }
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/DataKnife"
+      ],
+      "pricol": {
+        "en": -4312710,
+        "m0": -4312710,
+        "t1": -9861320,
+        "t2": -12631221
+      }
+    }
+  ],
+  "ItemId": {
+    "$oid": "5de635d357904a0b6d7abd83"
+  },
+  "ItemType": "/Lotus/Weapons/Tenno/HackingDevices/TnHackingDevice/TnHackingDeviceWeapon",
+  "UpgradeVer": 101,
+  "XP": 450000
+}

@@ -1,0 +1,21 @@
+{
+  "Configs": [
+    {
+      "Upgrades": [
+        "69638049156654eeed0341c5",
+        "6946fc6d204e6c14830c1535",
+        "6946fc68be3e871d56023a8d",
+        "6946fc62707d780d281069f4",
+        "6946fbba9736ea0c90101f41",
+        "6946fc2a21685b9bb30ef2fd"
+      ]
+    },
+    {},
+    {}
+  ],
+  "ItemId": {
+    "$oid": "6946fab7b0961e53cc0b3abb"
+  },
+  "ItemType": "/Lotus/Weapons/Operator/Antiques/MaduraiBow/MaduraiBowAntique",
+  "UpgradeVer": 101
+}

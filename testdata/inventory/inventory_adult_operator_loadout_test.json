@@ -1,0 +1,58 @@
+{
+  "ItemId": {
+    "$oid": "618d769e3348adda0fc130ae"
+  },
+  "Skins": [
+    "/Lotus/Upgrades/Skins/Operator/Heads/AdultFemaleHeadI",
+    "/Lotus/Upgrades/Skins/Armor/WarframeDefaults/EmptyCustomization",
+    "/Lotus/Upgrades/Skins/Operator/Hair/Hair1999Rusalka",
+    "",
+    "",
+    "/Lotus/Upgrades/Skins/Operator/Hoods/NoHood",
+    "/Lotus/Upgrades/Skins/Operator/BodySuits/BodySuitAdultChameleon",
+    "/Lotus/Upgrades/Skins/Operator/Sleeves/SleevesAdultChameleon",
+    "/Lotus/Upgrades/Skins/Operator/Leggings/LeggingsAdultChameleon",
+    "/Lotus/Upgrades/Skins/Voices/AdultOperatorVoiceDItem",
+    "/Lotus/Upgrades/Skins/Operator/Skirts/NoSkirt",
+    "",
+    "",
+    "/Lotus/Upgrades/Skins/Operator/Heads/AdultFemaleHeadC",
+    "/Lotus/Upgrades/Skins/Operator/Accessories/NightWaveEarPieceA",
+    "",
+    "/Lotus/Upgrades/Skins/Effects/OrbsEphemera",
+    "/Lotus/Upgrades/Skins/TextureOverrides/Bronze",
+    "/Lotus/Upgrades/Skins/TextureOverrides/RubberWoven",
+    "/Lotus/Upgrades/Skins/TextureOverrides/MarbleShell"
+  ],
+  "Upgrades": [
+    "6283b4ff99534c10ac5c2411",
+    "6127bf2e8a55f41ac920582f"
+  ],
+  "cloth": {
+    "e1": -3741205,
+    "en": -13726044,
+    "t0": -4658714,
+    "t1": -16777216,
+    "t2": -6464654,
+    "t3": -16777216
+  },
+  "eyecol": {
+    "m0": 3138033,
+    "t0": 5224119,
+    "t2": 110336,
+    "t3": 5017021
+  },
+  "facial": {
+    "e1": -2135261056,
+    "en": -14380858,
+    "m1": 2139062143,
+    "t2": -787462
+  },
+  "pricol": {
+    "en": -13408709,
+    "t0": -3760003,
+    "t1": -7594651,
+    "t2": -11255234,
+    "t3": 6370337
+  }
+}

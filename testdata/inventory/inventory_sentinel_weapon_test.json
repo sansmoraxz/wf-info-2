@@ -1,0 +1,41 @@
+{
+  "Configs": [
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/RifleUpperBack"
+      ],
+      "Upgrades": [
+        "",
+        "",
+        "",
+        "5deac59757904a6826621d74",
+        "",
+        "",
+        "5be841d957904a40be7cde7c",
+        "5bcd558357904a0fa06bba9b"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/RifleUpperBack"
+      ]
+    },
+    {
+      "Skins": [
+        "",
+        "",
+        "/Lotus/Upgrades/Skins/HolsterCustomizations/RifleUpperBack"
+      ]
+    }
+  ],
+  "ItemId": {
+    "$oid": "5bc2ef683f8d4ab51b364337"
+  },
+  "ItemType": "/Lotus/Types/Sentinels/SentinelWeapons/Gremlin",
+  "UpgradeVer": 101,
+  "XP": 20545526
+}

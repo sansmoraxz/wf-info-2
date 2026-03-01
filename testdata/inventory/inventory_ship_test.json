@@ -1,0 +1,13 @@
+{
+  "AirSupportPower": "/Lotus/Types/Restoratives/LisetAutoHack",
+  "ItemId": {
+    "$oid": "5bc08473a38e4a12a663faa5"
+  },
+  "ItemType": "/Lotus/Types/Items/Ships/DefaultShip",
+  "ShipExterior": {
+    "ShipAttachments": {
+      "HOOD_ORNAMENT": ""
+    },
+    "SkinFlavourItem": "/Lotus/Upgrades/Skins/Liset/DexLisetSkin"
+  }
+}

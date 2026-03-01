@@ -1,0 +1,57 @@
+{
+  "Configs": [
+    {
+      "Upgrades": [
+        "60d780ccdf466f30366e94c1",
+        "60eca0a2e63dbe16e032cbe7",
+        "613615963820d77ab741334f",
+        "60eca3b5f6a5de624d6be48d",
+        "60eca25e3a6685441513f467",
+        "5f7f5c52146903580e3cb368",
+        "62855ff701480c3254695ad1",
+        "629515e9c167e3108f063cbb",
+        "60d75da33bad780d8f1a4a14",
+        "60d75ceec2fc641c2b6b39f1",
+        "6285602c0b379e103043e59f",
+        "60eca0540aa6004d2c5262d9",
+        "60d75cdd09024f08fa71fb31",
+        "629515faa07b79780e1a2f29",
+        "60d75c8dd5ad204a953c7672"
+      ]
+    },
+    {
+      "Upgrades": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "629cf767f502bc20aa239b84",
+        "60d75da33bad780d8f1a4a14",
+        "62855ff701480c3254695ad1",
+        "60d75ceec2fc641c2b6b39f1",
+        "",
+        "60eca0540aa6004d2c5262d9",
+        "60d75cdd09024f08fa71fb31",
+        "",
+        "60d75ca9d5ad204a953c77d9"
+      ]
+    },
+    {}
+  ],
+  "Features": 1,
+  "ItemId": {
+    "$oid": "606eaecfe3b13607a2026ff3"
+  },
+  "ItemType": "/Lotus/Types/Game/CrewShip/RailJack/DefaultHarness",
+  "Polarity": [
+    {
+      "Slot": 14,
+      "Value": "AP_ANY"
+    }
+  ],
+  "Polarized": 1,
+  "UpgradeVer": 101,
+  "XP": 21375974
+}

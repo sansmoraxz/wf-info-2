@@ -1,0 +1,12 @@
+{
+  "CurrentHP": 65,
+  "ItemId": {
+    "$oid": "5bcddf3457904a584a5de3d1"
+  },
+  "ItemType": "/Lotus/Types/Ship/BasicResourceDrone",
+  "RepairStart": {
+    "$date": {
+      "$numberLong": "1769238622004"
+    }
+  }
+}
