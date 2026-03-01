@@ -275,5 +275,9 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Types/Gameplay/NarmerSorties/ArchonCrystalBorealMythic"
         );
+        assert_eq!(rec.identity.category, "Misc");
+        assert_eq!(rec.type_field, "Misc");
+        assert!(!rec.trade.tradable);
+        assert!(!rec.trade.masterable);
     }
 }

@@ -233,5 +233,21 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Weapons/Tenno/Archwing/Primary/NokkoArchGun/NokkoArchGun"
         );
+        assert_eq!(rec.identity.name, "Arbucep");
+        assert_eq!(rec.identity.category, "Arch-Gun");
+        assert!(!rec.trade.tradable);
+        assert!(rec.trade.masterable);
+
+        // Weapon stats
+        assert!((rec.weapon.critical_chance - 0.1).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 130.0).abs() < 0.01);
+        assert_eq!(rec.weapon.damage_per_shot.len(), 20);
+
+        // Gun stats
+        assert_eq!(rec.gun.magazine_size, Some(6));
+
+        // Buildable
+        assert_eq!(rec.build.build_price, Some(25000));
+        assert_eq!(rec.build.components.len(), 5);
     }
 }

@@ -126,5 +126,10 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Types/Items/Gems/Deimos/DeimosCommonOreAItem"
         );
+        assert_eq!(rec.identity.name, "Adramalium");
+        assert_eq!(rec.identity.category, "Resources");
+        assert_eq!(rec.type_field, ResourceType::Gem);
+        assert!(!rec.trade.tradable);
+        assert!(!rec.trade.masterable);
     }
 }

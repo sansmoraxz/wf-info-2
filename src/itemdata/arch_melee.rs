@@ -243,5 +243,21 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Weapons/Tenno/Archwing/Melee/ArchScythe/ArchScythe"
         );
+        assert_eq!(rec.identity.name, "Kaszas");
+        assert_eq!(rec.identity.category, "Arch-Melee");
+        assert!(!rec.trade.tradable);
+        assert!(rec.trade.masterable);
+
+        // Weapon stats
+        assert!((rec.weapon.critical_chance - 0.15).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 392.0).abs() < 0.01);
+        assert_eq!(rec.weapon.damage_per_shot.len(), 20);
+
+        // Melee stats
+        assert_eq!(rec.blocking_angle, 90);
+
+        // Buildable
+        assert_eq!(rec.build.build_price, Some(25000));
+        assert_eq!(rec.build.components.len(), 4);
     }
 }

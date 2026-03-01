@@ -230,7 +230,7 @@ mod tests {
     use serde_json::from_str;
 
     #[test]
-    fn test_deserialize_primary() {
+    fn test_deserialize_secondary() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/testdata/itemdata/secondary_test.json"
@@ -242,5 +242,27 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Weapons/ClanTech/Bio/AcidDartPistol"
         );
+        assert_eq!(rec.identity.name, "Acrid");
+        assert_eq!(rec.identity.category, "Secondary");
+        assert_eq!(rec.type_field, SecondaryType::Pistol);
+        assert!(!rec.trade.tradable);
+        assert!(rec.trade.masterable);
+
+        // Weapon stats
+        assert!((rec.weapon.critical_chance - 0.05).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 43.0).abs() < 0.01);
+        assert_eq!(rec.weapon.damage_per_shot.len(), 20);
+
+        // Gun stats
+        assert_eq!(rec.gun.magazine_size, Some(15));
+        assert!((rec.gun.accuracy - 100.0).abs() < 0.01);
+
+        // Buildable
+        assert_eq!(rec.build.build_price, Some(30000));
+        assert_eq!(rec.build.components.len(), 5);
+
+        // Equippable
+        assert_eq!(rec.equip.slot, Some(Slot::Secondary));
+        assert!(!rec.prime.is_prime);
     }
 }

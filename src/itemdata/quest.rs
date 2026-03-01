@@ -116,6 +116,14 @@ mod tests {
         let rec: Quest = from_str(json_data).unwrap();
 
         assert_eq!(rec.identity.unique_name, "/Lotus/Types/Keys/DojoKey");
+        assert_eq!(rec.identity.name, "Clan Key");
+        assert_eq!(rec.identity.category, "Quests");
+        assert_eq!(rec.type_field, "Key");
+        assert!(!rec.trade.tradable);
+        assert!(!rec.trade.masterable);
+
+        // Buildable
         assert_eq!(rec.build.build_price, Some(1500));
+        assert_eq!(rec.build.components.len(), 4);
     }
 }

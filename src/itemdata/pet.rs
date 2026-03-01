@@ -340,9 +340,20 @@ mod tests {
                     p.identity.unique_name,
                     "/Lotus/Types/Game/CatbrowPet/MirrorCatbrowPetPowerSuit"
                 );
+                assert_eq!(p.identity.name, "Adarza Kavat");
+                assert_eq!(p.identity.category, "Pets");
+                assert!(!p.trade.tradable);
+                assert!(p.trade.masterable);
+
+                // Character stats
                 assert_eq!(p.stats.health, 310);
                 assert_eq!(p.stats.shield, 270);
                 assert_eq!(p.stats.armor, 300);
+                assert_eq!(p.stats.power, 100);
+
+                // Has wikia link
+                assert!(p.wiki_available);
+                assert!(!p.wikia_url.is_empty());
             }
             _ => panic!("Expected KubrowPets variant"),
         }

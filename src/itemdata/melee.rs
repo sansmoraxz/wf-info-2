@@ -236,7 +236,7 @@ mod tests {
     use serde_json::from_str;
 
     #[test]
-    fn test_deserialize_archmelee() {
+    fn test_deserialize_melee() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/testdata/itemdata/melee_test.json"
@@ -248,5 +248,26 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Weapons/Grineer/Melee/GrineerTylAxeAndBoar/RegorAxeShield"
         );
+        assert_eq!(rec.identity.name, "Ack & Brunt");
+        assert_eq!(rec.identity.category, "Melee");
+        assert_eq!(rec.type_field, MeleeType::Melee);
+        assert!(!rec.trade.tradable);
+        assert!(rec.trade.masterable);
+
+        // Weapon stats
+        assert!((rec.weapon.critical_chance - 0.2).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 149.0).abs() < 0.01);
+        assert_eq!(rec.weapon.damage_per_shot.len(), 20);
+
+        // Melee stats
+        assert_eq!(rec.melee.blocking_angle, Some(70));
+
+        // Buildable
+        assert_eq!(rec.build.build_price, Some(65000));
+        assert_eq!(rec.build.components.len(), 5);
+
+        // Equippable
+        assert_eq!(rec.equip.slot, Some(Slot::Melee));
+        assert!(!rec.prime.is_prime);
     }
 }

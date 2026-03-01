@@ -85,5 +85,11 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Types/Items/Fish/Deimos/InfestedCommonDFishItem"
         );
+        assert_eq!(rec.identity.name, "Amniophysi");
+        assert_eq!(rec.identity.category, "Fish");
+        assert_eq!(rec.type_field, "Fish");
+        assert!(rec.trade.tradable);
+        assert!(!rec.trade.masterable);
+        assert!(!rec.drops.is_empty());
     }
 }

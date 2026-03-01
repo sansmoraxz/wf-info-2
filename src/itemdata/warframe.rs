@@ -439,7 +439,30 @@ mod tests {
                     w.identity.unique_name,
                     "/Lotus/Powersuits/Priest/HarrowPrime"
                 );
+                assert_eq!(w.identity.name, "Harrow Prime");
+                assert_eq!(w.identity.category, "Warframes");
+                assert_eq!(w.type_field, "Warframe");
                 assert_eq!(w.sex, Sex::Male);
+                assert!(!w.trade.tradable);
+                assert!(w.trade.masterable);
+                assert_eq!(w.product_category, "Suits");
+
+                // Character stats
+                assert_eq!(w.stats.health, 270);
+                assert_eq!(w.stats.shield, 640);
+                assert_eq!(w.stats.armor, 185);
+                assert_eq!(w.stats.power, 140);
+
+                // Abilities
+                assert_eq!(w.abilities.len(), 4);
+                assert_eq!(w.abilities[0].name, "Condemn");
+
+                // Buildable
+                assert_eq!(w.build.build_price, Some(25000));
+                assert_eq!(w.build.components.len(), 5);
+
+                // Prime
+                assert!(w.prime.is_prime);
             }
             _ => panic!("Expected Suits variant"),
         }

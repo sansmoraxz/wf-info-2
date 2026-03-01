@@ -91,6 +91,17 @@ mod tests {
         let rec: Node = from_str(json_data).unwrap();
 
         assert_eq!(rec.identity.unique_name, "SolNode203");
+        assert_eq!(rec.identity.name, "Abaddon");
+        assert_eq!(rec.identity.category, "Node");
+        assert_eq!(rec.type_field, "Node");
+        assert!(!rec.trade.tradable);
+        assert!(!rec.trade.masterable);
+
+        // Node-specific
         assert_eq!(rec.system_name, "Europa");
+        assert_eq!(rec.min_enemy_level, 21);
+        assert_eq!(rec.max_enemy_level, 23);
+        assert!(rec.faction_index >= 0);
+        assert!(rec.mission_index >= 0);
     }
 }

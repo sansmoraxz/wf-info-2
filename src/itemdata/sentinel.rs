@@ -188,5 +188,21 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Types/Sentinels/SentinelPowersuits/CarrierPowerSuit"
         );
+        assert_eq!(rec.identity.name, "Carrier");
+        assert_eq!(rec.identity.category, "Sentinels");
+        assert!(!rec.trade.tradable);
+        assert!(rec.trade.masterable);
+
+        // Character stats
+        assert_eq!(rec.stats.health, 560);
+        assert_eq!(rec.stats.shield, 250);
+        assert_eq!(rec.stats.armor, 80);
+        assert_eq!(rec.stats.power, 100);
+
+        // Buildable
+        assert_eq!(rec.build.build_price, Some(15000));
+        assert_eq!(rec.build.components.len(), 5);
+
+        assert!(!rec.prime.is_prime);
     }
 }

@@ -130,6 +130,17 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Types/StoreItems/SuitCustomizations/ColourPickerAccessibilityItemA"
         );
+        assert_eq!(rec.identity.name, "Accessibility");
+        assert_eq!(rec.identity.category, "Skins");
+        assert!(!rec.trade.tradable);
+        assert!(!rec.trade.masterable);
+
+        // Color palette specific
         assert!(!rec.hex_colours.is_empty());
+        assert!(rec.hex_colours.len() > 10);
+        // Hex values should be non-empty strings
+        assert!(!rec.hex_colours[0].value.is_empty());
+
+        assert_eq!(rec.exclude_from_codex, Some(true));
     }
 }

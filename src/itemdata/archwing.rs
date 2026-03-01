@@ -214,5 +214,24 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Powersuits/Archwing/StealthJetPack/StealthJetPack"
         );
+        assert_eq!(rec.identity.name, "Itzal");
+        assert_eq!(rec.identity.category, "Archwing");
+        assert!(!rec.trade.tradable);
+        assert!(rec.trade.masterable);
+
+        // Character stats
+        assert_eq!(rec.stats.health, 200);
+        assert_eq!(rec.stats.shield, 220);
+        assert_eq!(rec.stats.armor, 50);
+        assert_eq!(rec.stats.power, 220);
+
+        // Abilities
+        assert_eq!(rec.abilities.len(), 4);
+
+        // Buildable
+        assert_eq!(rec.build_price, 25000);
+        assert_eq!(rec.components.len(), 5);
+
+        assert!(!rec.prime.is_prime);
     }
 }

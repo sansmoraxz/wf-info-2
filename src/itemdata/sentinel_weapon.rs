@@ -267,5 +267,15 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Types/Friendly/Pets/ZanukaPets/ZanukaPetMeleeWeaponIP"
         );
+        assert_eq!(rec.identity.name, "Batoten");
+        assert!(!rec.trade.tradable);
+        assert!(rec.trade.masterable);
+
+        // Weapon stats
+        assert!((rec.weapon.critical_chance - 0.1).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 300.0).abs() < 0.01);
+        assert_eq!(rec.weapon.damage_per_shot.len(), 20);
+
+        assert!(!rec.prime.is_prime);
     }
 }

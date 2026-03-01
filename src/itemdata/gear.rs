@@ -124,5 +124,11 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Types/Restoratives/Consumable/MiningLaserC"
         );
+        assert_eq!(rec.identity.name, "Advanced Nosam Cutter");
+        assert_eq!(rec.identity.category, "Gear");
+        assert!(!rec.trade.tradable);
+        assert!(!rec.trade.masterable);
+        assert_eq!(rec.build.build_price, Some(3500));
+        assert_eq!(rec.build.components.len(), 4);
     }
 }

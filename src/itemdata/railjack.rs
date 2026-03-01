@@ -173,7 +173,22 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Weapons/CrewShip/MassDriver/AutoCannon/AutoCannonTierA"
         );
+        assert_eq!(rec.identity.name, "Apoc Mk I");
+        assert_eq!(rec.identity.category, "Railjack");
         assert_eq!(rec.type_field, RailjackType::RailjackTurret);
         assert!(rec.exclude_from_codex);
+        assert!(!rec.trade.tradable);
+
+        // Weapon stats
+        assert!((rec.weapon.critical_chance - 0.1).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 227.0).abs() < 0.01);
+        assert!((rec.weapon.fire_rate - 8.33).abs() < 0.01);
+        assert_eq!(rec.weapon.damage_per_shot.len(), 20);
+
+        // Gun stats
+        assert_eq!(rec.gun.magazine_size, Some(83));
+
+        // Drops
+        assert!(!rec.drops.is_empty());
     }
 }

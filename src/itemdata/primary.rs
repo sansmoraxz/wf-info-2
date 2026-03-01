@@ -240,5 +240,30 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Weapons/Tenno/LongGuns/SapientPrimary/SapientPrimaryWeapon"
         );
+        assert_eq!(rec.identity.name, "Acceltra");
+        assert_eq!(rec.identity.category, "Primary");
+        assert_eq!(rec.type_field, PrimaryType::Rifle);
+        assert!(!rec.trade.tradable);
+        assert!(rec.trade.masterable);
+
+        // Weapon stats
+        assert!((rec.weapon.critical_chance - 0.32).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 70.0).abs() < 0.01);
+        assert!((rec.weapon.fire_rate - 12.0).abs() < 0.1);
+        assert_eq!(rec.weapon.damage_per_shot.len(), 20);
+
+        // Gun stats
+        assert_eq!(rec.gun.magazine_size, Some(48));
+        assert!((rec.gun.accuracy - 23.53).abs() < 0.01);
+
+        // Buildable
+        assert_eq!(rec.build.build_price, Some(25000));
+        assert_eq!(rec.build.components.len(), 5);
+
+        // Not prime
+        assert!(!rec.prime.is_prime);
+
+        // Equippable
+        assert_eq!(rec.equip.slot, Some(Slot::Primary));
     }
 }

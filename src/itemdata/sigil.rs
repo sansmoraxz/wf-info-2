@@ -85,5 +85,9 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Upgrades/Skins/Sigils/Community10YearAnniversarySigil"
         );
+        assert_eq!(rec.identity.category, "Sigils");
+        assert_eq!(rec.type_field, "Sigil");
+        assert!(!rec.trade.tradable);
+        assert!(!rec.trade.masterable);
     }
 }

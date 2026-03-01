@@ -112,8 +112,23 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Types/Enemies/CorpusChampions/TeamD/CCTeamDOspreyAvatar"
         );
+        assert_eq!(rec.identity.name, "002-Er");
+        assert_eq!(rec.identity.category, "Enemy");
+        assert_eq!(rec.type_field, "Corpus");
+        assert!(!rec.trade.tradable);
+
+        // Combat stats
+        assert!((rec.health - 150.0).abs() < f64::EPSILON);
+        assert!((rec.shield - 100.0).abs() < f64::EPSILON);
+        assert!((rec.armor - 200.0).abs() < f64::EPSILON);
+
+        // Resistances
         assert_eq!(rec.resistances.len(), 3);
-        // Verify null chance drop is handled
+        assert!(!rec.resistances[0].type_field.is_empty());
+        assert!(!rec.resistances[0].affectors.is_empty());
+
+        // Drops with null chance handling
+        assert!(!rec.drops.is_empty());
         assert!(rec.drops.iter().any(|d| d.chance.is_none()));
     }
 }

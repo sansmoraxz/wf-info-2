@@ -93,5 +93,11 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Types/Game/Projections/T4VoidProjectionLavosPrimeASilver"
         );
+        assert_eq!(rec.identity.name, "Axi P8 Exceptional");
+        assert_eq!(rec.identity.category, "Relics");
+        assert_eq!(rec.type_field, "Relic");
+        assert!(rec.trade.tradable);
+        assert!(!rec.trade.masterable);
+        assert!(!rec.drops.is_empty());
     }
 }

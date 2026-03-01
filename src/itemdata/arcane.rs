@@ -97,5 +97,11 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Upgrades/CosmeticEnhancers/Defensive/SpeedOnDamage"
         );
+        assert_eq!(rec.identity.name, "Arcane Agility");
+        assert_eq!(rec.identity.category, "Arcanes");
+        assert!(rec.trade.tradable);
+        assert!(!rec.trade.masterable);
+        assert_eq!(rec.rarity, Some(Rarity::Uncommon));
+        assert!(!rec.drops.is_empty());
     }
 }

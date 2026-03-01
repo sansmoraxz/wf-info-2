@@ -85,5 +85,9 @@ mod tests {
             rec.identity.unique_name,
             "/Lotus/Types/StoreItems/AvatarImages/FanChannel/AvatarImageChromaPrimePartner"
         );
+        assert_eq!(rec.identity.category, "Glyphs");
+        assert_eq!(rec.type_field, "Glyph");
+        assert!(!rec.trade.tradable);
+        assert!(!rec.trade.masterable);
     }
 }
