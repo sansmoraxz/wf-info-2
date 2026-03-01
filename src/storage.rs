@@ -73,38 +73,14 @@ pub fn delete_profile() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Saves inventory data in two formats:
-/// 1. inventory.json - Pretty-printed JSON for human readability
-/// 2. lastData.dat - AES-128-CBC encrypted
+/// Saves inventory data as AES-128-CBC encrypted file.
 pub fn save_inventory(inventory: &inventory::Inventory) -> anyhow::Result<()> {
-    use aes::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
-    type Aes128CbcEnc = cbc::Encryptor<aes::Aes128>;
-
     let app_cache_dir = app_cache_dir()?;
 
-    // Save pretty-printed JSON
-    let json_path = app_cache_dir.join("inventory.json");
-    let pretty_json =
-        serde_json::to_string_pretty(inventory).context("Failed to serialize inventory")?;
-    fs::write(&json_path, &pretty_json).context("Failed to write inventory.json")?;
-    log::info!("Saved inventory JSON to {}", json_path.display());
+    let ciphertext = encrypt_inventory_bytes(inventory)?;
 
-    // Save encrypted lastData.dat (AES-128-CBC with PKCS7 padding)
-    let json_bytes = serde_json::to_vec(inventory).context("Failed to serialize inventory")?;
-
-    // Calculate padded size (PKCS7 pads to block size boundary)
-    let block_size = 16;
-    let padded_len = ((json_bytes.len() / block_size) + 1) * block_size;
-    let mut buffer = vec![0u8; padded_len];
-    buffer[..json_bytes.len()].copy_from_slice(&json_bytes);
-
-    let cipher = Aes128CbcEnc::new(&INVENTORY_KEY.into(), &INVENTORY_IV.into());
-    let ciphertext = cipher
-        .encrypt_padded_mut::<Pkcs7>(&mut buffer, json_bytes.len())
-        .map_err(|e| anyhow::anyhow!("Encryption error: {:?}", e))?;
-
-    let dat_path = app_cache_dir.join("lastData.dat");
-    fs::write(&dat_path, ciphertext).context("Failed to write lastData.dat")?;
+    let dat_path = app_cache_dir.join("inventoryData.dat");
+    fs::write(&dat_path, ciphertext).context("Failed to write inventoryData.dat")?;
     log::info!("Saved encrypted inventory to {}", dat_path.display());
 
     if let Err(e) = touch_inventory_updated(None) {
@@ -126,15 +102,25 @@ pub fn app_cache_dir() -> anyhow::Result<PathBuf> {
     Ok(app_cache_dir)
 }
 
-pub fn inventory_json_path() -> anyhow::Result<PathBuf> {
-    Ok(app_cache_dir()?.join("inventory.json"))
+pub fn decrypt_inventory_bytes(data: &[u8]) -> anyhow::Result<inventory::Inventory> {
+    use aes::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
+    type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
+
+    let mut buf = data.to_vec();
+    let cipher = Aes128CbcDec::new(&INVENTORY_KEY.into(), &INVENTORY_IV.into());
+    let plaintext = cipher
+        .decrypt_padded_mut::<Pkcs7>(&mut buf)
+        .map_err(|e| anyhow::anyhow!("Decryption error: {:?}", e))?;
+
+    let inventory =
+        serde_json::from_slice(plaintext).context("Failed to parse decrypted inventory JSON")?;
+    Ok(inventory)
 }
 
 pub fn read_inventory() -> anyhow::Result<inventory::Inventory> {
-    let json_path = inventory_json_path()?;
-    let raw = fs::read_to_string(&json_path).context("Failed to read inventory.json")?;
-    let inventory = serde_json::from_str(&raw).context("Failed to parse inventory JSON")?;
-    Ok(inventory)
+    let dat_path = app_cache_dir()?.join("inventoryData.dat");
+    let data = fs::read(&dat_path).context("Failed to read inventoryData.dat")?;
+    decrypt_inventory_bytes(&data)
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -196,4 +182,153 @@ pub fn clear_inventory_stale() -> anyhow::Result<InventoryMeta> {
     meta.stale_reason = None;
     write_inventory_meta(&meta)?;
     Ok(meta)
+}
+
+/// Encrypt inventory bytes using AES-128-CBC with the built-in key/IV.
+/// Returns the ciphertext (PKCS7-padded).
+pub fn encrypt_inventory_bytes(inventory: &inventory::Inventory) -> anyhow::Result<Vec<u8>> {
+    use aes::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
+    type Aes128CbcEnc = cbc::Encryptor<aes::Aes128>;
+
+    let json_bytes = serde_json::to_vec(inventory).context("Failed to serialize inventory")?;
+    let block_size = 16;
+    let padded_len = ((json_bytes.len() / block_size) + 1) * block_size;
+    let mut buffer = vec![0u8; padded_len];
+    buffer[..json_bytes.len()].copy_from_slice(&json_bytes);
+
+    let cipher = Aes128CbcEnc::new(&INVENTORY_KEY.into(), &INVENTORY_IV.into());
+    let ciphertext = cipher
+        .encrypt_padded_mut::<Pkcs7>(&mut buffer, json_bytes.len())
+        .map_err(|e| anyhow::anyhow!("Encryption error: {:?}", e))?;
+
+    Ok(ciphertext.to_vec())
+}
+
+/// Encrypt inventory bytes using a caller-supplied AES-128-CBC key and IV.
+pub fn encrypt_inventory_bytes_with_key(
+    inventory: &inventory::Inventory,
+    key: &[u8; 16],
+    iv: &[u8; 16],
+) -> anyhow::Result<Vec<u8>> {
+    use aes::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
+    type Aes128CbcEnc = cbc::Encryptor<aes::Aes128>;
+
+    let json_bytes = serde_json::to_vec(inventory).context("Failed to serialize inventory")?;
+    let block_size = 16;
+    let padded_len = ((json_bytes.len() / block_size) + 1) * block_size;
+    let mut buffer = vec![0u8; padded_len];
+    buffer[..json_bytes.len()].copy_from_slice(&json_bytes);
+
+    let cipher = Aes128CbcEnc::new(key.into(), iv.into());
+    let ciphertext = cipher
+        .encrypt_padded_mut::<Pkcs7>(&mut buffer, json_bytes.len())
+        .map_err(|e| anyhow::anyhow!("Encryption error: {:?}", e))?;
+
+    Ok(ciphertext.to_vec())
+}
+
+/// Decrypt inventory bytes using a caller-supplied AES-128-CBC key and IV.
+pub fn decrypt_inventory_bytes_with_key(
+    data: &[u8],
+    key: &[u8; 16],
+    iv: &[u8; 16],
+) -> anyhow::Result<inventory::Inventory> {
+    use aes::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
+    type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
+
+    let mut buf = data.to_vec();
+    let cipher = Aes128CbcDec::new(key.into(), iv.into());
+    let plaintext = cipher
+        .decrypt_padded_mut::<Pkcs7>(&mut buf)
+        .map_err(|e| anyhow::anyhow!("Decryption error: {:?}", e))?;
+
+    let inventory =
+        serde_json::from_slice(plaintext).context("Failed to parse decrypted inventory JSON")?;
+    Ok(inventory)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::inventory::tests::load_test_inventory;
+    use rand::{Rng, rng};
+
+    #[test]
+    fn test_encrypt_decrypt_roundtrip_default_key() {
+        let inventory = load_test_inventory();
+        let encrypted = encrypt_inventory_bytes(&inventory).expect("encryption should succeed");
+
+        // Ciphertext should not be empty and should differ from plaintext
+        assert!(!encrypted.is_empty());
+        let json_bytes = serde_json::to_vec(&inventory).unwrap();
+        assert_ne!(encrypted, json_bytes, "ciphertext must differ from plaintext");
+
+        let decrypted = decrypt_inventory_bytes(&encrypted).expect("decryption should succeed");
+        assert_eq!(inventory, decrypted);
+    }
+
+    #[test]
+    fn test_encrypt_decrypt_roundtrip_random_key() {
+        let inventory = load_test_inventory();
+
+        let mut key = [0u8; 16];
+        let mut iv = [0u8; 16];
+        rng().fill(&mut key);
+        rng().fill(&mut iv);
+
+        let encrypted =
+            encrypt_inventory_bytes_with_key(&inventory, &key, &iv).expect("encryption should succeed");
+
+        assert!(!encrypted.is_empty());
+        let json_bytes = serde_json::to_vec(&inventory).unwrap();
+        assert_ne!(encrypted, json_bytes, "ciphertext must differ from plaintext");
+
+        let decrypted =
+            decrypt_inventory_bytes_with_key(&encrypted, &key, &iv).expect("decryption should succeed");
+        assert_eq!(inventory, decrypted);
+    }
+
+    #[test]
+    fn test_decrypt_with_wrong_key_fails() {
+        let inventory = load_test_inventory();
+
+        let mut key = [0u8; 16];
+        let mut iv = [0u8; 16];
+        rng().fill(&mut key);
+        rng().fill(&mut iv);
+
+        let encrypted =
+            encrypt_inventory_bytes_with_key(&inventory, &key, &iv).expect("encryption should succeed");
+
+        // Use a different random key — decryption should fail
+        let mut wrong_key = [0u8; 16];
+        rng().fill(&mut wrong_key);
+        // Ensure it's actually different
+        if wrong_key == key {
+            wrong_key[0] ^= 0xFF;
+        }
+
+        let result = decrypt_inventory_bytes_with_key(&encrypted, &wrong_key, &iv);
+        assert!(result.is_err(), "decryption with wrong key should fail");
+    }
+
+    #[test]
+    fn test_multiple_random_keys_produce_different_ciphertext() {
+        let inventory = load_test_inventory();
+
+        let mut key1 = [0u8; 16];
+        let mut iv1 = [0u8; 16];
+        rng().fill(&mut key1);
+        rng().fill(&mut iv1);
+
+        let mut key2 = [0u8; 16];
+        let mut iv2 = [0u8; 16];
+        rng().fill(&mut key2);
+        rng().fill(&mut iv2);
+
+        let enc1 = encrypt_inventory_bytes_with_key(&inventory, &key1, &iv1).unwrap();
+        let enc2 = encrypt_inventory_bytes_with_key(&inventory, &key2, &iv2).unwrap();
+
+        assert_ne!(enc1, enc2, "different keys should produce different ciphertext");
+    }
 }

@@ -113,6 +113,10 @@ struct InventoryLoadArgs {
     /// Source identifier
     #[arg(long)]
     source: Option<String>,
+
+    /// Treat the file as AES-128-CBC encrypted
+    #[arg(long)]
+    encrypted: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -144,6 +148,10 @@ struct InventoryFilterArgs {
     /// Path filter
     #[arg(long)]
     path: Option<String>,
+
+    /// Treat the file as AES-128-CBC encrypted
+    #[arg(long)]
+    encrypted: bool,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -429,6 +437,9 @@ impl InventoryLoadArgs {
         if let Some(v) = self.source {
             params["source"] = Value::String(v);
         }
+        if self.encrypted {
+            params["encrypted"] = Value::Bool(true);
+        }
         params
     }
 }
@@ -456,6 +467,9 @@ impl InventoryFilterArgs {
         }
         if let Some(v) = self.path {
             params["path"] = Value::String(v);
+        }
+        if self.encrypted {
+            params["encrypted"] = Value::Bool(true);
         }
         params
     }
