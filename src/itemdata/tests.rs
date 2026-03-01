@@ -61,22 +61,46 @@ fn test_warframes_tabular_fields() {
         (
             "Excalibur",
             "/Lotus/Powersuits/Excalibur/Excalibur",
-            270, 240, 270, 100, 4, false, None,
+            270,
+            240,
+            270,
+            100,
+            4,
+            false,
+            None,
         ),
         (
             "Ash Prime",
             "/Lotus/Powersuits/Ninja/AshPrime",
-            455, 185, 365, 100, 4, true, Some(true),
+            455,
+            185,
+            365,
+            100,
+            4,
+            true,
+            Some(true),
         ),
         (
             "Bonewidow",
             "/Lotus/Powersuits/EntratiMech/ThanoTech",
-            1880, 480, 430, 175, 4, false, None,
+            1880,
+            480,
+            430,
+            175,
+            4,
+            false,
+            None,
         ),
         (
             "Helminth",
             "/Lotus/Powersuits/PowersuitAbilities/Helminth",
-            0, 0, 0, 0, 13, false, None,
+            0,
+            0,
+            0,
+            0,
+            13,
+            false,
+            None,
         ),
     ];
 
@@ -115,12 +139,18 @@ fn test_warframes_variant_discrimination() {
 
     // MechSuits variant
     let bw = find_by_name(&arr, "Bonewidow");
-    assert!(matches!(bw, itemdata::warframe::WarframeEntry::MechSuits(_)));
+    assert!(matches!(
+        bw,
+        itemdata::warframe::WarframeEntry::MechSuits(_)
+    ));
     assert_eq!(bw.mastery_req(), Some(0));
 
     // Helminth variant
     let helminth = find_by_name(&arr, "Helminth");
-    assert!(matches!(helminth, itemdata::warframe::WarframeEntry::Helminth(_)));
+    assert!(matches!(
+        helminth,
+        itemdata::warframe::WarframeEntry::Helminth(_)
+    ));
     assert!(helminth.build_price().is_none());
     assert!(!helminth.tradable());
 }
@@ -140,24 +170,53 @@ fn test_primary_tabular_fields() {
     let arr: itemdata::primary::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, type, crit_chance, total_damage, mag_size, trigger, disposition, is_prime, vaulted)
-    let cases: &[(&str, &str, &str, f64, f64, i64, &str, i64, bool, Option<bool>)] = &[
+    let cases: &[(
+        &str,
+        &str,
+        &str,
+        f64,
+        f64,
+        i64,
+        &str,
+        i64,
+        bool,
+        Option<bool>,
+    )] = &[
         (
             "Braton",
             "/Lotus/Weapons/Tenno/Rifle/Rifle",
             "Rifle",
-            0.12, 24.0, 45, "Auto", 5, false, None,
+            0.12,
+            24.0,
+            45,
+            "Auto",
+            5,
+            false,
+            None,
         ),
         (
             "Soma Prime",
             "/Lotus/Weapons/Tenno/LongGuns/PrimeSoma/PrimeSomaRifle",
             "Rifle",
-            0.30, 12.0, 200, "Auto", 3, true, Some(true),
+            0.30,
+            12.0,
+            200,
+            "Auto",
+            3,
+            true,
+            Some(true),
         ),
         (
             "Acceltra",
             "/Lotus/Weapons/Tenno/LongGuns/SapientPrimary/SapientPrimaryWeapon",
             "Rifle",
-            0.32, 70.0, 48, "Auto", 1, false, None,
+            0.32,
+            70.0,
+            48,
+            "Auto",
+            1,
+            false,
+            None,
         ),
     ];
 
@@ -191,30 +250,65 @@ fn test_secondary_tabular_fields() {
     let arr: itemdata::secondary::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, type, crit_chance, total_damage, mag_size, trigger, disposition, is_prime, vaulted)
-    let cases: &[(&str, &str, &str, f64, f64, i64, &str, i64, bool, Option<bool>)] = &[
+    let cases: &[(
+        &str,
+        &str,
+        &str,
+        f64,
+        f64,
+        i64,
+        &str,
+        i64,
+        bool,
+        Option<bool>,
+    )] = &[
         (
             "Lex",
             "/Lotus/Weapons/Tenno/Pistol/HeavyPistol",
             "Pistol",
-            0.2, 130.0, 6, "Semi", 4, false, None,
+            0.2,
+            130.0,
+            6,
+            "Semi",
+            4,
+            false,
+            None,
         ),
         (
             "Furis",
             "/Lotus/Weapons/Tenno/Pistol/AutoPistol",
             "Pistol",
-            0.05, 20.0, 35, "Auto", 5, false, None,
+            0.05,
+            20.0,
+            35,
+            "Auto",
+            5,
+            false,
+            None,
         ),
         (
             "Lex Prime",
             "/Lotus/Weapons/Tenno/Pistols/PrimeLex/PrimeLex",
             "Pistol",
-            0.25, 180.0, 8, "Semi", 4, true, Some(false),
+            0.25,
+            180.0,
+            8,
+            "Semi",
+            4,
+            true,
+            Some(false),
         ),
         (
             "Akstiletto Prime",
             "/Lotus/Weapons/Tenno/Pistols/PrimeAkstiletto/PrimeAkstiletto",
             "Pistol",
-            0.15, 36.0, 40, "Auto", 2, true, Some(true),
+            0.15,
+            36.0,
+            40,
+            "Auto",
+            2,
+            true,
+            Some(true),
         ),
     ];
 
@@ -252,17 +346,29 @@ fn test_melee_tabular_fields() {
         (
             "Skana",
             "/Lotus/Weapons/Tenno/Melee/LongSword/LongSword",
-            0.05, 120.0, 4, false, 55,
+            0.05,
+            120.0,
+            4,
+            false,
+            55,
         ),
         (
             "Nikana Prime",
             "/Lotus/Weapons/Tenno/Melee/Swords/PrimeKatana/PrimeNikana",
-            0.28, 198.0, 1, true, 55,
+            0.28,
+            198.0,
+            1,
+            true,
+            55,
         ),
         (
             "Gram",
             "/Lotus/Weapons/Tenno/Melee/GreatSword/GreatSword",
-            0.15, 160.0, 5, false, 55,
+            0.15,
+            160.0,
+            5,
+            false,
+            55,
         ),
     ];
 
@@ -273,8 +379,16 @@ fn test_melee_tabular_fields() {
         assert!((item.total_damage() - dmg).abs() < 0.5, "{name} dmg");
         assert_eq!(item.disposition(), Some(dispo), "{name} dispo");
         assert_eq!(item.is_prime(), prime, "{name} prime");
-        assert_eq!(item.blocking_angle(), Some(block_angle), "{name} blocking_angle");
-        assert_eq!(item.damage_per_shot().len(), 20, "{name} damage_per_shot len");
+        assert_eq!(
+            item.blocking_angle(),
+            Some(block_angle),
+            "{name} blocking_angle"
+        );
+        assert_eq!(
+            item.damage_per_shot().len(),
+            20,
+            "{name} damage_per_shot len"
+        );
         assert_eq!(item.slot(), Some(&itemdata::Slot::Melee), "{name} slot");
     }
 }
@@ -298,17 +412,32 @@ fn test_archwing_tabular_fields() {
         (
             "Amesha",
             "/Lotus/Powersuits/Archwing/SupportJetPack/SupportJetPack",
-            650, 195, 220, 4, false, 25000,
+            650,
+            195,
+            220,
+            4,
+            false,
+            25000,
         ),
         (
             "Odonata",
             "/Lotus/Powersuits/Archwing/StandardJetPack/StandardJetPack",
-            425, 100, 430, 4, false, 7000,
+            425,
+            100,
+            430,
+            4,
+            false,
+            7000,
         ),
         (
             "Odonata Prime",
             "/Lotus/Powersuits/Archwing/PrimeJetPack/PrimeJetPack",
-            650, 100, 640, 4, true, 25000,
+            650,
+            100,
+            640,
+            4,
+            true,
+            25000,
         ),
     ];
 
@@ -344,17 +473,35 @@ fn test_archgun_tabular_fields() {
         (
             "Cortege",
             "/Lotus/Weapons/Tenno/Archwing/Primary/ThanoTechArchGun/ThanoTechArchGun",
-            90.0, 12.0, 0.2, 100, "Held", 3, false,
+            90.0,
+            12.0,
+            0.2,
+            100,
+            "Held",
+            3,
+            false,
         ),
         (
             "Corvas",
             "/Lotus/Weapons/Tenno/Archwing/Primary/LaunchGrenade/ArchCannon",
-            880.0, 2.0, 0.4, 25, "Charge", 4, false,
+            880.0,
+            2.0,
+            0.4,
+            25,
+            "Charge",
+            4,
+            false,
         ),
         (
             "Corvas Prime",
             "/Lotus/Weapons/Tenno/Archwing/Primary/PrimeCorvas/PrimeCorvasWeapon",
-            960.0, 2.0, 0.44, 20, "Charge", 3, true,
+            960.0,
+            2.0,
+            0.44,
+            20,
+            "Charge",
+            3,
+            true,
         ),
     ];
 
@@ -392,17 +539,26 @@ fn test_archmelee_tabular_fields() {
         (
             "Agkuza",
             "/Lotus/Weapons/Tenno/Archwing/Melee/ArchSwordHook/ArchHookSwordWeapon",
-            436.0, 0.05, 90, 436,
+            436.0,
+            0.05,
+            90,
+            436,
         ),
         (
             "Centaur",
             "/Lotus/Weapons/Tenno/Archwing/Melee/Archswordandshield/ArchSwordShield",
-            376.0, 0.25, 90, 376,
+            376.0,
+            0.25,
+            90,
+            376,
         ),
         (
             "Kaszas",
             "/Lotus/Weapons/Tenno/Archwing/Melee/ArchScythe/ArchScythe",
-            392.0, 0.15, 90, 392,
+            392.0,
+            0.15,
+            90,
+            392,
         ),
     ];
 
@@ -492,25 +648,41 @@ fn test_mods_tabular_fields() {
             "Serration",
             "/Lotus/Upgrades/Mods/Rifle/Beginner/WeaponDamageAmountModBeginner",
             "Primary Mod",
-            true, true, false, false, false,
+            true,
+            true,
+            false,
+            false,
+            false,
         ),
         (
             "Archgun Riven Mod",
             "/Lotus/Upgrades/Mods/Randomized/LotusArchgunRandomModRare",
             "Arch-Gun Riven Mod",
-            false, false, true, false, false,
+            false,
+            false,
+            true,
+            false,
+            false,
         ),
         (
             "Vigilante Offense",
             "/Lotus/Upgrades/Mods/Sets/Vigilante/PrimaryVigilanteOffenseMod",
             "Primary Mod",
-            true, false, false, true, false,
+            true,
+            false,
+            false,
+            true,
+            false,
         ),
         (
             "Amarsetmod",
             "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod",
             "Mod Set Mod",
-            false, false, false, false, true,
+            false,
+            false,
+            false,
+            false,
+            true,
         ),
     ];
 
@@ -556,7 +728,10 @@ fn test_mods_variant_details() {
 
     // Set member details
     let vig = find_by_name(&arr, "Vigilante Offense");
-    assert!(matches!(vig.mod_category(), itemdata::ModCategory::SetMember { .. }));
+    assert!(matches!(
+        vig.mod_category(),
+        itemdata::ModCategory::SetMember { .. }
+    ));
 
     // Set definition details
     let set_def = find_by_name(&arr, "Amarsetmod");
@@ -612,17 +787,23 @@ fn test_pets_tabular_fields() {
         (
             "Adarza Kavat",
             "/Lotus/Types/Game/CatbrowPet/MirrorCatbrowPetPowerSuit",
-            false, true, false,
+            false,
+            true,
+            false,
         ),
         (
             "Adlet Core",
             "/Lotus/Types/Friendly/Pets/ZanukaPets/ZanukaPetParts/ZanukaPetPartBodyA",
-            false, false, true,
+            false,
+            false,
+            true,
         ),
         (
             "Venari",
             "/Lotus/Powersuits/Khora/Kavat/KhoraKavatPowerSuit",
-            false, true, false,
+            false,
+            true,
+            false,
         ),
     ];
 
@@ -707,17 +888,29 @@ fn test_sentinels_tabular_fields() {
         (
             "Carrier",
             "/Lotus/Types/Sentinels/SentinelPowersuits/CarrierPowerSuit",
-            560, 80, 250, false, None,
+            560,
+            80,
+            250,
+            false,
+            None,
         ),
         (
             "Carrier Prime",
             "/Lotus/Types/Sentinels/SentinelPowersuits/PrimeCarrierPowerSuit",
-            650, 150, 300, true, Some(true),
+            650,
+            150,
+            300,
+            true,
+            Some(true),
         ),
         (
             "Shade",
             "/Lotus/Types/Sentinels/SentinelPowersuits/ShadePowerSuit",
-            600, 80, 130, false, None,
+            600,
+            80,
+            130,
+            false,
+            None,
         ),
     ];
 
@@ -752,17 +945,23 @@ fn test_sentinel_weapons_tabular_fields() {
         (
             "Artax",
             "/Lotus/Types/Sentinels/SentinelWeapons/Gremlin",
-            5.0, 16.67, 3,
+            5.0,
+            16.67,
+            3,
         ),
         (
             "Akaten",
             "/Lotus/Types/Friendly/Pets/ZanukaPets/ZanukaPetMeleeWeaponPS",
-            300.0, 1.0, 3,
+            300.0,
+            1.0,
+            3,
         ),
         (
             "Batoten",
             "/Lotus/Types/Friendly/Pets/ZanukaPets/ZanukaPetMeleeWeaponIP",
-            300.0, 1.0, 3,
+            300.0,
+            1.0,
+            3,
         ),
     ];
 
@@ -795,17 +994,20 @@ fn test_gear_tabular_fields() {
         (
             "Advanced Nosam Cutter",
             "/Lotus/Types/Restoratives/Consumable/MiningLaserC",
-            false, true,
+            false,
+            true,
         ),
         (
             "Codex Scanner",
             "/Lotus/Types/Restoratives/Consumable/Scanner",
-            false, false,
+            false,
+            false,
         ),
         (
             "Air Support Charges",
             "/Lotus/Types/Restoratives/LisetAirSupport",
-            false, true,
+            false,
+            true,
         ),
     ];
 
@@ -815,7 +1017,11 @@ fn test_gear_tabular_fields() {
         assert_eq!(item.category(), "Gear", "{name} category");
         assert_eq!(item.type_field(), "Gear", "{name} type");
         assert_eq!(item.tradable(), tradable, "{name} tradable");
-        assert_eq!(item.build_price().is_some(), has_bp, "{name} has_build_price");
+        assert_eq!(
+            item.build_price().is_some(),
+            has_bp,
+            "{name} has_build_price"
+        );
     }
 }
 
@@ -838,17 +1044,20 @@ fn test_misc_tabular_fields() {
         (
             "<Shard_blue_simple> Azure Archon Shard",
             "/Lotus/Types/Gameplay/NarmerSorties/ArchonCrystalBoreal",
-            "Misc", false,
+            "Misc",
+            false,
         ),
         (
             "<Shard_blue_simple> Tauforged Azure Archon Shard",
             "/Lotus/Types/Gameplay/NarmerSorties/ArchonCrystalBorealMythic",
-            "Misc", false,
+            "Misc",
+            false,
         ),
         (
             "\"Circle Of Comrades\" Series On Vhs",
             "/Lotus/Types/Gameplay/1999Wf/Gifts/VideoCassette",
-            "Misc", false,
+            "Misc",
+            false,
         ),
     ];
 
@@ -922,17 +1131,20 @@ fn test_resources_tabular_fields() {
         (
             "35mm Film",
             "/Lotus/Types/Gameplay/1999Wf/Resources/HexDogTagQuincy",
-            "Resource", false,
+            "Resource",
+            false,
         ),
         (
             "Adramalium",
             "/Lotus/Types/Items/Gems/Deimos/DeimosCommonOreAItem",
-            "Gem", false,
+            "Gem",
+            false,
         ),
         (
             "Adramal Alloy",
             "/Lotus/Types/Items/Gems/Deimos/DeimosCommonOreAAlloyItem",
-            "Gem", false,
+            "Gem",
+            false,
         ),
     ];
 
@@ -963,20 +1175,25 @@ fn test_fish_tabular_fields() {
     let cases: &[(&str, &str, bool)] = &[
         (
             "/Lotus/Types/Items/Fish/Deimos/InfestedCommonDFishItem",
-            "Amniophysi", true,
+            "Amniophysi",
+            true,
         ),
         (
             "/Lotus/Types/Items/Fish/Deimos/InfestedCommonDFishItemLarge",
-            "Amniophysi", true,
+            "Amniophysi",
+            true,
         ),
         (
             "/Lotus/Types/Items/Fish/Deimos/InfestedCommonDFishItemMedium",
-            "Amniophysi", true,
+            "Amniophysi",
+            true,
         ),
     ];
 
     for &(unique, name, tradable) in cases {
-        let item = arr.iter().find(|f| f.unique_name() == unique)
+        let item = arr
+            .iter()
+            .find(|f| f.unique_name() == unique)
             .unwrap_or_else(|| panic!("fish with unique_name '{}' not found", unique));
         assert_eq!(item.name(), name, "{unique} name");
         assert_eq!(item.category(), "Fish", "{unique} category");
@@ -1086,17 +1303,20 @@ fn test_skins_tabular_fields() {
         (
             "17173 Emblem",
             "/Lotus/Upgrades/Skins/Clan/CY17173MediaBadge",
-            "Skin", false,
+            "Skin",
+            false,
         ),
         (
             "A Lost Time",
             "/Lotus/Types/Items/ShipDecos/NewWar/LisetPropFamilyPortrait",
-            "Ship Decoration", false,
+            "Ship Decoration",
+            false,
         ),
         (
             "Smoke",
             "/Lotus/Types/StoreItems/SuitCustomizations/NinjaColourPickerItem",
-            "Color Palette", false,
+            "Color Palette",
+            false,
         ),
     ];
 
@@ -1125,20 +1345,18 @@ fn test_quests_tabular_fields() {
 
     // (name, unique_name, tradable, has_build_price)
     let cases: &[(&str, &str, bool, bool)] = &[
-        (
-            "Clan Key",
-            "/Lotus/Types/Keys/DojoKey",
-            false, true,
-        ),
+        ("Clan Key", "/Lotus/Types/Keys/DojoKey", false, true),
         (
             "A Man Of Few Words",
             "/Lotus/Types/Keys/GetClemQuest/GetClemQuestKeyChain",
-            false, false,
+            false,
+            false,
         ),
         (
             "Angels Of The Zariman",
             "/Lotus/Types/Keys/ZarimanQuest/ZarimanQuestKeyChain",
-            false, false,
+            false,
+            false,
         ),
     ];
 
@@ -1147,7 +1365,11 @@ fn test_quests_tabular_fields() {
         assert_eq!(item.unique_name(), unique, "{name} unique_name");
         assert_eq!(item.category(), "Quests", "{name} category");
         assert_eq!(item.tradable(), tradable, "{name} tradable");
-        assert_eq!(item.build_price().is_some(), has_bp, "{name} has_build_price");
+        assert_eq!(
+            item.build_price().is_some(),
+            has_bp,
+            "{name} has_build_price"
+        );
     }
 }
 
@@ -1200,26 +1422,44 @@ fn test_enemies_tabular_fields() {
     let cases: &[(&str, &str, i64, i64, i64, usize)] = &[
         (
             "/Lotus/Types/Enemies/Orokin/OrokinRocketBombardAvatar",
-            "Orokin", 300, 500, 0, 3,
+            "Orokin",
+            300,
+            500,
+            0,
+            3,
         ),
         (
             "/Lotus/Types/Enemies/Grineer/SeaLab/Avatars/EliteRifleLancerAvatar",
-            "Grineer", 150, 200, 0, 3,
+            "Grineer",
+            150,
+            200,
+            0,
+            3,
         ),
         (
             "/Lotus/Types/Enemies/Corpus/Spaceman/AIWeek/DeployableSpacemanAvatar",
-            "Corpus", 700, 0, 250, 3,
+            "Corpus",
+            700,
+            0,
+            250,
+            3,
         ),
     ];
 
     for &(unique, typ, health, armor, shield, res_count) in cases {
-        let item = arr.iter().find(|e| e.unique_name() == unique)
+        let item = arr
+            .iter()
+            .find(|e| e.unique_name() == unique)
             .unwrap_or_else(|| panic!("enemy '{}' not found", unique));
         assert_eq!(item.type_field(), typ, "{unique} type");
         assert_eq!(item.combat.health, health, "{unique} health");
         assert_eq!(item.combat.armor, armor, "{unique} armor");
         assert_eq!(item.combat.shield, shield, "{unique} shield");
-        assert_eq!(item.combat.resistances.len(), res_count, "{unique} resistances");
+        assert_eq!(
+            item.combat.resistances.len(),
+            res_count,
+            "{unique} resistances"
+        );
     }
 }
 
@@ -1242,17 +1482,23 @@ fn test_railjack_tabular_fields() {
         (
             "Apoc",
             "/Lotus/Weapons/CrewShip/MassDriver/AutoCannon/AutoCannon",
-            126.0, 8.33, 0.1,
+            126.0,
+            8.33,
+            0.1,
         ),
         (
             "Apoc Mk I",
             "/Lotus/Weapons/CrewShip/MassDriver/AutoCannon/AutoCannonTierA",
-            227.0, 8.33, 0.1,
+            227.0,
+            8.33,
+            0.1,
         ),
         (
             "Apoc Mk Ii",
             "/Lotus/Weapons/CrewShip/MassDriver/AutoCannon/AutoCannonTierB",
-            386.0, 8.33, 0.14,
+            386.0,
+            8.33,
+            0.14,
         ),
     ];
 

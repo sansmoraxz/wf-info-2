@@ -140,7 +140,10 @@ mod tests {
         ));
         let rec: Gear = from_str(json_data).unwrap();
 
-        assert_eq!(rec.identity.unique_name, "/Lotus/Types/Restoratives/Consumable/Scanner");
+        assert_eq!(
+            rec.identity.unique_name,
+            "/Lotus/Types/Restoratives/Consumable/Scanner"
+        );
         assert_eq!(rec.identity.name, "Codex Scanner");
         assert_eq!(rec.identity.category, "Gear");
         assert!(!rec.trade.tradable);
@@ -155,7 +158,10 @@ mod tests {
         ));
         let rec: Gear = from_str(json_data).unwrap();
 
-        assert_eq!(rec.identity.unique_name, "/Lotus/Types/Restoratives/LisetAirSupport");
+        assert_eq!(
+            rec.identity.unique_name,
+            "/Lotus/Types/Restoratives/LisetAirSupport"
+        );
         assert_eq!(rec.identity.name, "Air Support Charges");
         assert_eq!(rec.build.build_price, Some(4000));
         assert_eq!(rec.build.components.len(), 5);

@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::Patchlog;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::{Noise, Polarity, SentinelWeaponProductCategory, SentinelWeaponType, Slot, Trigger};
+use crate::itemdata::enums::{
+    Noise, Polarity, SentinelWeaponProductCategory, SentinelWeaponType, Slot, Trigger,
+};
 use crate::itemdata::props::{
     BuildableProps, EquippableProps, ItemDetailProps, ItemIdentityProps, PrimeProps, TradableProps,
     WeaponProps, WeaponTypeStats, WikiaProps,

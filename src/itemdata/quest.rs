@@ -136,7 +136,10 @@ mod tests {
         ));
         let rec: Quest = from_str(json_data).unwrap();
 
-        assert_eq!(rec.identity.unique_name, "/Lotus/Types/Keys/GetClemQuest/GetClemQuestKeyChain");
+        assert_eq!(
+            rec.identity.unique_name,
+            "/Lotus/Types/Keys/GetClemQuest/GetClemQuestKeyChain"
+        );
         assert_eq!(rec.identity.name, "A Man Of Few Words");
         assert_eq!(rec.type_field, QuestType::Key);
         assert_eq!(rec.build.build_price, None);

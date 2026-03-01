@@ -100,7 +100,10 @@ mod tests {
         ));
         let rec: Sigil = from_str(json_data).unwrap();
 
-        assert_eq!(rec.identity.unique_name, "/Lotus/Upgrades/Skins/Sigils/Syndicate/HexRankThree");
+        assert_eq!(
+            rec.identity.unique_name,
+            "/Lotus/Upgrades/Skins/Sigils/Syndicate/HexRankThree"
+        );
         assert_eq!(rec.identity.name, "2-For-1 Sigil");
         assert_eq!(rec.type_field, SigilType::Sigil);
     }

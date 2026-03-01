@@ -7,9 +7,7 @@ use crate::itemdata::common::{Drop, Patchlog};
 use crate::itemdata::enums::EnemyType;
 #[cfg(test)]
 use crate::itemdata::enums::ResistanceType;
-use crate::itemdata::props::{
-    EnemyCombatStats, ItemDetailProps, ItemIdentityProps, TradableProps,
-};
+use crate::itemdata::props::{EnemyCombatStats, ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::itemdata::traits::{Droppable, Item};
 
 pub use crate::itemdata::props::{Affector, Resistance};
@@ -109,7 +107,10 @@ mod tests {
 
         // Resistances
         assert_eq!(rec.combat.resistances.len(), 3);
-        assert_ne!(rec.combat.resistances[0].type_field, ResistanceType::Unknown(String::new()));
+        assert_ne!(
+            rec.combat.resistances[0].type_field,
+            ResistanceType::Unknown(String::new())
+        );
         assert!(!rec.combat.resistances[0].affectors.is_empty());
 
         // Drops with null chance handling

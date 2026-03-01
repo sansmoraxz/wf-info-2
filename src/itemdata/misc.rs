@@ -289,7 +289,10 @@ mod tests {
         ));
         let rec: Misc = from_str(json_data).unwrap();
 
-        assert_eq!(rec.identity.unique_name, "/Lotus/Types/Gameplay/NarmerSorties/ArchonCrystalBoreal");
+        assert_eq!(
+            rec.identity.unique_name,
+            "/Lotus/Types/Gameplay/NarmerSorties/ArchonCrystalBoreal"
+        );
         assert_eq!(rec.identity.name, "<Shard_blue_simple> Azure Archon Shard");
         assert_eq!(rec.type_field, MiscType::Misc);
         assert!(!rec.trade.tradable);

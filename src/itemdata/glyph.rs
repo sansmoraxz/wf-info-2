@@ -100,7 +100,10 @@ mod tests {
         ));
         let rec: Glyph = from_str(json_data).unwrap();
 
-        assert_eq!(rec.identity.unique_name, "/Lotus/Types/StoreItems/AvatarImages/FanChannel/AvatarImage13angTV");
+        assert_eq!(
+            rec.identity.unique_name,
+            "/Lotus/Types/StoreItems/AvatarImages/FanChannel/AvatarImage13angTV"
+        );
         assert_eq!(rec.identity.name, "13angtv Glyph");
         assert_eq!(rec.type_field, GlyphType::Glyph);
     }

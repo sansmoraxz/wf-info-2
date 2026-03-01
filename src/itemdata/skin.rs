@@ -2,9 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::itemdata::enums::SkinType;
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
+use crate::itemdata::enums::SkinType;
 use crate::itemdata::props::{BuildableProps, ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::itemdata::traits::{Buildable, Droppable, Item};
 
@@ -153,7 +153,10 @@ mod tests {
         ));
         let rec: Skin = from_str(json_data).unwrap();
 
-        assert_eq!(rec.identity.unique_name, "/Lotus/Types/Items/ShipDecos/NewWar/LisetPropFamilyPortrait");
+        assert_eq!(
+            rec.identity.unique_name,
+            "/Lotus/Types/Items/ShipDecos/NewWar/LisetPropFamilyPortrait"
+        );
         assert_eq!(rec.identity.name, "A Lost Time");
         assert_eq!(rec.type_field, SkinType::ShipDecoration);
         assert!(!rec.trade.tradable);

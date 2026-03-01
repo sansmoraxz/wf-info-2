@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Introduced, Patchlog};
 use crate::itemdata::components::Component;
-use crate::itemdata::enums::{Polarity, PetType};
+use crate::itemdata::enums::{PetType, Polarity};
 use crate::itemdata::props::{CharacterStats, ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::itemdata::traits::{Buildable, Droppable, Equippable, Item, WikiaLinked};
 

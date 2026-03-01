@@ -698,13 +698,9 @@ pub enum ModCategory {
     /// Riven mod with unveiling challenges
     Riven,
     /// Member of a mod set (references a set definition)
-    SetMember {
-        mod_set: String,
-    },
+    SetMember { mod_set: String },
     /// Mod set definition (describes set bonuses)
-    SetDefinition {
-        num_upgrades_in_set: i64,
-    },
+    SetDefinition { num_upgrades_in_set: i64 },
     /// Regular mod with level-based stats
     #[default]
     Regular,
@@ -927,10 +923,18 @@ mod tests {
     test_unknown_roundtrip!(test_melee_type_unknown, MeleeType, "New Melee");
     test_unknown_roundtrip!(test_railjack_type_unknown, RailjackType, "New Railjack");
     test_unknown_roundtrip!(test_arch_gun_type_unknown, ArchGunType, "New Arch-Gun");
-    test_unknown_roundtrip!(test_arch_melee_type_unknown, ArchMeleeType, "New Arch-Melee");
+    test_unknown_roundtrip!(
+        test_arch_melee_type_unknown,
+        ArchMeleeType,
+        "New Arch-Melee"
+    );
     test_unknown_roundtrip!(test_archwing_type_unknown, ArchwingType, "New Archwing");
     test_unknown_roundtrip!(test_sentinel_type_unknown, SentinelType, "New Sentinel");
-    test_unknown_roundtrip!(test_sentinel_weapon_type_unknown, SentinelWeaponType, "New Companion");
+    test_unknown_roundtrip!(
+        test_sentinel_weapon_type_unknown,
+        SentinelWeaponType,
+        "New Companion"
+    );
     test_unknown_roundtrip!(test_mod_type_unknown, ModType, "New Mod Type");
     test_unknown_roundtrip!(test_relic_type_unknown, RelicType, "New Relic");
     test_unknown_roundtrip!(test_fish_type_unknown, FishType, "New Fish");
@@ -942,7 +946,11 @@ mod tests {
     test_unknown_roundtrip!(test_enemy_type_unknown, EnemyType, "New Enemy");
     test_unknown_roundtrip!(test_pet_type_unknown, PetType, "New Pet");
     test_unknown_roundtrip!(test_misc_type_unknown, MiscType, "New Misc");
-    test_unknown_roundtrip!(test_resistance_type_unknown, ResistanceType, "New Resistance");
+    test_unknown_roundtrip!(
+        test_resistance_type_unknown,
+        ResistanceType,
+        "New Resistance"
+    );
     test_unknown_roundtrip!(test_component_type_unknown, ComponentType, "New Component");
     test_unknown_roundtrip!(test_noise_unknown, Noise, "New Noise");
     test_unknown_roundtrip!(test_projectile_unknown, Projectile, "New Projectile");

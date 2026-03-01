@@ -17,9 +17,9 @@ pub use traits::{
 pub use enums::{
     ArcaneType, ArchGunProductCategory, ArchGunType, ArchMeleeProductCategory, ArchMeleeType,
     ArchwingProductCategory, ArchwingType, ComponentType, Disposition, EnemyType, FishType,
-    GearType, GlyphType, MeleeProductCategory, MeleeType, MiscType, ModCategory, ModType, Noise,
-    NodeType, PetType, Polarity, PrimaryProductCategory, PrimaryType, QuestType, RailjackType,
-    Rarity, RelicType, ResistanceType, ResourceType, SecondaryProductCategory, SecondaryType,
+    GearType, GlyphType, MeleeProductCategory, MeleeType, MiscType, ModCategory, ModType, NodeType,
+    Noise, PetType, Polarity, PrimaryProductCategory, PrimaryType, QuestType, RailjackType, Rarity,
+    RelicType, ResistanceType, ResourceType, SecondaryProductCategory, SecondaryType,
     SentinelProductCategory, SentinelType, SentinelWeaponProductCategory, SentinelWeaponType, Sex,
     SigilType, SkinType, Slot, Trigger, VaultStatus, WarframeType,
 };

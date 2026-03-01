@@ -200,7 +200,10 @@ mod tests {
         ));
         let rec: Railjack = from_str(json_data).unwrap();
 
-        assert_eq!(rec.identity.unique_name, "/Lotus/Weapons/CrewShip/MassDriver/AutoCannon/AutoCannon");
+        assert_eq!(
+            rec.identity.unique_name,
+            "/Lotus/Weapons/CrewShip/MassDriver/AutoCannon/AutoCannon"
+        );
         assert_eq!(rec.identity.name, "Apoc");
         assert!((rec.weapon.total_damage - 126.0).abs() < 1.0);
         assert!((rec.weapon.fire_rate - 8.33).abs() < 0.01);

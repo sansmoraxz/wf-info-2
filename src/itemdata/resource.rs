@@ -141,7 +141,10 @@ mod tests {
         ));
         let rec: Resource = from_str(json_data).unwrap();
 
-        assert_eq!(rec.identity.unique_name, "/Lotus/Types/Gameplay/1999Wf/Resources/HexDogTagQuincy");
+        assert_eq!(
+            rec.identity.unique_name,
+            "/Lotus/Types/Gameplay/1999Wf/Resources/HexDogTagQuincy"
+        );
         assert_eq!(rec.identity.name, "35mm Film");
         assert_eq!(rec.type_field, ResourceType::Resource);
         assert!(!rec.trade.tradable);

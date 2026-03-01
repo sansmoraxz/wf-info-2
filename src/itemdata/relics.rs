@@ -110,7 +110,10 @@ mod tests {
         ));
         let rec: Relic = from_str(json_data).unwrap();
 
-        assert_eq!(rec.identity.unique_name, "/Lotus/Types/Game/Projections/T4VoidProjectionEBronze");
+        assert_eq!(
+            rec.identity.unique_name,
+            "/Lotus/Types/Game/Projections/T4VoidProjectionEBronze"
+        );
         assert_eq!(rec.identity.name, "Axi A1 Intact");
         assert_eq!(rec.type_field, RelicType::Relic);
         assert!(rec.trade.tradable);
@@ -124,7 +127,10 @@ mod tests {
         ));
         let rec: Relic = from_str(json_data).unwrap();
 
-        assert_eq!(rec.identity.unique_name, "/Lotus/Types/Game/Projections/T4VoidProjectionEGold");
+        assert_eq!(
+            rec.identity.unique_name,
+            "/Lotus/Types/Game/Projections/T4VoidProjectionEGold"
+        );
         assert_eq!(rec.identity.name, "Axi A1 Flawless");
         assert_eq!(rec.type_field, RelicType::Relic);
         assert!(rec.trade.tradable);
