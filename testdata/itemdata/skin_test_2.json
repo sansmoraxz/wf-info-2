@@ -1,0 +1,11 @@
+{
+  "category": "Skins",
+  "description": "A family portrait found on a shelf in a familiar Zariman cabin, it may stir memories.",
+  "excludeFromCodex": true,
+  "imageName": "a-lost-time-268b684bbc.png",
+  "masterable": false,
+  "name": "A Lost Time",
+  "tradable": false,
+  "type": "Ship Decoration",
+  "uniqueName": "/Lotus/Types/Items/ShipDecos/NewWar/LisetPropFamilyPortrait"
+}

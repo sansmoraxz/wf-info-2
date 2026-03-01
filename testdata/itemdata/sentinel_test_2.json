@@ -1,0 +1,739 @@
+{
+  "armor": 150,
+  "buildPrice": 15000,
+  "buildQuantity": 1,
+  "buildTime": 86400,
+  "category": "Sentinels",
+  "components": [
+    {
+      "uniqueName": "/Lotus/Types/Recipes/SentinelRecipes/PrimeCarrierSentinelBlueprint",
+      "name": "Blueprint",
+      "description": "This ornate sentinel is an excellent example of late Orokin craftsmanship and styling.",
+      "itemCount": 1,
+      "primeSellingPrice": 15,
+      "imageName": "blueprint.png",
+      "tradable": true,
+      "masterable": false,
+      "ducats": 15,
+      "drops": [
+        {
+          "chance": 0.1667,
+          "location": "Lith V7 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Meso P12 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Meso V1 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Meso V3 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Meso V4 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Neo S3 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Lith V7 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Meso P12 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Meso V1 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Meso V3 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Meso V4 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Neo S3 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Lith V7 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Meso P12 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Meso V1 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Meso V3 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Meso V4 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Neo S3 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Lith V7 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Meso P12 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Meso V1 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Meso V3 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Meso V4 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Neo S3 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Blueprint"
+        }
+      ]
+    },
+    {
+      "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/PrimeCarrierCarapace",
+      "name": "Carapace",
+      "description": "A prime sentinel-crafting component.",
+      "primeSellingPrice": 15,
+      "itemCount": 1,
+      "imageName": "prime-carapace.png",
+      "tradable": true,
+      "drops": [
+        {
+          "chance": 0.11,
+          "location": "Lith V10 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.13,
+          "location": "Lith V10 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Axi N2 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Lith S5 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Neo A4 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Neo S1 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.17,
+          "location": "Lith V10 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi N2 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.2,
+          "location": "Lith S5 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.2,
+          "location": "Lith V10 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.2,
+          "location": "Neo A4 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.2,
+          "location": "Neo S1 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Axi N2 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Lith S5 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Neo A4 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Neo S1 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Axi N2 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Lith S5 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Neo A4 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Neo S1 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Carapace"
+        }
+      ],
+      "masterable": false,
+      "ducats": 15
+    },
+    {
+      "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/PrimeCarrierCerebrum",
+      "name": "Cerebrum",
+      "description": "A prime sentinel-crafting component.",
+      "primeSellingPrice": 65,
+      "itemCount": 1,
+      "imageName": "prime-cerebrum.png",
+      "tradable": true,
+      "drops": [
+        {
+          "chance": 0.02,
+          "location": "Lith C1 Relic",
+          "rarity": "Rare",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.02,
+          "location": "Meso C1 Relic",
+          "rarity": "Rare",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.02,
+          "location": "Meso C2 Relic",
+          "rarity": "Rare",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.02,
+          "location": "Meso C7 Relic",
+          "rarity": "Rare",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.04,
+          "location": "Lith C1 Relic (Exceptional)",
+          "rarity": "Rare",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.04,
+          "location": "Meso C1 Relic (Exceptional)",
+          "rarity": "Rare",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.04,
+          "location": "Meso C2 Relic (Exceptional)",
+          "rarity": "Rare",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.04,
+          "location": "Meso C7 Relic (Exceptional)",
+          "rarity": "Rare",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.06,
+          "location": "Lith C1 Relic (Flawless)",
+          "rarity": "Rare",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.06,
+          "location": "Meso C1 Relic (Flawless)",
+          "rarity": "Rare",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.06,
+          "location": "Meso C2 Relic (Flawless)",
+          "rarity": "Rare",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.06,
+          "location": "Meso C7 Relic (Flawless)",
+          "rarity": "Rare",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.1,
+          "location": "Lith C1 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.1,
+          "location": "Meso C1 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.1,
+          "location": "Meso C2 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.1,
+          "location": "Meso C7 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.11,
+          "location": "Meso N3 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.11,
+          "location": "Meso V6 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.13,
+          "location": "Meso N3 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.13,
+          "location": "Meso V6 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.17,
+          "location": "Meso N3 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.17,
+          "location": "Meso V6 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.2,
+          "location": "Meso N3 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Cerebrum"
+        },
+        {
+          "chance": 0.2,
+          "location": "Meso V6 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Cerebrum"
+        }
+      ],
+      "masterable": false,
+      "ducats": 65
+    },
+    {
+      "uniqueName": "/Lotus/Types/Items/MiscItems/OrokinCell",
+      "name": "Orokin Cell",
+      "description": "Ancient energy cell from the Orokin era.\n\nLocation: Ceres, Saturn, and Deimos",
+      "itemCount": 6,
+      "imageName": "orokin-cell-0d237af036.png",
+      "tradable": false,
+      "drops": [],
+      "masterable": false,
+      "type": "Resource"
+    },
+    {
+      "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/PrimeCarrierSystems",
+      "name": "Systems",
+      "description": "A prime sentinel-crafting component.",
+      "primeSellingPrice": 15,
+      "itemCount": 1,
+      "imageName": "prime-systems.png",
+      "tradable": true,
+      "drops": [
+        {
+          "chance": 0.1667,
+          "location": "Axi A7 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Axi K12 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Axi V1 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Lith N2 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Lith S2 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Lith S3 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Neo A1 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Neo V3 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi A7 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi K12 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi V1 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2,
+          "location": "Lith N2 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2,
+          "location": "Lith S2 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2,
+          "location": "Lith S3 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2,
+          "location": "Neo A1 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2,
+          "location": "Neo V3 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Axi A7 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Axi K12 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Axi V1 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Lith N2 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Lith S2 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Lith S3 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Neo A1 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Neo V3 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Axi A7 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Axi K12 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Axi V1 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Lith N2 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Lith S2 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Lith S3 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Neo A1 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Neo V3 Relic",
+          "rarity": "Uncommon",
+          "type": "Carrier Prime Systems"
+        }
+      ],
+      "masterable": false,
+      "ducats": 15
+    }
+  ],
+  "consumeOnBuild": true,
+  "description": "This ornate sentinel is an excellent example of late Orokin craftsmanship and styling.",
+  "estimatedVaultDate": "2017-05-30",
+  "health": 650,
+  "imageName": "carrier-prime-7e84bae628.png",
+  "introduced": {
+    "name": "Update 16.11",
+    "url": "https://wiki.warframe.com/w/Update_16%23Update_16.11",
+    "aliases": [
+      "16.11.0",
+      "16.11"
+    ],
+    "parent": "16.11",
+    "date": "2015-07-07"
+  },
+  "isPrime": true,
+  "masterable": true,
+  "masteryReq": 0,
+  "name": "Carrier Prime",
+  "patchlogs": [
+    {
+      "name": "Fortuna: Update 24.0",
+      "date": "2018-11-08T20:46:20Z",
+      "url": "https://forums.warframe.com/topic/1025679-fortuna-update-240/",
+      "additions": "",
+      "changes": "In an effort to reduce the inventory duplication clutter that came with the individual Sentinel attack Precept Mods, Wyrm, Wyrm Prime, Carrier, Carrier Prime, Dethcube, Taxon, and the newest Oxylus now come with the \u201cAssault Mode\u201d Mod: \u201cSentinel will attack first visible enemy within an area\u201d (*final stats available in game).",
+      "fixes": ""
+    },
+    {
+      "name": "Hotfix 16.11.2",
+      "date": "2015-07-08T15:21:23Z",
+      "url": "https://forums.warframe.com/topic/486780-hotfix-16112/",
+      "additions": "",
+      "changes": "Carrier Prime Psa:\nPlease note that all tiers of Prime Access now include Carrier Prime with this Hotfix. Once the hotfix is live, we will be running a script to give all eligible accounts their Carrier Primes. An account is eligible for Carrier Prime if they have purchased the Covert or Shuriken Ash Prime Access packs. We will let you know when the script is complete.",
+      "fixes": "Fixed the Carrier Prime\u2019s Carapace description reading the description for Wyrm Prime."
+    },
+    {
+      "name": "Update 16.11: Ash Prime + Hotfix 16.11.1",
+      "date": "2015-07-07T18:41:10Z",
+      "url": "https://forums.warframe.com/topic/486216-update-1611-ash-prime-hotfix-16111/",
+      "additions": "",
+      "changes": "",
+      "fixes": "including Ash Prime, Vectis Prime and Carrier Prime. Plus, stock up on discounted Platinum and get Exclusive Gear available only through Prime Access!"
+    }
+  ],
+  "polarities": [
+    "penjaga",
+    "penjaga",
+    "madurai",
+    "penjaga",
+    "vazarin",
+    "penjaga"
+  ],
+  "power": 100,
+  "productCategory": "Sentinels",
+  "releaseDate": "2015-07-07",
+  "shield": 300,
+  "skipBuildTimePrice": 30,
+  "stamina": 8,
+  "tradable": true,
+  "type": "Sentinel",
+  "uniqueName": "/Lotus/Types/Sentinels/SentinelPowersuits/PrimeCarrierPowerSuit",
+  "vaultDate": "2017-05-30",
+  "vaulted": true,
+  "wikiAvailable": true,
+  "wikiaThumbnail": "https://wiki.warframe.com/images/CarrierPrime.png?5bad8",
+  "wikiaUrl": "https://wiki.warframe.com/w/Carrier%2FPrime"
+}

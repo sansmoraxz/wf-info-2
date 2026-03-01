@@ -1,99 +1,624 @@
 //! Enums for known finite value sets in item data.
 //!
 //! These replace String fields where the set of valid values is known and finite.
-//! Each enum includes an `Unknown` variant with `#[serde(other)]` to gracefully
-//! handle new values that may be added to the source data in the future.
+//! Each enum includes an `Unknown(String)` variant to gracefully handle new values
+//! that may be added to the source data in the future, while preserving the original value.
 
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
-/// Weapon trigger types - how the weapon fires
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-pub enum Trigger {
-    Active,
-    Auto,
-    #[serde(rename = "Auto Burst")]
-    AutoBurst,
-    Burst,
-    Charge,
-    Duplex,
-    Held,
-    Melee,
-    Semi,
-    #[default]
-    #[serde(other)]
-    Unknown,
+/// Macro for generating string-backed enums with `Unknown(String)` fallback.
+///
+/// Each enum gets: `as_str()`, `Display`, custom `Serialize`/`Deserialize`,
+/// and `Default` (either a named variant or `Unknown(String::new())`).
+macro_rules! string_enum {
+    // Default is Unknown
+    ($(#[doc = $doc:expr])* pub enum $name:ident {
+        default Unknown;
+        $( $variant:ident => $str:expr ),* $(,)?
+    }) => {
+        string_enum!(@impl $(#[doc = $doc])* pub enum $name { $( $variant => $str ),* });
+        impl Default for $name {
+            fn default() -> Self { Self::Unknown(String::new()) }
+        }
+    };
+    // Default is a named variant
+    ($(#[doc = $doc:expr])* pub enum $name:ident {
+        default $default:ident;
+        $( $variant:ident => $str:expr ),* $(,)?
+    }) => {
+        string_enum!(@impl $(#[doc = $doc])* pub enum $name { $( $variant => $str ),* });
+        impl Default for $name {
+            fn default() -> Self { Self::$default }
+        }
+    };
+    // Internal: generates the enum, as_str, Serialize, Deserialize, Display
+    (@impl $(#[doc = $doc:expr])* pub enum $name:ident {
+        $( $variant:ident => $str:expr ),*
+    }) => {
+        $(#[doc = $doc])*
+        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        pub enum $name {
+            $( $variant, )*
+            Unknown(String),
+        }
+
+        impl $name {
+            pub fn as_str(&self) -> &str {
+                match self {
+                    $( Self::$variant => $str, )*
+                    Self::Unknown(s) => s,
+                }
+            }
+        }
+
+        impl Serialize for $name {
+            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                serializer.serialize_str(self.as_str())
+            }
+        }
+
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+                let s = String::deserialize(deserializer)?;
+                Ok(match s.as_str() {
+                    $( $str => Self::$variant, )*
+                    _ => Self::Unknown(s),
+                })
+            }
+        }
+
+        impl ::std::fmt::Display for $name {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                f.write_str(self.as_str())
+            }
+        }
+    };
 }
 
-/// Weapon noise level - affects enemy alertness
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-pub enum Noise {
-    Alarming,
-    Silent,
-    #[default]
-    #[serde(other)]
-    Unknown,
+// =============================================================================
+// Weapon property enums
+// =============================================================================
+
+string_enum! {
+    /// Weapon trigger types - how the weapon fires
+    pub enum Trigger {
+        default Unknown;
+        Active => "Active",
+        Auto => "Auto",
+        AutoBurst => "Auto Burst",
+        Burst => "Burst",
+        Charge => "Charge",
+        Duplex => "Duplex",
+        Held => "Held",
+        Melee => "Melee",
+        Semi => "Semi",
+    }
 }
 
-/// Item/drop rarity tiers
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-pub enum Rarity {
-    Common,
-    Uncommon,
-    Rare,
-    Legendary,
-    #[default]
-    #[serde(other)]
-    Unknown,
+string_enum! {
+    /// Weapon noise level - affects enemy alertness
+    pub enum Noise {
+        default Unknown;
+        Alarming => "Alarming",
+        Silent => "Silent",
+    }
 }
 
-/// Mod polarity types - determines mod capacity cost
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum Polarity {
-    Aura,
-    Madurai,
-    Naramon,
-    Penjaga,
-    Umbra,
-    Unairu,
-    Universal,
-    Vazarin,
-    Zenurik,
-    Any,
-    #[default]
-    #[serde(other)]
-    Unknown,
+string_enum! {
+    /// Item/drop rarity tiers
+    pub enum Rarity {
+        default Unknown;
+        Common => "Common",
+        Uncommon => "Uncommon",
+        Rare => "Rare",
+        Legendary => "Legendary",
+    }
 }
 
-/// Projectile type for ranged weapons
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-pub enum Projectile {
-    Discharge,
-    Hitscan,
-    Projectile,
-    Thrown,
-    #[default]
-    #[serde(other)]
-    Unknown,
+string_enum! {
+    /// Mod polarity types - determines mod capacity cost
+    pub enum Polarity {
+        default Unknown;
+        Aura => "aura",
+        Madurai => "madurai",
+        Naramon => "naramon",
+        Penjaga => "penjaga",
+        Umbra => "umbra",
+        Unairu => "unairu",
+        Universal => "universal",
+        Vazarin => "vazarin",
+        Zenurik => "zenurik",
+        Any => "any",
+    }
 }
 
-/// Riven disposition - affects Riven mod stat ranges (1-5)
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-pub enum Disposition {
-    #[serde(rename = "1")]
-    One,
-    #[serde(rename = "2")]
-    Two,
-    #[serde(rename = "3")]
-    Three,
-    #[serde(rename = "4")]
-    Four,
-    #[serde(rename = "5")]
-    Five,
-    #[default]
-    #[serde(other)]
-    Unknown,
+string_enum! {
+    /// Projectile type for ranged weapons
+    pub enum Projectile {
+        default Unknown;
+        Discharge => "Discharge",
+        Hitscan => "Hitscan",
+        ProjectileType => "Projectile",
+        Thrown => "Thrown",
+    }
 }
+
+string_enum! {
+    /// Riven disposition - affects Riven mod stat ranges (1-5)
+    pub enum Disposition {
+        default Unknown;
+        One => "1",
+        Two => "2",
+        Three => "3",
+        Four => "4",
+        Five => "5",
+    }
+}
+
+impl Disposition {
+    /// Convert disposition to numeric value (1-5), returns 0 for Unknown
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            Disposition::One => 1,
+            Disposition::Two => 2,
+            Disposition::Three => 3,
+            Disposition::Four => 4,
+            Disposition::Five => 5,
+            Disposition::Unknown(_) => 0,
+        }
+    }
+}
+
+// =============================================================================
+// Item type enums (replacing type_field: String)
+// =============================================================================
+
+string_enum! {
+    /// Warframe item type
+    pub enum WarframeType {
+        default Warframe;
+        Warframe => "Warframe",
+    }
+}
+
+string_enum! {
+    /// Arcane enhancement type classification
+    pub enum ArcaneType {
+        default Unknown;
+        WarframeArcane => "Warframe Arcane",
+        OperatorArcane => "Operator Arcane",
+        SecondaryArcane => "Secondary Arcane",
+        AmpArcane => "Amp Arcane",
+        PrimaryArcane => "Primary Arcane",
+        MeleeArcane => "Melee Arcane",
+        Arcane => "Arcane",
+        KitgunArcane => "Kitgun Arcane",
+        ZawArcane => "Zaw Arcane",
+        BowArcane => "Bow Arcane",
+        ShotgunArcane => "Shotgun Arcane",
+    }
+}
+
+string_enum! {
+    /// Gear item type classification
+    pub enum GearType {
+        default Gear;
+        Gear => "Gear",
+        Fish => "Fish",
+        FishBait => "Fish Bait",
+        Specter => "Specter",
+        Key => "Key",
+    }
+}
+
+string_enum! {
+    /// Resource type classification
+    pub enum ResourceType {
+        default Resource;
+        Resource => "Resource",
+        Gem => "Gem",
+        Plant => "Plant",
+    }
+}
+
+string_enum! {
+    /// Primary weapon type classification
+    pub enum PrimaryType {
+        default Rifle;
+        Bow => "Bow",
+        Launcher => "Launcher",
+        Pistol => "Pistol",
+        Rifle => "Rifle",
+        Shotgun => "Shotgun",
+        Sniper => "Sniper",
+    }
+}
+
+string_enum! {
+    /// Secondary weapon type classification
+    pub enum SecondaryType {
+        default Pistol;
+        DualPistols => "Dual Pistols",
+        Pistol => "Pistol",
+        Throwing => "Throwing",
+    }
+}
+
+string_enum! {
+    /// Melee weapon type classification
+    pub enum MeleeType {
+        default Melee;
+        Melee => "Melee",
+        Rifle => "Rifle",
+        ZawComponent => "Zaw Component",
+    }
+}
+
+string_enum! {
+    /// Railjack weapon types
+    pub enum RailjackType {
+        default RailjackTurret;
+        RailjackTurret => "Railjack Turret",
+        Shotgun => "Shotgun",
+    }
+}
+
+string_enum! {
+    /// Arch-Gun item type
+    pub enum ArchGunType {
+        default ArchGun;
+        ArchGun => "Arch-Gun",
+    }
+}
+
+string_enum! {
+    /// Arch-Melee item type
+    pub enum ArchMeleeType {
+        default ArchMelee;
+        ArchMelee => "Arch-Melee",
+    }
+}
+
+string_enum! {
+    /// Archwing item type
+    pub enum ArchwingType {
+        default Archwing;
+        Archwing => "Archwing",
+    }
+}
+
+string_enum! {
+    /// Sentinel item type
+    pub enum SentinelType {
+        default Sentinel;
+        Sentinel => "Sentinel",
+    }
+}
+
+string_enum! {
+    /// Sentinel weapon item type
+    pub enum SentinelWeaponType {
+        default CompanionWeapon;
+        CompanionWeapon => "Companion Weapon",
+    }
+}
+
+string_enum! {
+    /// Mod item type classification
+    pub enum ModType {
+        default Unknown;
+        ArchGunMod => "Arch-Gun Mod",
+        ArchGunRivenMod => "Arch-Gun Riven Mod",
+        ArchMeleeMod => "Arch-Melee Mod",
+        ArchwingMod => "Archwing Mod",
+        CompanionMod => "Companion Mod",
+        CompanionWeaponRivenMod => "Companion Weapon Riven Mod",
+        FocusWay => "Focus Way",
+        KDriveMod => "K-Drive Mod",
+        KitgunRivenMod => "Kitgun Riven Mod",
+        MeleeMod => "Melee Mod",
+        MeleeRivenMod => "Melee Riven Mod",
+        ModSetMod => "Mod Set Mod",
+        NecramechMod => "Necramech Mod",
+        ParazonMod => "Parazon Mod",
+        PeculiarMod => "Peculiar Mod",
+        PistolRivenMod => "Pistol Riven Mod",
+        PlexusMod => "Plexus Mod",
+        PostureMod => "Posture Mod",
+        PrimaryMod => "Primary Mod",
+        RailjackMod => "Railjack Mod",
+        RifleRivenMod => "Rifle Riven Mod",
+        SecondaryMod => "Secondary Mod",
+        ShotgunMod => "Shotgun Mod",
+        ShotgunRivenMod => "Shotgun Riven Mod",
+        StanceMod => "Stance Mod",
+        TektolystArtifactMod => "Tektolyst Artifact Mod",
+        TransmutationMod => "Transmutation Mod",
+        WarframeMod => "Warframe Mod",
+        ZawRivenMod => "Zaw Riven Mod",
+    }
+}
+
+string_enum! {
+    /// Relic item type
+    pub enum RelicType {
+        default Relic;
+        Relic => "Relic",
+    }
+}
+
+string_enum! {
+    /// Fish item type
+    pub enum FishType {
+        default Fish;
+        Fish => "Fish",
+    }
+}
+
+string_enum! {
+    /// Glyph item type
+    pub enum GlyphType {
+        default Glyph;
+        Glyph => "Glyph",
+    }
+}
+
+string_enum! {
+    /// Sigil item type
+    pub enum SigilType {
+        default Sigil;
+        Sigil => "Sigil",
+    }
+}
+
+string_enum! {
+    /// Node item type
+    pub enum NodeType {
+        default Node;
+        Node => "Node",
+    }
+}
+
+string_enum! {
+    /// Quest item type
+    pub enum QuestType {
+        default Key;
+        Key => "Key",
+    }
+}
+
+string_enum! {
+    /// Skin/cosmetic item type classification
+    pub enum SkinType {
+        default Skin;
+        ArcadeMinigameUnlock => "Arcade Minigame Unlock",
+        ColorPalette => "Color Palette",
+        Emotes => "Emotes",
+        FurColor => "Fur Color",
+        FurPattern => "Fur Pattern",
+        Glyph => "Glyph",
+        Misc => "Misc",
+        NotePacks => "Note Packs",
+        Resource => "Resource",
+        ShipDecoration => "Ship Decoration",
+        Skin => "Skin",
+        Skins => "Skins",
+        Syandana => "Syandana",
+        ThemeBackground => "Theme Background",
+        ThemeSound => "Theme Sound",
+        Themes => "Themes",
+    }
+}
+
+string_enum! {
+    /// Enemy faction/type classification
+    pub enum EnemyType {
+        default Unknown;
+        Corpus => "Corpus",
+        Grineer => "Grineer",
+        Infestation => "Infestation",
+        Melee => "Melee",
+        Neutral => "Neutral",
+        Orbiter => "Orbiter",
+        Orokin => "Orokin",
+        Predator => "Predator",
+        Prey => "Prey",
+        Rifle => "Rifle",
+        Sentient => "Sentient",
+        Shotgun => "Shotgun",
+        Stalker => "Stalker",
+        Tenno => "Tenno",
+        Warframe => "Warframe",
+    }
+}
+
+string_enum! {
+    /// Pet item type classification
+    pub enum PetType {
+        default Unknown;
+        PetParts => "Pet Parts",
+        PetResource => "Pet Resource",
+        Pets => "Pets",
+        Warframe => "Warframe",
+    }
+}
+
+string_enum! {
+    /// Miscellaneous item type classification
+    pub enum MiscType {
+        default Misc;
+        Alloy => "Alloy",
+        Amp => "Amp",
+        AyatanSculpture => "Ayatan Sculpture",
+        AyatanStar => "Ayatan Star",
+        Boosters => "Boosters",
+        Captura => "Captura",
+        ConservationPrey => "Conservation Prey",
+        ConservationTag => "Conservation Tag",
+        Currency => "Currency",
+        CutGem => "Cut Gem",
+        EidolonShard => "Eidolon Shard",
+        EquipmentAdapter => "Equipment Adapter",
+        ExaltedWeapon => "Exalted Weapon",
+        Extractor => "Extractor",
+        FishBait => "Fish Bait",
+        FishPart => "Fish Part",
+        FocusLens => "Focus Lens",
+        KDriveComponent => "K-Drive Component",
+        Key => "Key",
+        KitgunComponent => "Kitgun Component",
+        KitgunRivenMod => "Kitgun Riven Mod",
+        Medallion => "Medallion",
+        MeleeRivenMod => "Melee Riven Mod",
+        Misc => "Misc",
+        NightwaveChallenge => "Nightwave Challenge",
+        Orbiter => "Orbiter",
+        PetCollar => "Pet Collar",
+        PetResource => "Pet Resource",
+        Pistol => "Pistol",
+        PistolRivenMod => "Pistol Riven Mod",
+        Resource => "Resource",
+        Rifle => "Rifle",
+        RifleRivenMod => "Rifle Riven Mod",
+        ShipSegment => "Ship Segment",
+        ShotgunRivenMod => "Shotgun Riven Mod",
+        Simulacrum => "Simulacrum",
+        Skin => "Skin",
+        ZawRivenMod => "Zaw Riven Mod",
+    }
+}
+
+string_enum! {
+    /// Enemy resistance type classification
+    pub enum ResistanceType {
+        default Unknown;
+        AlloyArmor => "Alloy Armor",
+        ClonedFlesh => "Cloned Flesh",
+        FeriteArmor => "Ferrite Armor",
+        Flesh => "Flesh",
+        Fossilized => "Fossilized",
+        Infested => "Infested",
+        InfestedFlesh => "Infested Flesh",
+        InfestedSinew => "Infested Sinew",
+        Machinery => "Machinery",
+        NoResistance => "None",
+        ProtoShield => "Proto Shield",
+        Robotic => "Robotic",
+        Shield => "Shield",
+    }
+}
+
+string_enum! {
+    /// Component item type
+    pub enum ComponentType {
+        default Resource;
+        Resource => "Resource",
+    }
+}
+
+// =============================================================================
+// Product category enums
+// =============================================================================
+
+string_enum! {
+    /// Primary weapon product category
+    pub enum PrimaryProductCategory {
+        default LongGuns;
+        LongGuns => "LongGuns",
+        OperatorAmps => "OperatorAmps",
+    }
+}
+
+string_enum! {
+    /// Melee weapon product category
+    pub enum MeleeProductCategory {
+        default Melee;
+        Melee => "Melee",
+        Pistols => "Pistols",
+    }
+}
+
+string_enum! {
+    /// Warframe sex/gender
+    pub enum Sex {
+        default Unknown;
+        Female => "Female",
+        Male => "Male",
+        NonBinary => "Non-binary",
+    }
+}
+
+string_enum! {
+    /// Secondary weapon product category
+    pub enum SecondaryProductCategory {
+        default Pistols;
+        Pistols => "Pistols",
+    }
+}
+
+string_enum! {
+    /// Archwing product category
+    pub enum ArchwingProductCategory {
+        default SpaceSuits;
+        SpaceSuits => "SpaceSuits",
+    }
+}
+
+string_enum! {
+    /// Sentinel product category
+    pub enum SentinelProductCategory {
+        default Sentinels;
+        Sentinels => "Sentinels",
+    }
+}
+
+string_enum! {
+    /// Sentinel weapon product category
+    pub enum SentinelWeaponProductCategory {
+        default SentinelWeapons;
+        SentinelWeapons => "SentinelWeapons",
+    }
+}
+
+string_enum! {
+    /// Arch-Gun product category
+    pub enum ArchGunProductCategory {
+        default SpaceGuns;
+        SpaceGuns => "SpaceGuns",
+    }
+}
+
+string_enum! {
+    /// Arch-Melee product category
+    pub enum ArchMeleeProductCategory {
+        default SpaceMelee;
+        SpaceMelee => "SpaceMelee",
+    }
+}
+
+// =============================================================================
+// Equipment slot (numeric, not string-based)
+// =============================================================================
+
+/// Equipment slot classification
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize_repr, Deserialize_repr, Default)]
+#[repr(i64)]
+pub enum Slot {
+    /// Secondary weapons
+    Secondary = 0,
+    /// Primary, Arch-Gun, SentinelWeapons (ranged)
+    #[default]
+    Primary = 1,
+    /// Grimoire anomaly
+    SpecialSecondary = 2,
+    /// Melee, Arch-Melee
+    Melee = 5,
+}
+
+// =============================================================================
+// Computed enums (not directly deserialized from JSON)
+// =============================================================================
 
 /// Vault status for Prime items - represents the lifecycle state.
 ///
@@ -114,8 +639,6 @@ pub enum VaultStatus {
 
 impl VaultStatus {
     /// Compute vault status from individual fields.
-    ///
-    /// This is the canonical way to derive VaultStatus from the raw JSON fields.
     pub fn from_fields(
         is_prime: bool,
         vaulted: Option<bool>,
@@ -140,22 +663,18 @@ impl VaultStatus {
         }
     }
 
-    /// Check if this is a Prime item (any status except NotPrime)
     pub fn is_prime(&self) -> bool {
         !matches!(self, VaultStatus::NotPrime)
     }
 
-    /// Check if the item is currently vaulted
     pub fn is_vaulted(&self) -> bool {
         matches!(self, VaultStatus::Vaulted { .. })
     }
 
-    /// Check if the item is accessible (not vaulted)
     pub fn is_accessible(&self) -> bool {
         !self.is_vaulted()
     }
 
-    /// Get the vault date if vaulted
     pub fn vault_date(&self) -> Option<&str> {
         match self {
             VaultStatus::Vaulted { date } if !date.is_empty() => Some(date),
@@ -163,7 +682,6 @@ impl VaultStatus {
         }
     }
 
-    /// Get the estimated vault date if applicable
     pub fn estimated_vault_date(&self) -> Option<&str> {
         match self {
             VaultStatus::EstimatedVault { estimated_date } => Some(estimated_date),
@@ -172,102 +690,27 @@ impl VaultStatus {
     }
 }
 
-impl Trigger {
-    /// Convert to string representation for trait implementations
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Trigger::Active => "Active",
-            Trigger::Auto => "Auto",
-            Trigger::AutoBurst => "Auto Burst",
-            Trigger::Burst => "Burst",
-            Trigger::Charge => "Charge",
-            Trigger::Duplex => "Duplex",
-            Trigger::Held => "Held",
-            Trigger::Melee => "Melee",
-            Trigger::Semi => "Semi",
-            Trigger::Unknown => "Unknown",
-        }
-    }
-}
-
-impl Noise {
-    /// Convert to string representation for trait implementations
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Noise::Alarming => "Alarming",
-            Noise::Silent => "Silent",
-            Noise::Unknown => "Unknown",
-        }
-    }
-}
-
-impl Polarity {
-    /// Convert to lowercase string representation (matches JSON format)
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Polarity::Aura => "aura",
-            Polarity::Madurai => "madurai",
-            Polarity::Naramon => "naramon",
-            Polarity::Penjaga => "penjaga",
-            Polarity::Umbra => "umbra",
-            Polarity::Unairu => "unairu",
-            Polarity::Universal => "universal",
-            Polarity::Vazarin => "vazarin",
-            Polarity::Zenurik => "zenurik",
-            Polarity::Any => "any",
-            Polarity::Unknown => "unknown",
-        }
-    }
-}
-
-impl Disposition {
-    /// Convert disposition to numeric value (1-5), returns 0 for Unknown
-    pub fn as_u8(&self) -> u8 {
-        match self {
-            Disposition::One => 1,
-            Disposition::Two => 2,
-            Disposition::Three => 3,
-            Disposition::Four => 4,
-            Disposition::Five => 5,
-            Disposition::Unknown => 0,
-        }
-    }
-}
-
 /// Mod category classification.
 ///
 /// This is a computed enum derived from mod field presence.
-/// Mods can be categorized as:
-/// - Riven: has challenge/upgrade data for unveiling
-/// - SetMember: belongs to a mod set (has modSet reference)
-/// - SetDefinition: defines a mod set's bonuses (has numUpgradesInSet)
-/// - Regular: standard mod with level stats
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub enum ModCategory {
     /// Riven mod with unveiling challenges
     Riven,
     /// Member of a mod set (references a set definition)
-    SetMember {
-        /// Reference to the set definition's unique name
-        mod_set: String,
-    },
+    SetMember { mod_set: String },
     /// Mod set definition (describes set bonuses)
-    SetDefinition {
-        /// Number of mods in the set
-        num_upgrades_in_set: i64,
-    },
+    SetDefinition { num_upgrades_in_set: i64 },
     /// Regular mod with level-based stats
     #[default]
     Regular,
 }
 
 impl ModCategory {
-    /// Check if this is a Riven mod
     pub fn is_riven(&self) -> bool {
         matches!(self, ModCategory::Riven)
     }
 
-    /// Check if this is part of a set (either member or definition)
     pub fn is_set(&self) -> bool {
         matches!(
             self,
@@ -275,22 +718,18 @@ impl ModCategory {
         )
     }
 
-    /// Check if this is a set member
     pub fn is_set_member(&self) -> bool {
         matches!(self, ModCategory::SetMember { .. })
     }
 
-    /// Check if this is a set definition
     pub fn is_set_definition(&self) -> bool {
         matches!(self, ModCategory::SetDefinition { .. })
     }
 
-    /// Check if this is a regular mod
     pub fn is_regular(&self) -> bool {
         matches!(self, ModCategory::Regular)
     }
 
-    /// Get the mod set reference if this is a set member
     pub fn mod_set(&self) -> Option<&str> {
         match self {
             ModCategory::SetMember { mod_set } => Some(mod_set),
@@ -298,7 +737,6 @@ impl ModCategory {
         }
     }
 
-    /// Get the number of upgrades if this is a set definition
     pub fn num_upgrades_in_set(&self) -> Option<i64> {
         match self {
             ModCategory::SetDefinition {
@@ -321,9 +759,16 @@ mod tests {
         let trigger: Trigger = serde_json::from_str(r#""Semi""#).unwrap();
         assert_eq!(trigger, Trigger::Semi);
 
-        // Unknown variant for new values
+        // Unknown variant captures value
         let trigger: Trigger = serde_json::from_str(r#""NewTriggerType""#).unwrap();
-        assert_eq!(trigger, Trigger::Unknown);
+        assert_eq!(trigger, Trigger::Unknown("NewTriggerType".to_string()));
+    }
+
+    #[test]
+    fn test_trigger_serialize_unknown() {
+        let trigger = Trigger::Unknown("NewTriggerType".to_string());
+        let json = serde_json::to_string(&trigger).unwrap();
+        assert_eq!(json, r#""NewTriggerType""#);
     }
 
     #[test]
@@ -336,6 +781,16 @@ mod tests {
     }
 
     #[test]
+    fn test_polarity_serialize_unknown() {
+        let polarity = Polarity::Unknown("newpolarity".to_string());
+        let json = serde_json::to_string(&polarity).unwrap();
+        assert_eq!(json, r#""newpolarity""#);
+
+        let roundtrip: Polarity = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtrip, Polarity::Unknown("newpolarity".to_string()));
+    }
+
+    #[test]
     fn test_rarity_deserialize() {
         let rarity: Rarity = serde_json::from_str(r#""Legendary""#).unwrap();
         assert_eq!(rarity, Rarity::Legendary);
@@ -345,9 +800,19 @@ mod tests {
     }
 
     #[test]
+    fn test_rarity_serialize_unknown() {
+        let rarity = Rarity::Unknown("Mythic".to_string());
+        let json = serde_json::to_string(&rarity).unwrap();
+        assert_eq!(json, r#""Mythic""#);
+
+        let roundtrip: Rarity = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtrip, Rarity::Unknown("Mythic".to_string()));
+    }
+
+    #[test]
     fn test_disposition_as_u8() {
         assert_eq!(Disposition::Three.as_u8(), 3);
-        assert_eq!(Disposition::Unknown.as_u8(), 0);
+        assert_eq!(Disposition::Unknown("?".to_string()).as_u8(), 0);
     }
 
     #[test]
@@ -432,4 +897,63 @@ mod tests {
         assert!(!cat.is_regular());
         assert_eq!(cat.num_upgrades_in_set(), Some(3));
     }
+
+    // Unknown(String) serialize/deserialize roundtrip tests for all type enums
+
+    macro_rules! test_unknown_roundtrip {
+        ($name:ident, $enum_type:ty, $unknown_val:expr) => {
+            #[test]
+            fn $name() {
+                let val = <$enum_type>::Unknown($unknown_val.to_string());
+                let json = serde_json::to_string(&val).unwrap();
+                assert_eq!(json, format!("\"{}\"", $unknown_val));
+
+                let roundtrip: $enum_type = serde_json::from_str(&json).unwrap();
+                assert_eq!(roundtrip, <$enum_type>::Unknown($unknown_val.to_string()));
+            }
+        };
+    }
+
+    test_unknown_roundtrip!(test_warframe_type_unknown, WarframeType, "NewWarframeType");
+    test_unknown_roundtrip!(test_arcane_type_unknown, ArcaneType, "New Arcane");
+    test_unknown_roundtrip!(test_gear_type_unknown, GearType, "New Gear");
+    test_unknown_roundtrip!(test_resource_type_unknown, ResourceType, "New Resource");
+    test_unknown_roundtrip!(test_primary_type_unknown, PrimaryType, "New Primary");
+    test_unknown_roundtrip!(test_secondary_type_unknown, SecondaryType, "New Secondary");
+    test_unknown_roundtrip!(test_melee_type_unknown, MeleeType, "New Melee");
+    test_unknown_roundtrip!(test_railjack_type_unknown, RailjackType, "New Railjack");
+    test_unknown_roundtrip!(test_arch_gun_type_unknown, ArchGunType, "New Arch-Gun");
+    test_unknown_roundtrip!(
+        test_arch_melee_type_unknown,
+        ArchMeleeType,
+        "New Arch-Melee"
+    );
+    test_unknown_roundtrip!(test_archwing_type_unknown, ArchwingType, "New Archwing");
+    test_unknown_roundtrip!(test_sentinel_type_unknown, SentinelType, "New Sentinel");
+    test_unknown_roundtrip!(
+        test_sentinel_weapon_type_unknown,
+        SentinelWeaponType,
+        "New Companion"
+    );
+    test_unknown_roundtrip!(test_mod_type_unknown, ModType, "New Mod Type");
+    test_unknown_roundtrip!(test_relic_type_unknown, RelicType, "New Relic");
+    test_unknown_roundtrip!(test_fish_type_unknown, FishType, "New Fish");
+    test_unknown_roundtrip!(test_glyph_type_unknown, GlyphType, "New Glyph");
+    test_unknown_roundtrip!(test_sigil_type_unknown, SigilType, "New Sigil");
+    test_unknown_roundtrip!(test_node_type_unknown, NodeType, "New Node");
+    test_unknown_roundtrip!(test_quest_type_unknown, QuestType, "New Quest");
+    test_unknown_roundtrip!(test_skin_type_unknown, SkinType, "New Skin");
+    test_unknown_roundtrip!(test_enemy_type_unknown, EnemyType, "New Enemy");
+    test_unknown_roundtrip!(test_pet_type_unknown, PetType, "New Pet");
+    test_unknown_roundtrip!(test_misc_type_unknown, MiscType, "New Misc");
+    test_unknown_roundtrip!(
+        test_resistance_type_unknown,
+        ResistanceType,
+        "New Resistance"
+    );
+    test_unknown_roundtrip!(test_component_type_unknown, ComponentType, "New Component");
+    test_unknown_roundtrip!(test_noise_unknown, Noise, "New Noise");
+    test_unknown_roundtrip!(test_projectile_unknown, Projectile, "New Projectile");
+    test_unknown_roundtrip!(test_sex_unknown, Sex, "New Sex");
+    test_unknown_roundtrip!(test_disposition_unknown, Disposition, "6");
 }

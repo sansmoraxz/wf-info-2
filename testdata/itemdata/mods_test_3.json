@@ -1,0 +1,337 @@
+{
+  "availableChallenges": [
+    {
+      "fullName": "/Lotus/Types/Challenges/RandomizedKill",
+      "description": "Kill |COUNT| Enemies",
+      "complications": [
+        {
+          "fullName": "/Lotus/Types/Challenges/Complications/ResetOnDamageTaken",
+          "description": "without taking damage"
+        },
+        {
+          "fullName": "/Lotus/Types/Challenges/Complications/ResetOnDowned",
+          "description": "without dying or becoming downed"
+        },
+        {
+          "fullName": "/Lotus/Types/Challenges/Complications/ResetOnDisrupt",
+          "description": "without being disrupted by a <DT_MAGNETIC>Magnetic Status Effect"
+        },
+        {
+          "fullName": "/Lotus/Types/Challenges/Complications/ResetOnProc",
+          "description": "without getting afflicted by a Status Effect"
+        },
+        {
+          "fullName": "/Lotus/Types/Challenges/Complications/ResetOnAllyDowned",
+          "description": "without an ally becoming downed"
+        },
+        {
+          "fullName": "/Lotus/Types/Challenges/Complications/EquippedDamageDebuffKey",
+          "description": "with an Extinguished Dragon Key equipped"
+        },
+        {
+          "fullName": "/Lotus/Types/Challenges/Complications/EquippedHealthDebuffKey",
+          "description": "with a Bleeding Dragon Key equipped"
+        },
+        {
+          "fullName": "/Lotus/Types/Challenges/Complications/EquippedShieldDebuffKey",
+          "description": "with a Decaying Dragon Key equipped"
+        },
+        {
+          "fullName": "/Lotus/Types/Challenges/Complications/EquippedSpeedDebuffKey",
+          "description": "with a Hobbled Dragon Key equipped"
+        },
+        {
+          "fullName": "/Lotus/Types/Challenges/Complications/ResetOnGearHealthRestores",
+          "description": "without using health consumables"
+        },
+        {
+          "fullName": "/Lotus/Types/Challenges/Complications/ResetOnGearShieldRestores",
+          "description": "without using shield-restoring consumables"
+        },
+        {
+          "fullName": "/Lotus/Types/Challenges/Complications/ResetOnGearAmmoRestores",
+          "description": "without using ammo consumables"
+        },
+        {
+          "fullName": "/Lotus/Types/Challenges/Complications/ResetOnGearEnergyRestores",
+          "description": "without using energy consumables"
+        },
+        {
+          "fullName": "/Lotus/Types/Challenges/Complications/ResetOnNewDay",
+          "description": "in one day"
+        }
+      ]
+    }
+  ],
+  "baseDrain": 0,
+  "category": "Mods",
+  "fusionLimit": 0,
+  "imageName": "archgun-riven-mod-acf46416a8.png",
+  "introduced": {
+    "name": "Update 24.8",
+    "url": "https://wiki.warframe.com/w/Update_24%23Update_24.8",
+    "aliases": [
+      "24.8",
+      "24.8.0"
+    ],
+    "parent": "24.8",
+    "date": "2019-04-24"
+  },
+  "isPrime": false,
+  "masterable": false,
+  "name": "Archgun Riven Mod",
+  "polarity": "universal",
+  "rarity": "Common",
+  "releaseDate": "2019-04-24",
+  "tradable": false,
+  "transmutable": true,
+  "type": "Arch-Gun Riven Mod",
+  "uniqueName": "/Lotus/Upgrades/Mods/Randomized/LotusArchgunRandomModRare",
+  "upgradeEntries": [
+    {
+      "tag": "WeaponArmorPiercingDamageMod",
+      "prefixTag": "insi",
+      "suffixTag": "cak",
+      "upgradeValues": [
+        {
+          "value": 0.0099999998,
+          "locTag": "|val|% <DT_PUNCTURE_COLOR>Puncture"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponCritChanceMod",
+      "prefixTag": "crita",
+      "suffixTag": "cron",
+      "upgradeValues": [
+        {
+          "value": 0.0111,
+          "locTag": "|val|% Critical Chance"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponCritDamageMod",
+      "prefixTag": "acri",
+      "suffixTag": "tis",
+      "upgradeValues": [
+        {
+          "value": 0.0088999998,
+          "locTag": "|val|% Critical Damage"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponElectricityDamageMod",
+      "prefixTag": "vexi",
+      "suffixTag": "tio",
+      "upgradeValues": [
+        {
+          "value": 0.0133,
+          "locTag": "|val|% <DT_ELECTRICITY_COLOR>Electricity"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponFireDamageMod",
+      "prefixTag": "igni",
+      "suffixTag": "pha",
+      "upgradeValues": [
+        {
+          "value": 0.0133,
+          "locTag": "|val|% <DT_FIRE_COLOR>Heat"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponFireRateMod",
+      "prefixTag": "croni",
+      "suffixTag": "dra",
+      "upgradeValues": [
+        {
+          "value": 0.00667,
+          "locTag": "|val|% Fire Rate (x2 for Bows)"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponFreezeDamageMod",
+      "prefixTag": "geli",
+      "suffixTag": "do",
+      "upgradeValues": [
+        {
+          "value": 0.0133,
+          "locTag": "|val|% <DT_FREEZE_COLOR>Cold"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponImpactDamageMod",
+      "prefixTag": "magna",
+      "suffixTag": "ton",
+      "upgradeValues": [
+        {
+          "value": 0.0099999998,
+          "locTag": "|val|% <DT_IMPACT_COLOR>Impact"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponProcTimeMod",
+      "prefixTag": "deci",
+      "suffixTag": "des",
+      "upgradeValues": [
+        {
+          "value": 0.01111,
+          "locTag": "|val|% Status Duration"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponSlashDamageMod",
+      "prefixTag": "sci",
+      "suffixTag": "sus",
+      "upgradeValues": [
+        {
+          "value": 0.0099999998,
+          "locTag": "|val|% <DT_SLASH_COLOR>Slash"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponStunChanceMod",
+      "prefixTag": "hexa",
+      "suffixTag": "dex",
+      "upgradeValues": [
+        {
+          "value": 0.0066999998,
+          "locTag": "|val|% Status Chance"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponToxinDamageMod",
+      "prefixTag": "toxi",
+      "suffixTag": "tox",
+      "upgradeValues": [
+        {
+          "value": 0.0133,
+          "locTag": "|val|% <DT_POISON_COLOR>Toxin"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponAmmoMaxMod",
+      "prefixTag": "ampi",
+      "suffixTag": "bin",
+      "upgradeValues": [
+        {
+          "value": 0.0111,
+          "locTag": "|val|% Ammo Maximum"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponClipMaxMod",
+      "prefixTag": "arma",
+      "suffixTag": "tin",
+      "upgradeValues": [
+        {
+          "value": 0.0066999998,
+          "locTag": "|val|% Magazine Capacity"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponDamageAmountMod",
+      "prefixTag": "visi",
+      "suffixTag": "ata",
+      "upgradeValues": [
+        {
+          "value": 0.0111,
+          "locTag": "|val|% Damage"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponFireIterationsMod",
+      "prefixTag": "sati",
+      "suffixTag": "can",
+      "upgradeValues": [
+        {
+          "value": 0.0066999998,
+          "locTag": "|val|% Multishot"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponPunctureDepthMod",
+      "prefixTag": "lexi",
+      "suffixTag": "nok",
+      "upgradeValues": [
+        {
+          "value": 0.029999999,
+          "locTag": "|val| Punch Through"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponRecoilReductionMod",
+      "prefixTag": "zeti",
+      "suffixTag": "mag",
+      "upgradeValues": [
+        {
+          "value": -0.0099999998,
+          "locTag": "|val|% Weapon Recoil"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponReloadSpeedMod",
+      "prefixTag": "feva",
+      "suffixTag": "tak",
+      "upgradeValues": [
+        {
+          "value": 0.0111,
+          "locTag": "|val|% Reload Speed"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponFactionDamageCorpus",
+      "prefixTag": "manti",
+      "suffixTag": "tron",
+      "upgradeValues": [
+        {
+          "value": 0.0049999999,
+          "locTag": "|val| Damage to Corpus"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponFactionDamageGrineer",
+      "prefixTag": "argi",
+      "suffixTag": "con",
+      "upgradeValues": [
+        {
+          "value": 0.0049999999,
+          "locTag": "|val| Damage to Grineer"
+        }
+      ]
+    },
+    {
+      "tag": "WeaponZoomFovMod",
+      "prefixTag": "hera",
+      "suffixTag": "lis",
+      "upgradeValues": [
+        {
+          "value": 0.006666,
+          "locTag": "|val|% Zoom"
+        }
+      ]
+    }
+  ],
+  "wikiAvailable": true,
+  "wikiaThumbnail": "https://wiki.warframe.com/images/ArchgunRivenMod.png?c488c",
+  "wikiaUrl": "https://wiki.warframe.com/w/Archgun_Riven_Mod"
+}

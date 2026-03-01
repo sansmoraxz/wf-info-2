@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use serde::Serialize;
 use serde_json::Value;
 
+use super::item_data_fetch;
 use crate::itemdata;
 use crate::itemdata::ProductCategory;
 
@@ -55,9 +55,10 @@ fn category_to_product_category(cat: &str) -> Option<&'static str> {
 fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
     let mut index: HashMap<String, Vec<ItemInfo>> = HashMap::new();
 
-    let Some(data_dir) = find_itemdata_dir() else {
-        log::warn!("Item data directory not found; item details disabled");
-        return index;
+    let read_cached = |file: &str| -> Option<String> {
+        item_data_fetch::cached_path(file)
+            .ok()
+            .and_then(|p| fs::read_to_string(p).ok())
     };
 
     let mut push_info = |v: &Value, product_category: Option<String>| {
@@ -82,7 +83,7 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
     };
 
     // Warframes
-    if let Ok(raw) = fs::read_to_string(data_dir.join("Warframes.json")) {
+    if let Some(raw) = read_cached("Warframes.json") {
         if let Ok(arr) = serde_json::from_str::<itemdata::warframe::Root>(&raw) {
             for item in arr {
                 let v = serde_json::to_value(&item).unwrap_or(Value::Null);
@@ -91,71 +92,70 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
         }
     }
     // Primary
-    if let Ok(raw) = fs::read_to_string(data_dir.join("Primary.json")) {
+    if let Some(raw) = read_cached("Primary.json") {
         if let Ok(arr) = serde_json::from_str::<itemdata::primary::Root>(&raw) {
             for item in arr {
-                let pc = Some(item.product_category.clone());
+                let pc = Some(item.product_category.as_str().to_string());
                 let v = serde_json::to_value(&item).unwrap_or(Value::Null);
                 push_info(&v, pc);
             }
         }
     }
     // Secondary
-    if let Ok(raw) = fs::read_to_string(data_dir.join("Secondary.json")) {
+    if let Some(raw) = read_cached("Secondary.json") {
         if let Ok(arr) = serde_json::from_str::<itemdata::secondary::Root>(&raw) {
             for item in arr {
-                let pc = Some(item.product_category.clone());
+                let pc = Some(item.product_category.as_str().to_string());
                 let v = serde_json::to_value(&item).unwrap_or(Value::Null);
                 push_info(&v, pc);
             }
         }
     }
     // Melee
-    if let Ok(raw) = fs::read_to_string(data_dir.join("Melee.json")) {
+    if let Some(raw) = read_cached("Melee.json") {
         if let Ok(arr) = serde_json::from_str::<itemdata::melee::Root>(&raw) {
             for item in arr {
-                let pc = Some(item.product_category.clone());
+                let pc = Some(item.product_category.as_str().to_string());
                 let v = serde_json::to_value(&item).unwrap_or(Value::Null);
                 push_info(&v, pc);
             }
         }
     }
     // Archwing suits
-    if let Ok(raw) = fs::read_to_string(data_dir.join("Archwing.json")) {
+    if let Some(raw) = read_cached("Archwing.json") {
         if let Ok(arr) = serde_json::from_str::<itemdata::archwing::Root>(&raw) {
             for item in arr {
-                let pc = Some(item.product_category.clone());
+                let pc = Some(item.product_category.as_str().to_string());
                 let v = serde_json::to_value(&item).unwrap_or(Value::Null);
                 push_info(&v, pc);
             }
         }
     }
     // Arch-guns
-    if let Ok(raw) = fs::read_to_string(data_dir.join("Arch-Gun.json")) {
+    if let Some(raw) = read_cached("Arch-Gun.json") {
         if let Ok(arr) = serde_json::from_str::<itemdata::arch_gun::Root>(&raw) {
             for item in arr {
-                let pc = Some(item.product_category.clone());
+                let pc = Some(item.product_category.as_str().to_string());
                 let v = serde_json::to_value(&item).unwrap_or(Value::Null);
                 push_info(&v, pc);
             }
         }
     }
     // Arch-melee
-    if let Ok(raw) = fs::read_to_string(data_dir.join("Arch-Melee.json")) {
+    if let Some(raw) = read_cached("Arch-Melee.json") {
         if let Ok(arr) = serde_json::from_str::<itemdata::arch_melee::Root>(&raw) {
             for item in arr {
-                let pc = Some(item.product_category.clone());
+                let pc = Some(item.product_category.as_str().to_string());
                 let v = serde_json::to_value(&item).unwrap_or(Value::Null);
                 push_info(&v, pc);
             }
         }
     }
     // Mods (covers Upgrades/RawUpgrades)
-    if let Ok(raw) = fs::read_to_string(data_dir.join("Mods.json")) {
+    if let Some(raw) = read_cached("Mods.json") {
         if let Ok(arr) = serde_json::from_str::<itemdata::mods::Root>(&raw) {
             for item in arr {
                 let v = serde_json::to_value(&item).unwrap_or(Value::Null);
-                // Mods can map to Upgrades or RawUpgrades
                 for pc in item.get_product_categories() {
                     push_info(&v, Some(pc));
                 }
@@ -164,29 +164,4 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
     }
 
     index
-}
-
-fn find_itemdata_dir() -> Option<PathBuf> {
-    if let Ok(path) = std::env::var("WF_ITEMDATA_DIR") {
-        let path = PathBuf::from(path);
-        if path.exists() {
-            return Some(path);
-        }
-    }
-
-    if let Ok(cwd) = std::env::current_dir() {
-        let path = cwd.join("warframe-items-data").join("json");
-        if path.exists() {
-            return Some(path);
-        }
-    }
-
-    let fallback = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("warframe-items-data")
-        .join("json");
-    if fallback.exists() {
-        return Some(fallback);
-    }
-
-    None
 }

@@ -1,4 +1,5 @@
-// Shared types - import from these modules instead of defining locally
+//! Shared types - import from these modules instead of defining locally
+
 pub mod common;
 pub mod components;
 pub mod damage;
@@ -13,7 +14,15 @@ pub use traits::{
 };
 
 // Re-export important enums for easier access
-pub use enums::{ModCategory, Noise, Polarity, Rarity, Trigger, VaultStatus};
+pub use enums::{
+    ArcaneType, ArchGunProductCategory, ArchGunType, ArchMeleeProductCategory, ArchMeleeType,
+    ArchwingProductCategory, ArchwingType, ComponentType, Disposition, EnemyType, FishType,
+    GearType, GlyphType, MeleeProductCategory, MeleeType, MiscType, ModCategory, ModType, NodeType,
+    Noise, PetType, Polarity, PrimaryProductCategory, PrimaryType, QuestType, RailjackType, Rarity,
+    RelicType, ResistanceType, ResourceType, SecondaryProductCategory, SecondaryType,
+    SentinelProductCategory, SentinelType, SentinelWeaponProductCategory, SentinelWeaponType, Sex,
+    SigilType, SkinType, Slot, Trigger, VaultStatus, WarframeType,
+};
 pub use props::{MeleeWeaponData, RangedWeaponData, WeaponTypeStats};
 
 // Category-specific modules
@@ -37,6 +46,15 @@ pub mod gear;
 pub mod misc;
 pub mod relics;
 pub mod resource;
+
+pub mod enemy;
+pub mod fish;
+pub mod glyph;
+pub mod node;
+pub mod quest;
+pub mod railjack;
+pub mod sigil;
+pub mod skin;
 
 /// Trait for items that belong to product categories (for inventory lookup).
 pub trait ProductCategory {

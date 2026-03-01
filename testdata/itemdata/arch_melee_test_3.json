@@ -1,0 +1,181 @@
+{
+  "attacks": [
+    {
+      "name": "Normal Attack",
+      "speed": 1,
+      "crit_chance": 5,
+      "crit_mult": 1.5,
+      "status_chance": 15,
+      "damage": {
+        "impact": 65.4,
+        "slash": 65.4,
+        "puncture": 305.2
+      }
+    }
+  ],
+  "blockingAngle": 90,
+  "bpCost": 35000,
+  "buildPrice": 25000,
+  "buildQuantity": 1,
+  "buildTime": 43200,
+  "category": "Arch-Melee",
+  "comboDuration": 5,
+  "components": [
+    {
+      "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/ArchHookSwordBlade",
+      "name": "Blade",
+      "description": "An Archwing weapon-crafting component.",
+      "itemCount": 1,
+      "imageName": "agkuza-blade.png",
+      "tradable": false,
+      "drops": [
+        {
+          "chance": 1,
+          "location": "New Loka, Benevolent",
+          "rarity": "Common",
+          "type": "Agkuza Blade"
+        }
+      ],
+      "masterable": false
+    },
+    {
+      "uniqueName": "/Lotus/Types/Recipes/Weapons/ArchHookSwordBlueprint",
+      "name": "Blueprint",
+      "description": "Tear apart incoming enemies with this massive hooked blade.",
+      "itemCount": 1,
+      "imageName": "blueprint.png",
+      "tradable": false,
+      "masterable": false,
+      "drops": []
+    },
+    {
+      "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/ArchHookSwordGuard",
+      "name": "Guard",
+      "description": "An Archwing weapon-crafting component.",
+      "itemCount": 1,
+      "imageName": "agkuza-guard.png",
+      "tradable": false,
+      "drops": [
+        {
+          "chance": 1,
+          "location": "Steel Meridian, Defender",
+          "rarity": "Common",
+          "type": "Agkuza Guard"
+        }
+      ],
+      "masterable": false
+    },
+    {
+      "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/ArchHookSwordHandle",
+      "name": "Handle",
+      "description": "An Archwing weapon-crafting component.",
+      "itemCount": 1,
+      "imageName": "agkuza-handle.png",
+      "tradable": false,
+      "drops": [
+        {
+          "chance": 1,
+          "location": "Red Veil, Esteemed",
+          "rarity": "Common",
+          "type": "Agkuza Handle"
+        }
+      ],
+      "masterable": false
+    }
+  ],
+  "consumeOnBuild": true,
+  "criticalChance": 0.050000001,
+  "criticalMultiplier": 1.5,
+  "damage": {
+    "total": 435.99997,
+    "impact": 65.400002,
+    "puncture": 65.399986,
+    "slash": 305.19998,
+    "heat": 0,
+    "cold": 0,
+    "electricity": 0,
+    "toxin": 0,
+    "blast": 0,
+    "radiation": 0,
+    "gas": 0,
+    "magnetic": 0,
+    "viral": 0,
+    "corrosive": 0,
+    "void": 0,
+    "tau": 0,
+    "cinematic": 0,
+    "shieldDrain": 0,
+    "healthDrain": 0,
+    "energyDrain": 0,
+    "true": 0
+  },
+  "damagePerShot": [
+    65.400002,
+    305.19998,
+    65.399986,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "description": "Tear apart incoming enemies with this massive hooked blade.",
+  "disposition": 1,
+  "fireRate": 1,
+  "followThrough": 0.69999999,
+  "heavyAttackDamage": 436,
+  "heavySlamAttack": 436,
+  "imageName": "agkuza-ad630f8d41.png",
+  "introduced": {
+    "name": "Update: Specters of the Rail 0.0",
+    "url": "https://wiki.warframe.com/w/Update_19%23Update%3A_Specters_of_the_Rail",
+    "aliases": [
+      "Specters of the Rail",
+      "Specters of the Rail 0.0",
+      "SotR"
+    ],
+    "parent": "18.15",
+    "date": "2016-07-08"
+  },
+  "isPrime": false,
+  "marketCost": 150,
+  "masterable": true,
+  "masteryReq": 3,
+  "name": "Agkuza",
+  "omegaAttenuation": 0.5,
+  "polarities": [
+    "vazarin"
+  ],
+  "procChance": 0.14999998,
+  "productCategory": "SpaceMelee",
+  "range": 2.5,
+  "releaseDate": "2016-07-08",
+  "skipBuildTimePrice": 50,
+  "slamAttack": 436,
+  "slamRadialDamage": 872,
+  "slamRadius": 3,
+  "slideAttack": 934,
+  "slot": 5,
+  "tags": [
+    "Tenno"
+  ],
+  "totalDamage": 435.99997,
+  "tradable": false,
+  "type": "Arch-Melee",
+  "uniqueName": "/Lotus/Weapons/Tenno/Archwing/Melee/ArchSwordHook/ArchHookSwordWeapon",
+  "wikiAvailable": true,
+  "wikiaThumbnail": "https://wiki.warframe.com/images/Agkuza.png?5cbfc",
+  "wikiaUrl": "https://wiki.warframe.com/w/Agkuza"
+}

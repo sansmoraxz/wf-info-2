@@ -3,9 +3,12 @@
 use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
-use crate::itemdata::common::{Ability, Introduced, Patchlog};
+use crate::itemdata::common::{Ability, Patchlog};
 use crate::itemdata::components::Component;
-use crate::itemdata::enums::Polarity;
+use crate::itemdata::enums::{ArchwingProductCategory, ArchwingType, Polarity, Slot};
+use crate::itemdata::props::{
+    CharacterStats, ItemDetailProps, ItemIdentityProps, PrimeProps, TradableProps, WikiaProps,
+};
 use crate::itemdata::traits::{
     Buildable, Character, Equippable, HasAbilities, Item, Prime, WikiaLinked,
 };
@@ -15,27 +18,14 @@ pub type Root = Vec<Archwing>;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Archwing {
-    // Core identity
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
-    pub image_name: String,
-    pub description: String,
-
-    // Tradable
-    pub tradable: bool,
-    pub masterable: bool,
-
-    // Character stats
-    pub health: i64,
-    pub shield: i64,
-    pub armor: i64,
-    pub power: i64,
-    pub stamina: i64,
-    pub sprint: Option<f64>,
-    pub sprint_speed: f64,
+    pub type_field: ArchwingType,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
 
     // Archwing-specific
     #[serde(default)]
@@ -56,53 +46,48 @@ pub struct Archwing {
     // Equippable
     pub polarities: Option<Vec<Polarity>>,
 
-    // Prime/vault
-    #[serde(default)]
-    pub is_prime: bool,
-    pub vaulted: Option<bool>,
-    pub vault_date: Option<String>,
-    pub estimated_vault_date: Option<String>,
-
-    // Wikia
-    pub wiki_available: Option<bool>,
-    pub wikia_url: Option<String>,
-    pub wikia_thumbnail: Option<String>,
-    pub introduced: Option<Introduced>,
-    pub release_date: Option<String>,
-    pub product_category: String,
+    pub product_category: ArchwingProductCategory,
 
     // Droppable
     #[serde(default)]
     pub patchlogs: Vec<Patchlog>,
+
+    // Grouped props
+    #[serde(flatten)]
+    pub stats: CharacterStats,
+    #[serde(flatten)]
+    pub prime: PrimeProps,
+    #[serde(flatten)]
+    pub wikia: WikiaProps,
 }
 
 impl ProductCategory for Archwing {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.clone()]
+        vec![self.product_category.as_str().to_string()]
     }
 }
 
 impl Item for Archwing {
     fn unique_name(&self) -> &str {
-        &self.unique_name
+        &self.identity.unique_name
     }
     fn name(&self) -> &str {
-        &self.name
+        &self.identity.name
     }
     fn category(&self) -> &str {
-        &self.category
+        &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
-        Some(&self.image_name)
+        self.detail.image_name.as_deref()
     }
     fn tradable(&self) -> bool {
-        self.tradable
+        self.trade.tradable
     }
     fn masterable(&self) -> bool {
-        self.masterable
+        self.trade.masterable
     }
     fn patchlogs(&self) -> &[Patchlog] {
         &self.patchlogs
@@ -141,55 +126,55 @@ impl Buildable for Archwing {
 
 impl Prime for Archwing {
     fn is_prime(&self) -> bool {
-        self.is_prime
+        self.prime.is_prime
     }
     fn vaulted(&self) -> Option<bool> {
-        self.vaulted
+        self.prime.vaulted
     }
     fn vault_date(&self) -> Option<&str> {
-        self.vault_date.as_deref()
+        self.prime.vault_date.as_deref()
     }
     fn estimated_vault_date(&self) -> Option<&str> {
-        self.estimated_vault_date.as_deref()
+        self.prime.estimated_vault_date.as_deref()
     }
 }
 
 impl WikiaLinked for Archwing {
     fn wiki_available(&self) -> Option<bool> {
-        self.wiki_available
+        self.wikia.wiki_available
     }
     fn wikia_url(&self) -> Option<&str> {
-        self.wikia_url.as_deref()
+        self.wikia.wikia_url.as_deref()
     }
     fn wikia_thumbnail(&self) -> Option<&str> {
-        self.wikia_thumbnail.as_deref()
+        self.wikia.wikia_thumbnail.as_deref()
     }
-    fn introduced(&self) -> Option<&Introduced> {
-        self.introduced.as_ref()
+    fn introduced(&self) -> Option<&crate::itemdata::common::Introduced> {
+        self.wikia.introduced.as_ref()
     }
     fn release_date(&self) -> Option<&str> {
-        self.release_date.as_deref()
+        self.wikia.release_date.as_deref()
     }
 }
 
 impl Character for Archwing {
     fn health(&self) -> i64 {
-        self.health
+        self.stats.health
     }
     fn shield(&self) -> i64 {
-        self.shield
+        self.stats.shield
     }
     fn armor(&self) -> i64 {
-        self.armor
+        self.stats.armor
     }
     fn power(&self) -> i64 {
-        self.power
+        self.stats.power
     }
     fn stamina(&self) -> i64 {
-        self.stamina
+        self.stats.stamina
     }
     fn sprint_speed(&self) -> Option<f64> {
-        Some(self.sprint_speed)
+        self.stats.sprint_speed
     }
 }
 
@@ -206,7 +191,7 @@ impl Equippable for Archwing {
             None => &[],
         }
     }
-    fn slot(&self) -> Option<i64> {
+    fn slot(&self) -> Option<&Slot> {
         None
     }
 }
@@ -226,8 +211,58 @@ mod tests {
         let rec: Archwing = from_str(json_data).unwrap();
 
         assert_eq!(
-            rec.unique_name,
+            rec.identity.unique_name,
             "/Lotus/Powersuits/Archwing/StealthJetPack/StealthJetPack"
         );
+        assert_eq!(rec.identity.name, "Itzal");
+        assert_eq!(rec.identity.category, "Archwing");
+        assert!(!rec.trade.tradable);
+        assert!(rec.trade.masterable);
+
+        // Character stats
+        assert_eq!(rec.stats.health, 200);
+        assert_eq!(rec.stats.shield, 220);
+        assert_eq!(rec.stats.armor, 50);
+        assert_eq!(rec.stats.power, 220);
+
+        // Abilities
+        assert_eq!(rec.abilities.len(), 4);
+
+        // Buildable
+        assert_eq!(rec.build_price, 25000);
+        assert_eq!(rec.components.len(), 5);
+
+        assert!(!rec.prime.is_prime);
+    }
+
+    #[test]
+    fn test_deserialize_archwing_odonata() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/archwing_test_2.json"
+        ));
+        let rec: Archwing = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Odonata");
+        assert_eq!(rec.stats.health, 425);
+        assert_eq!(rec.stats.armor, 100);
+        assert_eq!(rec.stats.shield, 430);
+        assert_eq!(rec.build_price, 7000);
+        assert!(!rec.prime.is_prime);
+    }
+
+    #[test]
+    fn test_deserialize_archwing_prime() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/archwing_test_3.json"
+        ));
+        let rec: Archwing = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Odonata Prime");
+        assert_eq!(rec.stats.health, 650);
+        assert_eq!(rec.stats.shield, 640);
+        assert!(rec.prime.is_prime);
+        assert_eq!(rec.prime.vaulted, Some(true));
     }
 }

@@ -1,0 +1,317 @@
+{
+  "category": "Skins",
+  "description": "Unlocks a collection of specialized colors.",
+  "excludeFromCodex": true,
+  "hexColours": [
+    {
+      "value": "0x00FFFFFF"
+    },
+    {
+      "value": "0x00D2D1D1"
+    },
+    {
+      "value": "0x009A9A9A"
+    },
+    {
+      "value": "0x009A9A9A"
+    },
+    {
+      "value": "0x007F7F7F"
+    },
+    {
+      "value": "0x00595959"
+    },
+    {
+      "value": "0x00434343"
+    },
+    {
+      "value": "0x00252525"
+    },
+    {
+      "value": "0x001A1A1A"
+    },
+    {
+      "value": "0x00000000"
+    },
+    {
+      "value": "0x00C2BA9F"
+    },
+    {
+      "value": "0x00F9E9A8"
+    },
+    {
+      "value": "0x00F5DC99"
+    },
+    {
+      "value": "0x00F1C959"
+    },
+    {
+      "value": "0x00F2D34E"
+    },
+    {
+      "value": "0x00DFD36B"
+    },
+    {
+      "value": "0x00D4CB2B"
+    },
+    {
+      "value": "0x00FBED00"
+    },
+    {
+      "value": "0x00FEF900"
+    },
+    {
+      "value": "0x00F6DF00"
+    },
+    {
+      "value": "0x00EDD65E"
+    },
+    {
+      "value": "0x00EFD02A"
+    },
+    {
+      "value": "0x00DFBC00"
+    },
+    {
+      "value": "0x00DBB900"
+    },
+    {
+      "value": "0x00F1CB00"
+    },
+    {
+      "value": "0x00CEA52F"
+    },
+    {
+      "value": "0x00EDB900"
+    },
+    {
+      "value": "0x00EBB100"
+    },
+    {
+      "value": "0x00E59700"
+    },
+    {
+      "value": "0x00E07700"
+    },
+    {
+      "value": "0x00C56B00"
+    },
+    {
+      "value": "0x00C25200"
+    },
+    {
+      "value": "0x00A54700"
+    },
+    {
+      "value": "0x00813700"
+    },
+    {
+      "value": "0x00561A03"
+    },
+    {
+      "value": "0x00D35038"
+    },
+    {
+      "value": "0x00DA4000"
+    },
+    {
+      "value": "0x00AA3400"
+    },
+    {
+      "value": "0x008A2500"
+    },
+    {
+      "value": "0x007E270D"
+    },
+    {
+      "value": "0x00B53AAB"
+    },
+    {
+      "value": "0x0092308B"
+    },
+    {
+      "value": "0x00682263"
+    },
+    {
+      "value": "0x00551B51"
+    },
+    {
+      "value": "0x00551B51"
+    },
+    {
+      "value": "0x00BF7EC3"
+    },
+    {
+      "value": "0x00A1599D"
+    },
+    {
+      "value": "0x00BE53BD"
+    },
+    {
+      "value": "0x00C03FB6"
+    },
+    {
+      "value": "0x00D35384"
+    },
+    {
+      "value": "0x00CA8CFF"
+    },
+    {
+      "value": "0x009353C0"
+    },
+    {
+      "value": "0x00973EFF"
+    },
+    {
+      "value": "0x008334CC"
+    },
+    {
+      "value": "0x005C278C"
+    },
+    {
+      "value": "0x00896BA6"
+    },
+    {
+      "value": "0x006A4D84"
+    },
+    {
+      "value": "0x00553D6B"
+    },
+    {
+      "value": "0x00472B60"
+    },
+    {
+      "value": "0x003E195E"
+    },
+    {
+      "value": "0x00A0C0F6"
+    },
+    {
+      "value": "0x009BA7FF"
+    },
+    {
+      "value": "0x007A8AFD"
+    },
+    {
+      "value": "0x00515AD5"
+    },
+    {
+      "value": "0x003E44A2"
+    },
+    {
+      "value": "0x007FBDFF"
+    },
+    {
+      "value": "0x005EA4FF"
+    },
+    {
+      "value": "0x005B9FFF"
+    },
+    {
+      "value": "0x00447CFF"
+    },
+    {
+      "value": "0x00325AB8"
+    },
+    {
+      "value": "0x009DD5FF"
+    },
+    {
+      "value": "0x0096EDF8"
+    },
+    {
+      "value": "0x008BECF8"
+    },
+    {
+      "value": "0x007AD1FF"
+    },
+    {
+      "value": "0x00568EB2"
+    },
+    {
+      "value": "0x00BFF3E8"
+    },
+    {
+      "value": "0x00A5EDDB"
+    },
+    {
+      "value": "0x0087C9B8"
+    },
+    {
+      "value": "0x006DB29D"
+    },
+    {
+      "value": "0x004C806F"
+    },
+    {
+      "value": "0x00C5F585"
+    },
+    {
+      "value": "0x00B6F362"
+    },
+    {
+      "value": "0x009DF700"
+    },
+    {
+      "value": "0x0070AF00"
+    },
+    {
+      "value": "0x00547E00"
+    },
+    {
+      "value": "0x00D3EE69"
+    },
+    {
+      "value": "0x00D6FA41"
+    },
+    {
+      "value": "0x00A7B400"
+    },
+    {
+      "value": "0x00838E00"
+    },
+    {
+      "value": "0x00606800"
+    }
+  ],
+  "imageName": "accessibility-fd7e5e95a0.png",
+  "masterable": false,
+  "name": "Accessibility",
+  "patchlogs": [
+    {
+      "name": "Veilbreaker: Hotfix 32.0.3",
+      "date": "2022-09-14T17:58:41Z",
+      "url": "https://forums.warframe.com/topic/1323565-veilbreaker-hotfix-3203/",
+      "additions": "",
+      "changes": "In order to remove Veils from Narmer victims, you are required to Tap the dedicated button to fill the gauge and release them. As a friendly reminder, there is a \u2018Repeated Button Presses\u2019 option in the Accessibility settings that can swap the Tap to Hold if that is preferred!",
+      "fixes": ""
+    },
+    {
+      "name": "Nora\u2019s Mix Vol.2: Hotfix 31.6.4",
+      "date": "2022-07-14T15:00:33Z",
+      "url": "https://forums.warframe.com/topic/1316486-nora%E2%80%99s-mix-vol2-hotfix-3164/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed being unable to use manual blocking while in melee-only mode, or use aim+attack melee combos, unless you are also using the \u2018Hold to Aim Weapon\u2019 in the Accessibility options.\u00a0"
+    },
+    {
+      "name": "Update 31.1.0: Echoes of War",
+      "date": "2022-02-09T15:59:43Z",
+      "url": "https://forums.warframe.com/topic/1299619-update-3110-echoes-of-war/",
+      "additions": "",
+      "changes": "NEW: Accessibility options now have their own tab! You\u2019ll find respective VIDEO and INTERFACE accessibility options now live here.",
+      "fixes": ""
+    },
+    {
+      "name": "Update 31: The New War",
+      "date": "2021-12-15T14:23:13Z",
+      "url": "https://forums.warframe.com/topic/1290487-update-31-the-new-war/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Additionally, a new Accessibility setting has been added titled 'Hold Button for Struggle Action'. This allows you to choose either 'Hold' or 'Tap' when confronted with a struggle context action, where typically mashing of a button would be requested. We recommend that you put this setting to your preference before initiating The New War Quest to ensure you have the best experience. Players can turn this on in the Controls options menu at any time in the quest, just above the Archwing section."
+    }
+  ],
+  "tradable": false,
+  "type": "Color Palette",
+  "uniqueName": "/Lotus/Types/StoreItems/SuitCustomizations/ColourPickerAccessibilityItemA"
+}

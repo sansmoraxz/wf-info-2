@@ -1,0 +1,77 @@
+{
+  "category": "Arcanes",
+  "drops": [
+    {
+      "chance": 0.0141,
+      "location": "Veil/Erato (Skirmish), Rotation C",
+      "rarity": "Rare",
+      "type": "Arcane Energize"
+    },
+    {
+      "chance": 0.05,
+      "location": "Eidolon Hydrolyst (Capture)",
+      "rarity": "Rare",
+      "type": "Arcane Energize"
+    }
+  ],
+  "imageName": "arcane-energize-0a955c2bcd.png",
+  "levelStats": [
+    {
+      "stats": [
+        "On Energy Pickup:\\n60% chance to replenish 25 Energy to self and allies within 15m\\n15s cooldown"
+      ]
+    },
+    {
+      "stats": [
+        "On Energy Pickup:\\n60% chance to replenish 50 Energy to self and allies within 15m\\n15s cooldown"
+      ]
+    },
+    {
+      "stats": [
+        "On Energy Pickup:\\n60% chance to replenish 75 Energy to self and allies within 15m\\n15s cooldown"
+      ]
+    },
+    {
+      "stats": [
+        "On Energy Pickup:\\n60% chance to replenish 100 Energy to self and allies within 15m\\n15s cooldown\\n+1 Arcane Revive",
+        "+1 Arcane Revive"
+      ]
+    },
+    {
+      "stats": [
+        "On Energy Pickup:\\n60% chance to replenish 125 Energy to self and allies within 15m\\n15s cooldown\\n+1 Arcane Revive",
+        "+1 Arcane Revive"
+      ]
+    },
+    {
+      "stats": [
+        "On Energy Pickup:\\n60% chance to replenish 150 Energy to self and allies within 15m\\n15s cooldown\\n+1 Arcane Revive",
+        "+1 Arcane Revive"
+      ]
+    }
+  ],
+  "masterable": false,
+  "name": "Arcane Energize",
+  "patchlogs": [
+    {
+      "name": "Update 30.5: Sisters of Parvos",
+      "date": "2021-07-06T15:02:10Z",
+      "url": "https://forums.warframe.com/topic/1269749-update-305-sisters-of-parvos/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed buff notification for Arcane Energize and Grace showing up as a cooldown instead of an upgrade duration. It now appears as a debuff."
+    },
+    {
+      "name": "Warframe Revised: Update 27.2.0",
+      "date": "2020-03-05T15:32:32Z",
+      "url": "https://forums.warframe.com/topic/1172454-warframe-revised-update-2720/",
+      "additions": "",
+      "changes": "Arcane Energize:\nArcane Energize will still give Energy to toggled Warframe Abilities ",
+      "fixes": ""
+    }
+  ],
+  "rarity": "Legendary",
+  "tradable": true,
+  "type": "Warframe Arcane",
+  "uniqueName": "/Lotus/Upgrades/CosmeticEnhancers/Utility/GolemArcaneRadialEnergyOnEnergyPickup"
+}

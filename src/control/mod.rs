@@ -2,6 +2,7 @@ mod broadcaster;
 mod events;
 mod inventory;
 mod item_data;
+pub mod item_data_fetch;
 mod requests;
 mod screenshot;
 mod search;

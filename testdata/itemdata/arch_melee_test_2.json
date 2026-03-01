@@ -1,0 +1,189 @@
+{
+  "attacks": [
+    {
+      "name": "Normal Attack",
+      "speed": 1.08,
+      "crit_chance": 25,
+      "crit_mult": 2,
+      "status_chance": 20,
+      "damage": {
+        "impact": 37.6,
+        "slash": 263.2,
+        "puncture": 75.2
+      }
+    }
+  ],
+  "blockingAngle": 90,
+  "bpCost": 35000,
+  "buildPrice": 25000,
+  "buildQuantity": 1,
+  "buildTime": 43200,
+  "category": "Arch-Melee",
+  "comboDuration": 5,
+  "components": [
+    {
+      "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/ArchSwordShieldAegis",
+      "name": "Aegis",
+      "description": "An Archwing weapon-crafting component.",
+      "itemCount": 1,
+      "imageName": "centaur-aegis.png",
+      "tradable": false,
+      "drops": [
+        {
+          "chance": 1,
+          "location": "Arbiters of Hexis, Lawful",
+          "rarity": "Common",
+          "type": "Centaur Aegis"
+        }
+      ],
+      "masterable": false
+    },
+    {
+      "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/ArchSwordShieldBlade",
+      "name": "Blade",
+      "description": "An Archwing weapon-crafting component.",
+      "itemCount": 1,
+      "imageName": "centaur-blade.png",
+      "tradable": false,
+      "drops": [
+        {
+          "chance": 1,
+          "location": "The Perrin Sequence, Executive",
+          "rarity": "Common",
+          "type": "Centaur Blade"
+        }
+      ],
+      "masterable": false
+    },
+    {
+      "uniqueName": "/Lotus/Types/Recipes/Weapons/ArchSwordShieldBlueprint",
+      "name": "Blueprint",
+      "description": "Part sword, part shield, the Centaur excels at charging headlong into enemy fire.",
+      "itemCount": 1,
+      "imageName": "blueprint.png",
+      "tradable": false,
+      "masterable": false,
+      "drops": []
+    },
+    {
+      "uniqueName": "/Lotus/Types/Recipes/Weapons/WeaponParts/ArchSwordShieldHandle",
+      "name": "Handle",
+      "description": "An Archwing weapon-crafting component.",
+      "itemCount": 1,
+      "imageName": "centaur-handle.png",
+      "tradable": false,
+      "drops": [
+        {
+          "chance": 1,
+          "location": "New Loka, Benevolent",
+          "rarity": "Common",
+          "type": "Centaur Handle"
+        }
+      ],
+      "masterable": false
+    }
+  ],
+  "consumeOnBuild": true,
+  "criticalChance": 0.25,
+  "criticalMultiplier": 2,
+  "damage": {
+    "total": 376,
+    "impact": 37.600002,
+    "puncture": 263.19998,
+    "slash": 75.200005,
+    "heat": 0,
+    "cold": 0,
+    "electricity": 0,
+    "toxin": 0,
+    "blast": 0,
+    "radiation": 0,
+    "gas": 0,
+    "magnetic": 0,
+    "viral": 0,
+    "corrosive": 0,
+    "void": 0,
+    "tau": 0,
+    "cinematic": 0,
+    "shieldDrain": 0,
+    "healthDrain": 0,
+    "energyDrain": 0,
+    "true": 0
+  },
+  "damagePerShot": [
+    37.600002,
+    75.200005,
+    263.19998,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "description": "Part sword, part shield, the Centaur excels at charging headlong into enemy fire.",
+  "disposition": 1,
+  "fireRate": 1.0833334,
+  "followThrough": 0.69999999,
+  "heavyAttackDamage": 376,
+  "heavySlamAttack": 376,
+  "imageName": "centaur-a00c7e4fd8.png",
+  "introduced": {
+    "name": "Hotfix 15.7.2",
+    "url": "https://wiki.warframe.com/w/Update_15%23Hotfix_15.7.2",
+    "aliases": [
+      "15.7.2"
+    ],
+    "parent": "15.7",
+    "date": "2014-12-19"
+  },
+  "isPrime": false,
+  "marketCost": 195,
+  "masterable": true,
+  "masteryReq": 8,
+  "name": "Centaur",
+  "omegaAttenuation": 0.5,
+  "patchlogs": [
+    {
+      "name": "Update 15.7.2 + 15.7.2.1",
+      "date": "2014-12-19T18:09:43Z",
+      "url": "https://forums.warframe.com/topic/369418-update-1572-15721/",
+      "additions": "",
+      "changes": "",
+      "fixes": "CENTAUR: \u00a0\u00a0Part sword, part shield, the Centaur excels at charging headlong into enemy fire.\nStart your Research for the Itzal and Fluctus in the Clan Dojo, and purchase the blueprint for the Centaur from the Marketplace today!"
+    }
+  ],
+  "polarities": [
+    "madurai"
+  ],
+  "procChance": 0.19999999,
+  "productCategory": "SpaceMelee",
+  "range": 2.5,
+  "releaseDate": "2014-12-19",
+  "skipBuildTimePrice": 50,
+  "slamAttack": 376,
+  "slamRadialDamage": 752,
+  "slamRadius": 3,
+  "slideAttack": 806,
+  "slot": 5,
+  "tags": [
+    "Tenno"
+  ],
+  "totalDamage": 376,
+  "tradable": false,
+  "type": "Arch-Melee",
+  "uniqueName": "/Lotus/Weapons/Tenno/Archwing/Melee/Archswordandshield/ArchSwordShield",
+  "wikiAvailable": true,
+  "wikiaThumbnail": "https://wiki.warframe.com/images/Centaur.png?ad3fd",
+  "wikiaUrl": "https://wiki.warframe.com/w/Centaur"
+}

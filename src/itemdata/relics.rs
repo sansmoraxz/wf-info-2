@@ -5,6 +5,8 @@ use serde_json::Value;
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
+use crate::itemdata::enums::RelicType;
+use crate::itemdata::props::{ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::itemdata::traits::{Droppable, Item};
 
 pub type Root = Vec<Relic>;
@@ -12,18 +14,14 @@ pub type Root = Vec<Relic>;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Relic {
-    // Core identity
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
-    pub image_name: String,
-    pub description: String,
-
-    // Tradable
-    pub tradable: bool,
-    pub masterable: bool,
+    pub type_field: RelicType,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
 
     // Relic-specific
     #[serde(default)]
@@ -47,25 +45,25 @@ impl ProductCategory for Relic {
 
 impl Item for Relic {
     fn unique_name(&self) -> &str {
-        &self.unique_name
+        &self.identity.unique_name
     }
     fn name(&self) -> &str {
-        &self.name
+        &self.identity.name
     }
     fn category(&self) -> &str {
-        &self.category
+        &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
-        Some(&self.image_name)
+        self.detail.image_name.as_deref()
     }
     fn tradable(&self) -> bool {
-        self.tradable
+        self.trade.tradable
     }
     fn masterable(&self) -> bool {
-        self.masterable
+        self.trade.masterable
     }
     fn patchlogs(&self) -> &[Patchlog] {
         &self.patchlogs
@@ -93,8 +91,48 @@ mod tests {
         let rec: Relic = from_str(json_data).unwrap();
 
         assert_eq!(
-            rec.unique_name,
+            rec.identity.unique_name,
             "/Lotus/Types/Game/Projections/T4VoidProjectionLavosPrimeASilver"
         );
+        assert_eq!(rec.identity.name, "Axi P8 Exceptional");
+        assert_eq!(rec.identity.category, "Relics");
+        assert_eq!(rec.type_field, RelicType::Relic);
+        assert!(rec.trade.tradable);
+        assert!(!rec.trade.masterable);
+        assert!(!rec.drops.is_empty());
+    }
+
+    #[test]
+    fn test_deserialize_relic_intact() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/relics_test_2.json"
+        ));
+        let rec: Relic = from_str(json_data).unwrap();
+
+        assert_eq!(
+            rec.identity.unique_name,
+            "/Lotus/Types/Game/Projections/T4VoidProjectionEBronze"
+        );
+        assert_eq!(rec.identity.name, "Axi A1 Intact");
+        assert_eq!(rec.type_field, RelicType::Relic);
+        assert!(rec.trade.tradable);
+    }
+
+    #[test]
+    fn test_deserialize_relic_flawless() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/relics_test_3.json"
+        ));
+        let rec: Relic = from_str(json_data).unwrap();
+
+        assert_eq!(
+            rec.identity.unique_name,
+            "/Lotus/Types/Game/Projections/T4VoidProjectionEGold"
+        );
+        assert_eq!(rec.identity.name, "Axi A1 Flawless");
+        assert_eq!(rec.type_field, RelicType::Relic);
+        assert!(rec.trade.tradable);
     }
 }

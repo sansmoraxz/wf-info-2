@@ -1,0 +1,16 @@
+{
+  "category": "Node",
+  "factionIndex": 1,
+  "masterable": false,
+  "masteryReq": 0,
+  "maxEnemyLevel": 23,
+  "minEnemyLevel": 21,
+  "missionIndex": 5,
+  "name": "Abaddon",
+  "nodeType": 0,
+  "systemIndex": 12,
+  "systemName": "Europa",
+  "tradable": false,
+  "type": "Node",
+  "uniqueName": "SolNode203"
+}

@@ -1,0 +1,617 @@
+{
+  "abilities": [
+    {
+      "uniqueName": "/Lotus/Powersuits/Archwing/ArchwingAbilities/FireShieldAbility",
+      "name": "Energy Shell",
+      "description": "Forms a protective energy shell around the Warframe",
+      "imageName": "energy-shell-4161409a59.png"
+    },
+    {
+      "uniqueName": "/Lotus/Powersuits/Archwing/ArchwingAbilities/FlareCounterMeasureAbility",
+      "name": "Disarray",
+      "description": "Drops flare beacons confusing incoming guided missiles.",
+      "imageName": "disarray-0a536226ae.png"
+    },
+    {
+      "uniqueName": "/Lotus/Powersuits/Archwing/ArchwingAbilities/MissileVolleyAbility",
+      "name": "Seeking Fire",
+      "description": "Fires a large volley of homing missiles.",
+      "imageName": "seeking-fire-7bb1aeb759.png"
+    },
+    {
+      "uniqueName": "/Lotus/Powersuits/Archwing/ArchwingAbilities/EMPPushAbility",
+      "name": "Repel",
+      "description": "The Warframe emits a massive pulse of energy, stunning nearby enemies and sending them flying.",
+      "imageName": "repel-7f65457cfd.png"
+    }
+  ],
+  "armor": 100,
+  "buildPrice": 25000,
+  "buildQuantity": 1,
+  "buildTime": 129600,
+  "category": "Archwing",
+  "components": [
+    {
+      "uniqueName": "/Lotus/Types/Recipes/ArchwingRecipes/PrimeArchwing/PrimeArchwingBlueprint",
+      "name": "Blueprint",
+      "description": "This enhanced version of the first Archwing prototype takes the design to its theoretical limits.",
+      "itemCount": 1,
+      "primeSellingPrice": 45,
+      "imageName": "blueprint.png",
+      "tradable": true,
+      "masterable": false,
+      "ducats": 45,
+      "drops": [
+        {
+          "chance": 0.11,
+          "location": "Axi L4 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.11,
+          "location": "Axi V8 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.11,
+          "location": "Lith F1 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.11,
+          "location": "Meso C2 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.11,
+          "location": "Meso S1 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.13,
+          "location": "Axi L4 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.13,
+          "location": "Axi V8 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.13,
+          "location": "Lith F1 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.13,
+          "location": "Meso C2 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.13,
+          "location": "Meso S1 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.17,
+          "location": "Axi L4 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.17,
+          "location": "Axi V8 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.17,
+          "location": "Lith F1 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.17,
+          "location": "Meso C2 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.17,
+          "location": "Meso S1 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi L4 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi V8 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Lith F1 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Meso C2 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Meso S1 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Blueprint"
+        }
+      ]
+    },
+    {
+      "uniqueName": "/Lotus/Types/Recipes/ArchwingRecipes/PrimeArchwing/PrimeArchwingChassisComponent",
+      "name": "Harness",
+      "description": "Harness component of the Odonata Prime Archwing.",
+      "primeSellingPrice": 15,
+      "itemCount": 1,
+      "imageName": "prime-odonata-prime-harness.png",
+      "tradable": true,
+      "drops": [
+        {
+          "chance": 0.1667,
+          "location": "Axi K1 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Axi T1 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Axi V4 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Lith K1 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Neo O1 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Neo V8 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi K1 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi T1 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi V4 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Lith K1 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Neo O1 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Neo V8 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Axi K1 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Axi T1 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Axi V4 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Lith K1 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Neo O1 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Neo V8 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Axi K1 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Axi T1 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Axi V4 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Lith K1 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Neo O1 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Neo V8 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Harness Blueprint"
+        }
+      ],
+      "masterable": false,
+      "ducats": 15
+    },
+    {
+      "uniqueName": "/Lotus/Types/Items/MiscItems/OrokinCell",
+      "name": "Orokin Cell",
+      "description": "Ancient energy cell from the Orokin era.\n\nLocation: Ceres, Saturn, and Deimos",
+      "itemCount": 1,
+      "imageName": "orokin-cell-0d237af036.png",
+      "tradable": false,
+      "drops": [],
+      "masterable": false,
+      "type": "Resource"
+    },
+    {
+      "uniqueName": "/Lotus/Types/Recipes/ArchwingRecipes/PrimeArchwing/PrimeArchwingSystemsComponent",
+      "name": "Systems",
+      "description": "Systems component of the Odonata Prime Archwing.",
+      "primeSellingPrice": 15,
+      "itemCount": 1,
+      "imageName": "prime-odonata-prime-systems.png",
+      "tradable": true,
+      "drops": [
+        {
+          "chance": 0.1667,
+          "location": "Axi V1 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Axi V8 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Lith F2 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Meso O3 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.1667,
+          "location": "Neo N3 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi V1 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi V8 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Lith F2 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Meso O3 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Neo N3 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Axi V1 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Axi V8 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Lith F2 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Meso O3 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.2333,
+          "location": "Neo N3 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Axi V1 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Axi V8 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Lith F2 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Meso O3 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        },
+        {
+          "chance": 0.2533,
+          "location": "Neo N3 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Systems Blueprint"
+        }
+      ],
+      "masterable": false,
+      "ducats": 15
+    },
+    {
+      "uniqueName": "/Lotus/Types/Recipes/ArchwingRecipes/PrimeArchwing/PrimeArchwingWingsComponent",
+      "name": "Wings",
+      "description": "Wings component of the Odonata Prime Archwing.",
+      "primeSellingPrice": 65,
+      "itemCount": 1,
+      "imageName": "prime-odonata-prime-wings.png",
+      "tradable": true,
+      "drops": [
+        {
+          "chance": 0.02,
+          "location": "Lith O2 Relic",
+          "rarity": "Rare",
+          "type": "Odonata Prime Wings Blueprint"
+        },
+        {
+          "chance": 0.02,
+          "location": "Meso O3 Relic",
+          "rarity": "Rare",
+          "type": "Odonata Prime Wings Blueprint"
+        },
+        {
+          "chance": 0.02,
+          "location": "Neo O1 Relic",
+          "rarity": "Rare",
+          "type": "Odonata Prime Wings Blueprint"
+        },
+        {
+          "chance": 0.04,
+          "location": "Lith O2 Relic (Exceptional)",
+          "rarity": "Rare",
+          "type": "Odonata Prime Wings Blueprint"
+        },
+        {
+          "chance": 0.04,
+          "location": "Meso O3 Relic (Exceptional)",
+          "rarity": "Rare",
+          "type": "Odonata Prime Wings Blueprint"
+        },
+        {
+          "chance": 0.04,
+          "location": "Neo O1 Relic (Exceptional)",
+          "rarity": "Rare",
+          "type": "Odonata Prime Wings Blueprint"
+        },
+        {
+          "chance": 0.06,
+          "location": "Lith O2 Relic (Flawless)",
+          "rarity": "Rare",
+          "type": "Odonata Prime Wings Blueprint"
+        },
+        {
+          "chance": 0.06,
+          "location": "Meso O3 Relic (Flawless)",
+          "rarity": "Rare",
+          "type": "Odonata Prime Wings Blueprint"
+        },
+        {
+          "chance": 0.06,
+          "location": "Neo O1 Relic (Flawless)",
+          "rarity": "Rare",
+          "type": "Odonata Prime Wings Blueprint"
+        },
+        {
+          "chance": 0.1,
+          "location": "Lith O2 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Wings Blueprint"
+        },
+        {
+          "chance": 0.1,
+          "location": "Meso O3 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Wings Blueprint"
+        },
+        {
+          "chance": 0.1,
+          "location": "Neo O1 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Wings Blueprint"
+        },
+        {
+          "chance": 0.11,
+          "location": "Axi N1 Relic",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Wings Blueprint"
+        },
+        {
+          "chance": 0.13,
+          "location": "Axi N1 Relic (Exceptional)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Wings Blueprint"
+        },
+        {
+          "chance": 0.17,
+          "location": "Axi N1 Relic (Flawless)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Wings Blueprint"
+        },
+        {
+          "chance": 0.2,
+          "location": "Axi N1 Relic (Radiant)",
+          "rarity": "Uncommon",
+          "type": "Odonata Prime Wings Blueprint"
+        }
+      ],
+      "masterable": false,
+      "ducats": 65
+    }
+  ],
+  "consumeOnBuild": true,
+  "description": "This enhanced version of the first Archwing prototype takes the design to its theoretical limits.",
+  "estimatedVaultDate": "2017-02-28",
+  "health": 650,
+  "imageName": "odonata-prime-39baaa7427.png",
+  "isPrime": true,
+  "masterable": true,
+  "masteryReq": 0,
+  "name": "Odonata Prime",
+  "patchlogs": [
+    {
+      "name": "Hotfix 16.1.1",
+      "date": "2015-03-24T23:35:27Z",
+      "url": "https://forums.warframe.com/topic/425719-hotfix-1611/",
+      "additions": "",
+      "changes": "",
+      "fixes": "Fixed Odonata Prime parts not being tradable."
+    },
+    {
+      "name": "Update 16.1: Volt Prime",
+      "date": "2015-03-24T18:01:52Z",
+      "url": "https://forums.warframe.com/topic/425416-update-161-volt-prime/",
+      "additions": "",
+      "changes": "",
+      "fixes": "including Volt Prime, Odonata Prime, Edo Prime Armor and the Kazeru Prime Sugatra. Plus, stock up on discounted Platinum and get Exclusive Gear available only through Prime Access!\nTake flight with Odonata Prime."
+    }
+  ],
+  "power": 85,
+  "productCategory": "SpaceSuits",
+  "releaseDate": "2015-03-24",
+  "shield": 640,
+  "skipBuildTimePrice": 50,
+  "sprintSpeed": 1.05,
+  "stamina": 200,
+  "tradable": true,
+  "type": "Archwing",
+  "uniqueName": "/Lotus/Powersuits/Archwing/PrimeJetPack/PrimeJetPack",
+  "vaultDate": "2017-02-28",
+  "vaulted": true
+}

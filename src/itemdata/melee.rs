@@ -3,10 +3,13 @@
 use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
-use crate::itemdata::common::{Drop, Introduced, Patchlog};
-use crate::itemdata::components::Component;
+use crate::itemdata::common::{Drop, Patchlog};
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::Polarity;
+use crate::itemdata::enums::{MeleeProductCategory, MeleeType, Polarity, Slot};
+use crate::itemdata::props::{
+    BuildableProps, EquippableProps, ItemDetailProps, ItemIdentityProps, MeleeProps, PrimeProps,
+    TradableProps, WeaponProps, WikiaProps,
+};
 use crate::itemdata::traits::{
     Buildable, Droppable, Equippable, Item, MeleeWeapon, Prime, Weapon, WikiaLinked,
 };
@@ -16,83 +19,24 @@ pub type Root = Vec<Melee>;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Melee {
-    // Core identity
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
-    pub image_name: String,
-    pub description: String,
-
-    // Tradable
-    pub tradable: bool,
-    pub masterable: bool,
+    pub type_field: MeleeType,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
 
     // Weapon stats
-    pub critical_chance: f64,
-    pub critical_multiplier: f64,
-    pub damage: Option<DamageBreakdown>,
-    #[serde(default)]
-    pub damage_per_shot: Vec<f64>,
-    pub disposition: Option<i64>,
-    pub fire_rate: f64,
-    pub omega_attenuation: f64,
-    pub proc_chance: f64,
-    pub total_damage: f64,
-    #[serde(default)]
-    pub attacks: Vec<Attack>,
-
-    // Melee-specific
-    pub blocking_angle: Option<i64>,
-    pub combo_duration: Option<i64>,
-    pub follow_through: Option<f64>,
-    pub range: Option<f64>,
-    #[serde(default)]
-    pub stance_polarity: Option<Polarity>,
-    pub slam_attack: Option<i64>,
-    pub slam_radial_damage: Option<i64>,
-    pub slam_radius: Option<i64>,
-    pub slide_attack: Option<i64>,
-    pub heavy_attack_damage: Option<i64>,
-    pub heavy_slam_attack: Option<i64>,
-    pub heavy_slam_radial_damage: Option<i64>,
-    pub heavy_slam_radius: Option<i64>,
-    pub wind_up: Option<f64>,
-
-    // Buildable
-    pub build_price: Option<i64>,
-    pub build_quantity: Option<i64>,
-    pub build_time: Option<i64>,
-    pub skip_build_time_price: Option<i64>,
-    pub consume_on_build: Option<bool>,
-    pub mastery_req: i64,
-    pub market_cost: Option<i64>,
-    pub bp_cost: Option<i64>,
-    #[serde(default)]
-    pub components: Vec<Component>,
+    #[serde(flatten)]
+    pub weapon: WeaponProps,
 
     // Equippable
-    #[serde(default)]
-    pub polarities: Vec<Polarity>,
-    pub slot: i64,
-    #[serde(default)]
-    pub tags: Vec<String>,
+    #[serde(flatten)]
+    pub equip: EquippableProps,
 
-    // Prime/vault
-    #[serde(default)]
-    pub is_prime: bool,
-    pub vaulted: Option<bool>,
-    pub vault_date: Option<String>,
-    pub estimated_vault_date: Option<String>,
-
-    // Wikia
-    pub wiki_available: Option<bool>,
-    pub wikia_url: Option<String>,
-    pub wikia_thumbnail: Option<String>,
-    pub introduced: Option<Introduced>,
-    pub release_date: Option<String>,
-    pub product_category: String,
+    pub product_category: MeleeProductCategory,
     pub max_level_cap: Option<i64>,
     pub exclude_from_codex: Option<bool>,
 
@@ -106,35 +50,45 @@ pub struct Melee {
     pub drops: Vec<Drop>,
     #[serde(default)]
     pub patchlogs: Vec<Patchlog>,
+
+    // Grouped props
+    #[serde(flatten)]
+    pub build: BuildableProps,
+    #[serde(flatten)]
+    pub prime: PrimeProps,
+    #[serde(flatten)]
+    pub wikia: WikiaProps,
+    #[serde(flatten)]
+    pub melee: MeleeProps,
 }
 
 impl ProductCategory for Melee {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.clone()]
+        vec![self.product_category.as_str().to_string()]
     }
 }
 
 impl Item for Melee {
     fn unique_name(&self) -> &str {
-        &self.unique_name
+        &self.identity.unique_name
     }
     fn name(&self) -> &str {
-        &self.name
+        &self.identity.name
     }
     fn category(&self) -> &str {
-        &self.category
+        &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
-        Some(&self.image_name)
+        self.detail.image_name.as_deref()
     }
     fn tradable(&self) -> bool {
-        self.tradable
+        self.trade.tradable
     }
     fn masterable(&self) -> bool {
-        self.masterable
+        self.trade.masterable
     }
     fn patchlogs(&self) -> &[Patchlog] {
         &self.patchlogs
@@ -149,130 +103,130 @@ impl Droppable for Melee {
 
 impl Buildable for Melee {
     fn build_price(&self) -> Option<i64> {
-        self.build_price
+        self.build.build_price
     }
     fn build_quantity(&self) -> Option<i64> {
-        self.build_quantity
+        self.build.build_quantity
     }
     fn build_time(&self) -> Option<i64> {
-        self.build_time
+        self.build.build_time
     }
     fn skip_build_time_price(&self) -> Option<i64> {
-        self.skip_build_time_price
+        self.build.skip_build_time_price
     }
     fn consume_on_build(&self) -> Option<bool> {
-        self.consume_on_build
+        self.build.consume_on_build
     }
     fn mastery_req(&self) -> Option<i64> {
-        Some(self.mastery_req)
+        self.build.mastery_req
     }
     fn market_cost(&self) -> Option<i64> {
-        self.market_cost
+        self.build.market_cost
     }
     fn bp_cost(&self) -> Option<i64> {
-        self.bp_cost
+        self.build.bp_cost
     }
-    fn components(&self) -> &[Component] {
-        &self.components
+    fn components(&self) -> &[crate::itemdata::components::Component] {
+        &self.build.components
     }
 }
 
 impl Prime for Melee {
     fn is_prime(&self) -> bool {
-        self.is_prime
+        self.prime.is_prime
     }
     fn vaulted(&self) -> Option<bool> {
-        self.vaulted
+        self.prime.vaulted
     }
     fn vault_date(&self) -> Option<&str> {
-        self.vault_date.as_deref()
+        self.prime.vault_date.as_deref()
     }
     fn estimated_vault_date(&self) -> Option<&str> {
-        self.estimated_vault_date.as_deref()
+        self.prime.estimated_vault_date.as_deref()
     }
 }
 
 impl WikiaLinked for Melee {
     fn wiki_available(&self) -> Option<bool> {
-        self.wiki_available
+        self.wikia.wiki_available
     }
     fn wikia_url(&self) -> Option<&str> {
-        self.wikia_url.as_deref()
+        self.wikia.wikia_url.as_deref()
     }
     fn wikia_thumbnail(&self) -> Option<&str> {
-        self.wikia_thumbnail.as_deref()
+        self.wikia.wikia_thumbnail.as_deref()
     }
-    fn introduced(&self) -> Option<&Introduced> {
-        self.introduced.as_ref()
+    fn introduced(&self) -> Option<&crate::itemdata::common::Introduced> {
+        self.wikia.introduced.as_ref()
     }
     fn release_date(&self) -> Option<&str> {
-        self.release_date.as_deref()
+        self.wikia.release_date.as_deref()
     }
 }
 
 impl Weapon for Melee {
     fn critical_chance(&self) -> f64 {
-        self.critical_chance
+        self.weapon.critical_chance
     }
     fn critical_multiplier(&self) -> f64 {
-        self.critical_multiplier
+        self.weapon.critical_multiplier
     }
     fn damage(&self) -> Option<&DamageBreakdown> {
-        self.damage.as_ref()
+        self.weapon.damage.as_ref()
     }
     fn damage_per_shot(&self) -> &[f64] {
-        &self.damage_per_shot
+        &self.weapon.damage_per_shot
     }
     fn total_damage(&self) -> f64 {
-        self.total_damage
+        self.weapon.total_damage
     }
     fn proc_chance(&self) -> f64 {
-        self.proc_chance
+        self.weapon.proc_chance
     }
     fn fire_rate(&self) -> f64 {
-        self.fire_rate
+        self.weapon.fire_rate
     }
     fn disposition(&self) -> Option<i64> {
-        self.disposition
+        self.weapon.disposition
     }
     fn omega_attenuation(&self) -> f64 {
-        self.omega_attenuation
+        self.weapon.omega_attenuation
     }
     fn attacks(&self) -> &[Attack] {
-        &self.attacks
+        &self.weapon.attacks
     }
 }
 
 impl MeleeWeapon for Melee {
     fn blocking_angle(&self) -> Option<i64> {
-        self.blocking_angle
+        self.melee.blocking_angle
     }
     fn combo_duration(&self) -> Option<i64> {
-        self.combo_duration
+        self.melee.combo_duration
     }
     fn follow_through(&self) -> Option<f64> {
-        self.follow_through
+        self.melee.follow_through
     }
     fn range(&self) -> Option<f64> {
-        self.range
+        self.melee.range
     }
     fn stance_polarity(&self) -> Option<&str> {
-        self.stance_polarity.as_ref().map(|p| p.as_str())
+        self.melee.stance_polarity.as_ref().map(|p| p.as_str())
     }
     fn slam_attack(&self) -> Option<i64> {
-        self.slam_attack
+        self.melee.slam_attack
     }
     fn heavy_attack_damage(&self) -> Option<i64> {
-        self.heavy_attack_damage
+        self.melee.heavy_attack_damage
     }
 }
 
 impl Equippable for Melee {
     fn polarities(&self) -> &[Polarity] {
-        &self.polarities
+        &self.equip.polarities
     }
-    fn slot(&self) -> Option<i64> {
-        Some(self.slot)
+    fn slot(&self) -> Option<&Slot> {
+        self.equip.slot.as_ref()
     }
 }
 
@@ -282,7 +236,7 @@ mod tests {
     use serde_json::from_str;
 
     #[test]
-    fn test_deserialize_archmelee() {
+    fn test_deserialize_melee() {
         let json_data = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/testdata/itemdata/melee_test.json"
@@ -291,8 +245,59 @@ mod tests {
         let rec: Melee = from_str(json_data).unwrap();
 
         assert_eq!(
-            rec.unique_name,
+            rec.identity.unique_name,
             "/Lotus/Weapons/Grineer/Melee/GrineerTylAxeAndBoar/RegorAxeShield"
         );
+        assert_eq!(rec.identity.name, "Ack & Brunt");
+        assert_eq!(rec.identity.category, "Melee");
+        assert_eq!(rec.type_field, MeleeType::Melee);
+        assert!(!rec.trade.tradable);
+        assert!(rec.trade.masterable);
+
+        // Weapon stats
+        assert!((rec.weapon.critical_chance - 0.2).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 149.0).abs() < 0.01);
+        assert_eq!(rec.weapon.damage_per_shot.len(), 20);
+
+        // Melee stats
+        assert_eq!(rec.melee.blocking_angle, Some(70));
+
+        // Buildable
+        assert_eq!(rec.build.build_price, Some(65000));
+        assert_eq!(rec.build.components.len(), 5);
+
+        // Equippable
+        assert_eq!(rec.equip.slot, Some(Slot::Melee));
+        assert!(!rec.prime.is_prime);
+    }
+
+    #[test]
+    fn test_deserialize_melee_prime() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/melee_test_2.json"
+        ));
+        let rec: Melee = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Nikana Prime");
+        assert!((rec.weapon.total_damage - 198.0).abs() < 0.01);
+        assert!((rec.weapon.critical_chance - 0.28).abs() < 0.01);
+        assert_eq!(rec.melee.blocking_angle, Some(55));
+        assert!(rec.prime.is_prime);
+        assert_eq!(rec.prime.vaulted, Some(true));
+    }
+
+    #[test]
+    fn test_deserialize_melee_base() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/melee_test_3.json"
+        ));
+        let rec: Melee = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Skana");
+        assert!((rec.weapon.total_damage - 120.0).abs() < 0.01);
+        assert_eq!(rec.melee.blocking_angle, Some(55));
+        assert!(!rec.prime.is_prime);
     }
 }

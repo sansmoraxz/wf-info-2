@@ -1,0 +1,10 @@
+{
+  "category": "Sigils",
+  "description": "A sigil representing prestige gained with The Hex.",
+  "imageName": "2-for-1-sigil-538f02ce05.png",
+  "masterable": false,
+  "name": "2-For-1 Sigil",
+  "tradable": false,
+  "type": "Sigil",
+  "uniqueName": "/Lotus/Upgrades/Skins/Sigils/Syndicate/HexRankThree"
+}

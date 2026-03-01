@@ -1,0 +1,152 @@
+{
+  "uniqueName": "/Lotus/Types/Enemies/CorpusChampions/TeamD/CCTeamDOspreyAvatar",
+  "name": "002-Er",
+  "description": "",
+  "health": 150,
+  "shield": 100,
+  "armor": 200,
+  "regionBits": 128,
+  "type": "Corpus",
+  "imageName": "002-er.png",
+  "category": "Enemy",
+  "tradable": false,
+  "drops": [
+    {
+      "location": "Flux Overdrive",
+      "type": "Mod Locations",
+      "rarity": "Uncommon",
+      "chance": 0.125
+    },
+    {
+      "location": "Thermagnetic Shells",
+      "type": "Mod Locations",
+      "rarity": "Uncommon",
+      "chance": 0.125
+    },
+    {
+      "location": "Static Discharge",
+      "type": "Mod Locations",
+      "rarity": "Uncommon",
+      "chance": 0.125
+    },
+    {
+      "location": "Pain Threshold",
+      "type": "Mod Locations",
+      "rarity": "Uncommon",
+      "chance": 0.125
+    },
+    {
+      "location": "Kinetic Ricochet",
+      "type": "Mod Locations",
+      "rarity": "Uncommon",
+      "chance": 0.125
+    },
+    {
+      "location": "Medi-Pet Kit",
+      "type": "Mod Locations",
+      "rarity": "Uncommon",
+      "chance": 0.125
+    },
+    {
+      "location": "Tether Grenades",
+      "type": "Mod Locations",
+      "rarity": "Uncommon",
+      "chance": 0.125
+    },
+    {
+      "location": "Shield Charger",
+      "type": "Mod Locations",
+      "rarity": "Uncommon",
+      "chance": 0.125
+    },
+    {
+      "location": "002-Er",
+      "type": "Enemy Mod Tables",
+      "chance": null
+    }
+  ],
+  "resistances": [
+    {
+      "amount": 100,
+      "type": "Shield",
+      "affectors": [
+        {
+          "element": "Impact",
+          "modifier": 0.75
+        },
+        {
+          "element": "Cold",
+          "modifier": 0.75
+        },
+        {
+          "element": "Magnetic",
+          "modifier": 0
+        },
+        {
+          "element": "Puncture",
+          "modifier": -0.5
+        },
+        {
+          "element": "Radiation",
+          "modifier": -0.5
+        }
+      ]
+    },
+    {
+      "amount": 200,
+      "type": "Alloy Armor",
+      "affectors": [
+        {
+          "element": "Puncture",
+          "modifier": 0.5
+        },
+        {
+          "element": "Cold",
+          "modifier": 0.5
+        },
+        {
+          "element": "Radiation",
+          "modifier": 0
+        },
+        {
+          "element": "Slash",
+          "modifier": -0.75
+        },
+        {
+          "element": "Electricity",
+          "modifier": -0.75
+        },
+        {
+          "element": "Magnetic",
+          "modifier": -0.75
+        }
+      ]
+    },
+    {
+      "amount": 150,
+      "type": "Robotic",
+      "affectors": [
+        {
+          "element": "Puncture",
+          "modifier": 0.5
+        },
+        {
+          "element": "Electricity",
+          "modifier": 0.75
+        },
+        {
+          "element": "Radiation",
+          "modifier": 0.5
+        },
+        {
+          "element": "Slash",
+          "modifier": -0.5
+        },
+        {
+          "element": "Toxin",
+          "modifier": -0.5
+        }
+      ]
+    }
+  ]
+}

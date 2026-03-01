@@ -4,11 +4,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::itemdata::ProductCategory;
-use crate::itemdata::common::{Drop, Introduced, Patchlog};
-use crate::itemdata::components::Component;
+use crate::itemdata::common::{Drop, Patchlog};
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::{Noise, Polarity, Trigger};
-use crate::itemdata::props::WeaponTypeStats;
+use crate::itemdata::enums::{MiscType, Noise, Polarity, Rarity, Trigger};
+use crate::itemdata::props::{
+    BuildableProps, ItemDetailProps, ItemIdentityProps, TradableProps, WeaponTypeStats, WikiaProps,
+};
 use crate::itemdata::traits::{Buildable, Droppable, Item, WikiaLinked};
 
 pub type Root = Vec<Misc>;
@@ -16,18 +17,14 @@ pub type Root = Vec<Misc>;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Misc {
-    // Core identity
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
-    pub image_name: Option<String>,
-    pub description: Option<String>,
-
-    // Tradable
-    pub tradable: bool,
-    pub masterable: bool,
+    pub type_field: MiscType,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
 
     // Misc-specific
     pub show_in_inventory: Option<bool>,
@@ -35,7 +32,7 @@ pub struct Misc {
     pub standing: Option<i64>,
     pub item_count: Option<i64>,
     pub probability: Option<f64>,
-    pub rarity: Option<String>,
+    pub rarity: Option<Rarity>,
     pub reward_name: Option<String>,
     pub tier: Option<i64>,
     pub fusion_points: Option<i64>,
@@ -91,29 +88,17 @@ pub struct Misc {
     pub slot: Option<i64>,
     #[serde(default)]
     pub polarities: Vec<Polarity>,
-    pub mastery_req: Option<i64>,
-
-    // Buildable
-    pub build_price: Option<i64>,
-    pub build_quantity: Option<i64>,
-    pub build_time: Option<i64>,
-    pub skip_build_time_price: Option<i64>,
-    pub consume_on_build: Option<bool>,
-    #[serde(default)]
-    pub components: Vec<Component>,
 
     // Prime/vault
     pub vaulted: Option<bool>,
 
-    // Wikia
-    pub wiki_available: Option<bool>,
-    pub wikia_url: Option<String>,
-    pub wikia_thumbnail: Option<String>,
-    pub introduced: Option<Introduced>,
-    pub release_date: Option<String>,
     pub product_category: Option<String>,
-    #[serde(default)]
-    pub tags: Vec<String>,
+
+    // Grouped props
+    #[serde(flatten)]
+    pub build: BuildableProps,
+    #[serde(flatten)]
+    pub wikia: WikiaProps,
 
     // Railjack-specific
     pub bin_capacity: Option<i64>,
@@ -193,25 +178,25 @@ impl Misc {
 
 impl Item for Misc {
     fn unique_name(&self) -> &str {
-        &self.unique_name
+        &self.identity.unique_name
     }
     fn name(&self) -> &str {
-        &self.name
+        &self.identity.name
     }
     fn category(&self) -> &str {
-        &self.category
+        &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
-        self.image_name.as_deref()
+        self.detail.image_name.as_deref()
     }
     fn tradable(&self) -> bool {
-        self.tradable
+        self.trade.tradable
     }
     fn masterable(&self) -> bool {
-        self.masterable
+        self.trade.masterable
     }
     fn patchlogs(&self) -> &[Patchlog] {
         &self.patchlogs
@@ -226,49 +211,49 @@ impl Droppable for Misc {
 
 impl Buildable for Misc {
     fn build_price(&self) -> Option<i64> {
-        self.build_price
+        self.build.build_price
     }
     fn build_quantity(&self) -> Option<i64> {
-        self.build_quantity
+        self.build.build_quantity
     }
     fn build_time(&self) -> Option<i64> {
-        self.build_time
+        self.build.build_time
     }
     fn skip_build_time_price(&self) -> Option<i64> {
-        self.skip_build_time_price
+        self.build.skip_build_time_price
     }
     fn consume_on_build(&self) -> Option<bool> {
-        self.consume_on_build
+        self.build.consume_on_build
     }
     fn mastery_req(&self) -> Option<i64> {
-        self.mastery_req
+        self.build.mastery_req
     }
     fn market_cost(&self) -> Option<i64> {
-        None
+        self.build.market_cost
     }
     fn bp_cost(&self) -> Option<i64> {
-        None
+        self.build.bp_cost
     }
-    fn components(&self) -> &[Component] {
-        &self.components
+    fn components(&self) -> &[crate::itemdata::components::Component] {
+        &self.build.components
     }
 }
 
 impl WikiaLinked for Misc {
     fn wiki_available(&self) -> Option<bool> {
-        self.wiki_available
+        self.wikia.wiki_available
     }
     fn wikia_url(&self) -> Option<&str> {
-        self.wikia_url.as_deref()
+        self.wikia.wikia_url.as_deref()
     }
     fn wikia_thumbnail(&self) -> Option<&str> {
-        self.wikia_thumbnail.as_deref()
+        self.wikia.wikia_thumbnail.as_deref()
     }
-    fn introduced(&self) -> Option<&Introduced> {
-        self.introduced.as_ref()
+    fn introduced(&self) -> Option<&crate::itemdata::common::Introduced> {
+        self.wikia.introduced.as_ref()
     }
     fn release_date(&self) -> Option<&str> {
-        self.release_date.as_deref()
+        self.wikia.release_date.as_deref()
     }
 }
 
@@ -287,8 +272,42 @@ mod tests {
         let rec: Misc = from_str(json_data).unwrap();
 
         assert_eq!(
-            rec.unique_name,
+            rec.identity.unique_name,
             "/Lotus/Types/Gameplay/NarmerSorties/ArchonCrystalBorealMythic"
         );
+        assert_eq!(rec.identity.category, "Misc");
+        assert_eq!(rec.type_field, MiscType::Misc);
+        assert!(!rec.trade.tradable);
+        assert!(!rec.trade.masterable);
+    }
+
+    #[test]
+    fn test_deserialize_misc_archon_shard() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/misc_test_2.json"
+        ));
+        let rec: Misc = from_str(json_data).unwrap();
+
+        assert_eq!(
+            rec.identity.unique_name,
+            "/Lotus/Types/Gameplay/NarmerSorties/ArchonCrystalBoreal"
+        );
+        assert_eq!(rec.identity.name, "<Shard_blue_simple> Azure Archon Shard");
+        assert_eq!(rec.type_field, MiscType::Misc);
+        assert!(!rec.trade.tradable);
+    }
+
+    #[test]
+    fn test_deserialize_misc_nightwave() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/misc_test_3.json"
+        ));
+        let rec: Misc = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Accelerator");
+        assert_eq!(rec.type_field, MiscType::NightwaveChallenge);
+        assert!(!rec.trade.tradable);
     }
 }

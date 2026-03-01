@@ -1,0 +1,129 @@
+{
+  "accuracy": 16.666666,
+  "attacks": [
+    {
+      "name": "Normal Attack",
+      "speed": 8.33,
+      "crit_chance": 10,
+      "crit_mult": 2,
+      "status_chance": 5,
+      "shot_type": "Projectile",
+      "shot_speed": -1,
+      "flight": -1,
+      "falloff": {
+        "start": 2000,
+        "end": 4000,
+        "reduction": 0.6667
+      },
+      "damage": {
+        "slash": 68.1,
+        "puncture": 158.9
+      }
+    }
+  ],
+  "category": "Railjack",
+  "criticalChance": 0.1,
+  "criticalMultiplier": 2,
+  "damage": {
+    "total": 227,
+    "impact": 0,
+    "puncture": 68.100006,
+    "slash": 158.89999,
+    "heat": 0,
+    "cold": 0,
+    "electricity": 0,
+    "toxin": 0,
+    "blast": 0,
+    "radiation": 0,
+    "gas": 0,
+    "magnetic": 0,
+    "viral": 0,
+    "corrosive": 0,
+    "void": 0,
+    "tau": 0,
+    "cinematic": 0,
+    "shieldDrain": 0,
+    "healthDrain": 0,
+    "energyDrain": 0,
+    "true": 0
+  },
+  "damagePerShot": [
+    0,
+    158.89999,
+    68.100006,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "description": "Rapid-fire autocannon: launches high-velocity projectiles, puncturing and shredding the armor of enemy ships.",
+  "disposition": 1,
+  "drops": [
+    {
+      "chance": 0.02,
+      "location": "Kosma Gokstad Crewship",
+      "rarity": "Uncommon",
+      "type": "Vidar Apoc Mk I"
+    },
+    {
+      "chance": 0.02,
+      "location": "Kosma Gokstad Crewship",
+      "rarity": "Uncommon",
+      "type": "Lavan Apoc Mk I"
+    },
+    {
+      "chance": 0.1111,
+      "location": "Elite Kosma Outrider",
+      "rarity": "Uncommon",
+      "type": "Zetki Apoc Mk I"
+    }
+  ],
+  "excludeFromCodex": true,
+  "fireRate": 8.333334,
+  "imageName": "apoc.png",
+  "introduced": {
+    "name": "Update 27.0",
+    "url": "https://wiki.warframe.com/w/Update_27%23Update_27.0",
+    "aliases": [
+      "27.0",
+      "27",
+      "Empyrean"
+    ],
+    "parent": "27.0",
+    "date": "2019-12-13"
+  },
+  "magazineSize": 83,
+  "masterable": false,
+  "masteryReq": 0,
+  "multishot": 1,
+  "name": "Apoc Mk I",
+  "noise": "Alarming",
+  "omegaAttenuation": 0.5,
+  "procChance": 0.050000012,
+  "productCategory": "CrewShipWeapons",
+  "releaseDate": "2019-12-13",
+  "reloadTime": 2.0999999,
+  "slot": 14,
+  "tags": [],
+  "totalDamage": 227,
+  "tradable": false,
+  "trigger": "Auto",
+  "type": "Railjack Turret",
+  "uniqueName": "/Lotus/Weapons/CrewShip/MassDriver/AutoCannon/AutoCannonTierA",
+  "wikiAvailable": true,
+  "wikiaThumbnail": "https://wiki.warframe.com/images/TurretApoc.png?77fe4",
+  "wikiaUrl": "https://wiki.warframe.com/w/Apoc_Mk_I"
+}

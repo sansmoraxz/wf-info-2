@@ -128,7 +128,8 @@ pub struct Attack {
 
     pub slam: Option<Slam>,
 
-    pub slide: Option<String>,
+    /// Polymorphic: can be a string label (e.g. "Slide") or a numeric damage value.
+    pub slide: Option<serde_json::Value>,
 
     pub duration: Option<f64>,
 

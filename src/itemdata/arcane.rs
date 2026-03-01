@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, LevelStat, Patchlog};
-use crate::itemdata::components::Component;
-use crate::itemdata::enums::Rarity;
+use crate::itemdata::enums::{ArcaneType, Rarity};
+use crate::itemdata::props::{BuildableProps, ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::itemdata::traits::{Droppable, Item};
 
 pub type Root = Vec<Arcane>;
@@ -13,17 +13,14 @@ pub type Root = Vec<Arcane>;
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Arcane {
-    // Core identity
-    pub unique_name: String,
-    pub name: String,
-    pub category: String,
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
     #[serde(rename = "type")]
-    pub type_field: String,
-    pub image_name: String,
-
-    // Tradable
-    pub tradable: bool,
-    pub masterable: bool,
+    pub type_field: ArcaneType,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
 
     // Arcane-specific
     #[serde(default)]
@@ -32,14 +29,9 @@ pub struct Arcane {
     pub level_stats: Vec<LevelStat>,
     pub exclude_from_codex: Option<bool>,
 
-    // Buildable properties
-    pub build_price: Option<i64>,
-    pub build_quantity: Option<i64>,
-    pub build_time: Option<i64>,
-    pub skip_build_time_price: Option<i64>,
-    pub consume_on_build: Option<bool>,
-    #[serde(default)]
-    pub components: Vec<Component>,
+    // Grouped props
+    #[serde(flatten)]
+    pub build: BuildableProps,
 
     // Droppable
     #[serde(default)]
@@ -56,25 +48,25 @@ impl ProductCategory for Arcane {
 
 impl Item for Arcane {
     fn unique_name(&self) -> &str {
-        &self.unique_name
+        &self.identity.unique_name
     }
     fn name(&self) -> &str {
-        &self.name
+        &self.identity.name
     }
     fn category(&self) -> &str {
-        &self.category
+        &self.identity.category
     }
     fn type_field(&self) -> &str {
-        &self.type_field
+        self.type_field.as_str()
     }
     fn image_name(&self) -> Option<&str> {
-        Some(&self.image_name)
+        self.detail.image_name.as_deref()
     }
     fn tradable(&self) -> bool {
-        self.tradable
+        self.trade.tradable
     }
     fn masterable(&self) -> bool {
-        self.masterable
+        self.trade.masterable
     }
     fn patchlogs(&self) -> &[Patchlog] {
         &self.patchlogs
@@ -102,8 +94,41 @@ mod tests {
         let rec: Arcane = from_str(json_data).unwrap();
 
         assert_eq!(
-            rec.unique_name,
+            rec.identity.unique_name,
             "/Lotus/Upgrades/CosmeticEnhancers/Defensive/SpeedOnDamage"
         );
+        assert_eq!(rec.identity.name, "Arcane Agility");
+        assert_eq!(rec.identity.category, "Arcanes");
+        assert!(rec.trade.tradable);
+        assert!(!rec.trade.masterable);
+        assert_eq!(rec.rarity, Some(Rarity::Uncommon));
+        assert!(!rec.drops.is_empty());
+    }
+
+    #[test]
+    fn test_deserialize_arcane_legendary() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/arcane_test_2.json"
+        ));
+        let rec: Arcane = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Arcane Energize");
+        assert_eq!(rec.rarity, Some(Rarity::Legendary));
+        assert!(rec.trade.tradable);
+        assert_eq!(rec.level_stats.len(), 6);
+    }
+
+    #[test]
+    fn test_deserialize_arcane_secondary() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/arcane_test_3.json"
+        ));
+        let rec: Arcane = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Akimbo Slip Shot");
+        assert_eq!(rec.rarity, Some(Rarity::Rare));
+        assert!(rec.trade.tradable);
     }
 }
