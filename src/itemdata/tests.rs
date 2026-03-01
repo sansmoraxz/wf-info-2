@@ -682,10 +682,10 @@ fn test_enemies_sample_fields() {
         bombard.unique_name(),
         "/Lotus/Types/Enemies/Orokin/OrokinRocketBombardAvatar"
     );
-    assert!((bombard.health - 300.0).abs() < f64::EPSILON);
-    assert!((bombard.armor - 500.0).abs() < f64::EPSILON);
-    assert!((bombard.shield - 0.0).abs() < f64::EPSILON);
-    assert_eq!(bombard.resistances.len(), 3);
+    assert_eq!(bombard.combat.health, 300);
+    assert_eq!(bombard.combat.armor, 500);
+    assert_eq!(bombard.combat.shield, 0);
+    assert_eq!(bombard.combat.resistances.len(), 3);
     assert!(bombard.has_drops());
 }
 

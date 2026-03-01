@@ -4,28 +4,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
-use crate::itemdata::enums::{EnemyType, ResistanceType};
-use crate::itemdata::props::{ItemDetailProps, ItemIdentityProps, TradableProps};
+use crate::itemdata::enums::EnemyType;
+#[cfg(test)]
+use crate::itemdata::enums::ResistanceType;
+use crate::itemdata::props::{
+    EnemyCombatStats, ItemDetailProps, ItemIdentityProps, TradableProps,
+};
 use crate::itemdata::traits::{Droppable, Item};
 
+pub use crate::itemdata::props::{Affector, Resistance};
+
 pub type Root = Vec<Enemy>;
-
-/// Damage type affector within a resistance entry.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Affector {
-    pub element: String,
-    pub modifier: f64,
-}
-
-/// Resistance entry (e.g., Shield, Alloy Armor, Robotic).
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Resistance {
-    pub amount: f64,
-    #[serde(rename = "type")]
-    pub type_field: ResistanceType,
-    #[serde(default)]
-    pub affectors: Vec<Affector>,
-}
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,13 +28,8 @@ pub struct Enemy {
     #[serde(flatten)]
     pub trade: TradableProps,
 
-    // Combat stats
-    pub health: f64,
-    pub shield: f64,
-    pub armor: f64,
-    pub region_bits: i64,
-    #[serde(default)]
-    pub resistances: Vec<Resistance>,
+    #[serde(flatten)]
+    pub combat: EnemyCombatStats,
 
     // Optional
     pub faction: Option<String>,
@@ -119,14 +103,14 @@ mod tests {
         assert!(!rec.trade.tradable);
 
         // Combat stats
-        assert!((rec.health - 150.0).abs() < f64::EPSILON);
-        assert!((rec.shield - 100.0).abs() < f64::EPSILON);
-        assert!((rec.armor - 200.0).abs() < f64::EPSILON);
+        assert_eq!(rec.combat.health, 150);
+        assert_eq!(rec.combat.shield, 100);
+        assert_eq!(rec.combat.armor, 200);
 
         // Resistances
-        assert_eq!(rec.resistances.len(), 3);
-        assert_ne!(rec.resistances[0].type_field, ResistanceType::Unknown(String::new()));
-        assert!(!rec.resistances[0].affectors.is_empty());
+        assert_eq!(rec.combat.resistances.len(), 3);
+        assert_ne!(rec.combat.resistances[0].type_field, ResistanceType::Unknown(String::new()));
+        assert!(!rec.combat.resistances[0].affectors.is_empty());
 
         // Drops with null chance handling
         assert!(!rec.drops.is_empty());

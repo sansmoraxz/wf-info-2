@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::common::{Introduced, deserialize_option_number_to_f64};
 use crate::itemdata::components::Component;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::{Noise, Polarity, Slot, Trigger};
+use crate::itemdata::enums::{Noise, Polarity, ResistanceType, Slot, Trigger};
 
 /// Core identity fields present on every item type.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -300,13 +300,21 @@ impl WeaponTypeStats {
     }
 }
 
+/// Base defensive stats.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DefenseStats {
+    pub health: i64,
+    pub shield: i64,
+    pub armor: i64,
+}
+
 /// Character/suit stats (Warframe, Archwing, companions).
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CharacterStats {
-    pub health: i64,
-    pub shield: i64,
-    pub armor: i64,
+    #[serde(flatten)]
+    pub defense: DefenseStats,
     pub power: i64,
     pub stamina: i64,
 
@@ -315,6 +323,48 @@ pub struct CharacterStats {
 
     #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
     pub sprint_speed: Option<f64>,
+}
+
+impl std::ops::Deref for CharacterStats {
+    type Target = DefenseStats;
+    fn deref(&self) -> &DefenseStats {
+        &self.defense
+    }
+}
+
+/// Damage type affector within a resistance entry.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Affector {
+    pub element: String,
+    pub modifier: f64,
+}
+
+/// Resistance entry (e.g., Shield, Alloy Armor, Robotic).
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Resistance {
+    pub amount: f64,
+    #[serde(rename = "type")]
+    pub type_field: ResistanceType,
+    #[serde(default)]
+    pub affectors: Vec<Affector>,
+}
+
+/// Combat stats for enemies.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnemyCombatStats {
+    #[serde(flatten)]
+    pub defense: DefenseStats,
+    pub region_bits: i64,
+    #[serde(default)]
+    pub resistances: Vec<Resistance>,
+}
+
+impl std::ops::Deref for EnemyCombatStats {
+    type Target = DefenseStats;
+    fn deref(&self) -> &DefenseStats {
+        &self.defense
+    }
 }
 
 #[cfg(test)]
