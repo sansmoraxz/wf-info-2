@@ -4,11 +4,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::itemdata::ProductCategory;
-use crate::itemdata::common::{Drop, Introduced, Patchlog};
-use crate::itemdata::components::Component;
+use crate::itemdata::common::{Drop, Patchlog};
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{Noise, Polarity, Rarity, Trigger};
-use crate::itemdata::props::WeaponTypeStats;
+use crate::itemdata::props::{BuildableProps, WeaponTypeStats, WikiaProps};
 use crate::itemdata::traits::{Buildable, Droppable, Item, WikiaLinked};
 
 pub type Root = Vec<Misc>;
@@ -91,29 +90,17 @@ pub struct Misc {
     pub slot: Option<i64>,
     #[serde(default)]
     pub polarities: Vec<Polarity>,
-    pub mastery_req: Option<i64>,
-
-    // Buildable
-    pub build_price: Option<i64>,
-    pub build_quantity: Option<i64>,
-    pub build_time: Option<i64>,
-    pub skip_build_time_price: Option<i64>,
-    pub consume_on_build: Option<bool>,
-    #[serde(default)]
-    pub components: Vec<Component>,
 
     // Prime/vault
     pub vaulted: Option<bool>,
 
-    // Wikia
-    pub wiki_available: Option<bool>,
-    pub wikia_url: Option<String>,
-    pub wikia_thumbnail: Option<String>,
-    pub introduced: Option<Introduced>,
-    pub release_date: Option<String>,
     pub product_category: Option<String>,
-    #[serde(default)]
-    pub tags: Vec<String>,
+
+    // Grouped props
+    #[serde(flatten)]
+    pub build: BuildableProps,
+    #[serde(flatten)]
+    pub wikia: WikiaProps,
 
     // Railjack-specific
     pub bin_capacity: Option<i64>,
@@ -226,49 +213,49 @@ impl Droppable for Misc {
 
 impl Buildable for Misc {
     fn build_price(&self) -> Option<i64> {
-        self.build_price
+        self.build.build_price
     }
     fn build_quantity(&self) -> Option<i64> {
-        self.build_quantity
+        self.build.build_quantity
     }
     fn build_time(&self) -> Option<i64> {
-        self.build_time
+        self.build.build_time
     }
     fn skip_build_time_price(&self) -> Option<i64> {
-        self.skip_build_time_price
+        self.build.skip_build_time_price
     }
     fn consume_on_build(&self) -> Option<bool> {
-        self.consume_on_build
+        self.build.consume_on_build
     }
     fn mastery_req(&self) -> Option<i64> {
-        self.mastery_req
+        self.build.mastery_req
     }
     fn market_cost(&self) -> Option<i64> {
-        None
+        self.build.market_cost
     }
     fn bp_cost(&self) -> Option<i64> {
-        None
+        self.build.bp_cost
     }
-    fn components(&self) -> &[Component] {
-        &self.components
+    fn components(&self) -> &[crate::itemdata::components::Component] {
+        &self.build.components
     }
 }
 
 impl WikiaLinked for Misc {
     fn wiki_available(&self) -> Option<bool> {
-        self.wiki_available
+        self.wikia.wiki_available
     }
     fn wikia_url(&self) -> Option<&str> {
-        self.wikia_url.as_deref()
+        self.wikia.wikia_url.as_deref()
     }
     fn wikia_thumbnail(&self) -> Option<&str> {
-        self.wikia_thumbnail.as_deref()
+        self.wikia.wikia_thumbnail.as_deref()
     }
-    fn introduced(&self) -> Option<&Introduced> {
-        self.introduced.as_ref()
+    fn introduced(&self) -> Option<&crate::itemdata::common::Introduced> {
+        self.wikia.introduced.as_ref()
     }
     fn release_date(&self) -> Option<&str> {
-        self.release_date.as_deref()
+        self.wikia.release_date.as_deref()
     }
 }
 

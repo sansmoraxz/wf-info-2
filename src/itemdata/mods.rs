@@ -3,8 +3,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
-use crate::itemdata::common::{Drop, Introduced, LevelStat, Patchlog};
+use crate::itemdata::common::{Drop, LevelStat, Patchlog};
 use crate::itemdata::enums::{ModCategory, Polarity, Rarity};
+use crate::itemdata::props::WikiaProps;
 use crate::itemdata::traits::{Droppable, Item, WikiaLinked};
 
 pub type Root = Vec<Mod>;
@@ -58,13 +59,11 @@ pub struct Mod {
     #[serde(default)]
     pub upgrade_entries: Vec<UpgradeEntry>,
 
-    // Wikia
-    pub wiki_available: Option<bool>,
-    pub wikia_thumbnail: Option<String>,
-    pub wikia_url: Option<String>,
-    pub introduced: Option<Introduced>,
-    pub release_date: Option<String>,
     pub exclude_from_codex: Option<bool>,
+
+    // Grouped props
+    #[serde(flatten)]
+    pub wikia: WikiaProps,
 
     // Droppable
     #[serde(default)]
@@ -164,19 +163,19 @@ impl Droppable for Mod {
 
 impl WikiaLinked for Mod {
     fn wiki_available(&self) -> Option<bool> {
-        self.wiki_available
+        self.wikia.wiki_available
     }
     fn wikia_url(&self) -> Option<&str> {
-        self.wikia_url.as_deref()
+        self.wikia.wikia_url.as_deref()
     }
     fn wikia_thumbnail(&self) -> Option<&str> {
-        self.wikia_thumbnail.as_deref()
+        self.wikia.wikia_thumbnail.as_deref()
     }
-    fn introduced(&self) -> Option<&Introduced> {
-        self.introduced.as_ref()
+    fn introduced(&self) -> Option<&crate::itemdata::common::Introduced> {
+        self.wikia.introduced.as_ref()
     }
     fn release_date(&self) -> Option<&str> {
-        self.release_date.as_deref()
+        self.wikia.release_date.as_deref()
     }
 }
 

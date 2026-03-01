@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::Patchlog;
 use crate::itemdata::enums::{Polarity, SentinelProductCategory, Slot};
-use crate::itemdata::props::{BuildableProps, CharacterStats, EquippableProps, PrimeProps, WikiaProps};
+use crate::itemdata::props::{
+    BuildableProps, CharacterStats, EquippableProps, PrimeProps, WikiaProps,
+};
 use crate::itemdata::traits::{Buildable, Character, Equippable, Item, Prime, WikiaLinked};
 
 pub type Root = Vec<Sentinel>;

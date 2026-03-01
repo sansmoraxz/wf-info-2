@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
-use crate::itemdata::components::Component;
 use crate::itemdata::enums::ResourceType;
+use crate::itemdata::props::BuildableProps;
 use crate::itemdata::traits::{Buildable, Droppable, Item};
 
 pub type Root = Vec<Resource>;
@@ -26,14 +26,9 @@ pub struct Resource {
     pub tradable: bool,
     pub masterable: bool,
 
-    // Buildable properties
-    pub build_price: Option<i64>,
-    pub build_quantity: Option<i64>,
-    pub build_time: Option<i64>,
-    pub skip_build_time_price: Option<i64>,
-    pub consume_on_build: Option<bool>,
-    #[serde(default)]
-    pub components: Vec<Component>,
+    // Grouped props
+    #[serde(flatten)]
+    pub build: BuildableProps,
 
     // Resource-specific
     pub item_count: Option<i64>,
@@ -89,31 +84,31 @@ impl Droppable for Resource {
 
 impl Buildable for Resource {
     fn build_price(&self) -> Option<i64> {
-        self.build_price
+        self.build.build_price
     }
     fn build_quantity(&self) -> Option<i64> {
-        self.build_quantity
+        self.build.build_quantity
     }
     fn build_time(&self) -> Option<i64> {
-        self.build_time
+        self.build.build_time
     }
     fn skip_build_time_price(&self) -> Option<i64> {
-        self.skip_build_time_price
+        self.build.skip_build_time_price
     }
     fn consume_on_build(&self) -> Option<bool> {
-        self.consume_on_build
+        self.build.consume_on_build
     }
     fn mastery_req(&self) -> Option<i64> {
-        None
+        self.build.mastery_req
     }
     fn market_cost(&self) -> Option<i64> {
-        None
+        self.build.market_cost
     }
     fn bp_cost(&self) -> Option<i64> {
-        None
+        self.build.bp_cost
     }
-    fn components(&self) -> &[Component] {
-        &self.components
+    fn components(&self) -> &[crate::itemdata::components::Component] {
+        &self.build.components
     }
 }
 

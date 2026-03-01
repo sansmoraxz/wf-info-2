@@ -6,7 +6,9 @@ use crate::itemdata::ProductCategory;
 use crate::itemdata::common::Patchlog;
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{ArchGunProductCategory, Polarity, Slot};
-use crate::itemdata::props::{BuildableProps, EquippableProps, GunProps, PrimeProps, WeaponProps, WikiaProps};
+use crate::itemdata::props::{
+    BuildableProps, EquippableProps, GunProps, PrimeProps, WeaponProps, WikiaProps,
+};
 use crate::itemdata::traits::{
     Buildable, Equippable, Item, Prime, RangedWeapon, Weapon, WikiaLinked,
 };

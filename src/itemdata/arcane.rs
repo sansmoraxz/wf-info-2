@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, LevelStat, Patchlog};
-use crate::itemdata::components::Component;
 use crate::itemdata::enums::{ArcaneType, Rarity};
+use crate::itemdata::props::BuildableProps;
 use crate::itemdata::traits::{Droppable, Item};
 
 pub type Root = Vec<Arcane>;
@@ -32,14 +32,9 @@ pub struct Arcane {
     pub level_stats: Vec<LevelStat>,
     pub exclude_from_codex: Option<bool>,
 
-    // Buildable properties
-    pub build_price: Option<i64>,
-    pub build_quantity: Option<i64>,
-    pub build_time: Option<i64>,
-    pub skip_build_time_price: Option<i64>,
-    pub consume_on_build: Option<bool>,
-    #[serde(default)]
-    pub components: Vec<Component>,
+    // Grouped props
+    #[serde(flatten)]
+    pub build: BuildableProps,
 
     // Droppable
     #[serde(default)]

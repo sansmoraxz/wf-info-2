@@ -6,7 +6,9 @@ use crate::itemdata::ProductCategory;
 use crate::itemdata::common::{Drop, Patchlog};
 use crate::itemdata::damage::{Attack, DamageBreakdown};
 use crate::itemdata::enums::{MeleeProductCategory, MeleeType, Polarity, Slot};
-use crate::itemdata::props::{BuildableProps, EquippableProps, MeleeProps, PrimeProps, WeaponProps, WikiaProps};
+use crate::itemdata::props::{
+    BuildableProps, EquippableProps, MeleeProps, PrimeProps, WeaponProps, WikiaProps,
+};
 use crate::itemdata::traits::{
     Buildable, Droppable, Equippable, Item, MeleeWeapon, Prime, Weapon, WikiaLinked,
 };

@@ -3,10 +3,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::itemdata::ProductCategory;
-use crate::itemdata::common::{Drop, Introduced, Patchlog};
+use crate::itemdata::common::{Drop, Patchlog};
 use crate::itemdata::damage::{Attack, DamageBreakdown};
-use crate::itemdata::enums::{Noise, RailjackType, Trigger};
-use crate::itemdata::traits::{Droppable, Item, WikiaLinked};
+use crate::itemdata::enums::RailjackType;
+use crate::itemdata::props::{GunProps, WeaponProps, WikiaProps};
+use crate::itemdata::traits::{Droppable, Item, RangedWeapon, Weapon, WikiaLinked};
 
 pub type Root = Vec<Railjack>;
 
@@ -25,38 +26,16 @@ pub struct Railjack {
     pub product_category: String,
     pub exclude_from_codex: bool,
 
-    // Weapon stats
-    pub accuracy: f64,
-    pub critical_chance: f64,
-    pub critical_multiplier: f64,
-    pub damage: DamageBreakdown,
-    #[serde(default)]
-    pub damage_per_shot: Vec<f64>,
-    pub fire_rate: f64,
-    pub magazine_size: i64,
     pub mastery_req: i64,
-    pub multishot: i64,
-    pub noise: Noise,
-    pub omega_attenuation: f64,
-    pub proc_chance: f64,
-    pub reload_time: f64,
     pub slot: i64,
-    pub total_damage: f64,
-    pub trigger: Trigger,
 
-    // Optional weapon fields
-    #[serde(default)]
-    pub attacks: Vec<Attack>,
-    pub disposition: Option<i64>,
-
-    // Wikia
-    pub wiki_available: Option<bool>,
-    pub wikia_url: Option<String>,
-    pub wikia_thumbnail: Option<String>,
-    pub introduced: Option<Introduced>,
-    pub release_date: Option<String>,
-    #[serde(default)]
-    pub tags: Vec<String>,
+    // Grouped props
+    #[serde(flatten)]
+    pub weapon: WeaponProps,
+    #[serde(flatten)]
+    pub gun: GunProps,
+    #[serde(flatten)]
+    pub wikia: WikiaProps,
 
     #[serde(default)]
     pub drops: Vec<Drop>,
@@ -105,19 +84,73 @@ impl Droppable for Railjack {
 
 impl WikiaLinked for Railjack {
     fn wiki_available(&self) -> Option<bool> {
-        self.wiki_available
+        self.wikia.wiki_available
     }
     fn wikia_url(&self) -> Option<&str> {
-        self.wikia_url.as_deref()
+        self.wikia.wikia_url.as_deref()
     }
     fn wikia_thumbnail(&self) -> Option<&str> {
-        self.wikia_thumbnail.as_deref()
+        self.wikia.wikia_thumbnail.as_deref()
     }
-    fn introduced(&self) -> Option<&Introduced> {
-        self.introduced.as_ref()
+    fn introduced(&self) -> Option<&crate::itemdata::common::Introduced> {
+        self.wikia.introduced.as_ref()
     }
     fn release_date(&self) -> Option<&str> {
-        self.release_date.as_deref()
+        self.wikia.release_date.as_deref()
+    }
+}
+
+impl Weapon for Railjack {
+    fn critical_chance(&self) -> f64 {
+        self.weapon.critical_chance
+    }
+    fn critical_multiplier(&self) -> f64 {
+        self.weapon.critical_multiplier
+    }
+    fn damage(&self) -> Option<&DamageBreakdown> {
+        self.weapon.damage.as_ref()
+    }
+    fn damage_per_shot(&self) -> &[f64] {
+        &self.weapon.damage_per_shot
+    }
+    fn total_damage(&self) -> f64 {
+        self.weapon.total_damage
+    }
+    fn proc_chance(&self) -> f64 {
+        self.weapon.proc_chance
+    }
+    fn fire_rate(&self) -> f64 {
+        self.weapon.fire_rate
+    }
+    fn disposition(&self) -> Option<i64> {
+        self.weapon.disposition
+    }
+    fn omega_attenuation(&self) -> f64 {
+        self.weapon.omega_attenuation
+    }
+    fn attacks(&self) -> &[Attack] {
+        &self.weapon.attacks
+    }
+}
+
+impl RangedWeapon for Railjack {
+    fn accuracy(&self) -> f64 {
+        self.gun.accuracy
+    }
+    fn multishot(&self) -> i64 {
+        self.gun.multishot
+    }
+    fn noise(&self) -> &str {
+        self.gun.noise.as_str()
+    }
+    fn trigger(&self) -> &str {
+        self.gun.trigger.as_str()
+    }
+    fn magazine_size(&self) -> Option<i64> {
+        self.gun.magazine_size
+    }
+    fn reload_time(&self) -> f64 {
+        self.gun.reload_time
     }
 }
 

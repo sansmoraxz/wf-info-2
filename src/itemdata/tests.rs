@@ -263,13 +263,15 @@ fn test_map_warframe_inventory() {
 
     let data: Vec<Data> = info_idx
         .iter()
-        .map(|(key, info): (&String, &itemdata::warframe::WarframeEntry)| {
-            let inv_data = inv_index.get(key).cloned();
-            Data {
-                info: info.clone(),
-                inventory: inv_data,
-            }
-        })
+        .map(
+            |(key, info): (&String, &itemdata::warframe::WarframeEntry)| {
+                let inv_data = inv_index.get(key).cloned();
+                Data {
+                    info: info.clone(),
+                    inventory: inv_data,
+                }
+            },
+        )
         .collect();
 
     print!("Data: {:?}", data);
