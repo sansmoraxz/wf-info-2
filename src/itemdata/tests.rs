@@ -410,12 +410,18 @@ fn test_mods_serration_fields() {
     );
     assert_eq!(serration.type_field(), "Primary Mod");
     assert!(serration.tradable());
-    assert_eq!(serration.rarity, Some(itemdata::Rarity::Uncommon));
-    assert_eq!(serration.polarity, Some(itemdata::Polarity::Madurai));
-    assert_eq!(serration.base_drain, Some(2));
-    assert_eq!(serration.fusion_limit, Some(3));
-    assert_eq!(serration.compat_name, Some("Rifle".to_string()));
-    assert_eq!(serration.mod_set, None);
+    assert!(serration.is_regular());
+
+    match serration {
+        itemdata::mods::ModEntry::Regular(m) => {
+            assert_eq!(m.rarity, itemdata::Rarity::Uncommon);
+            assert_eq!(m.polarity, itemdata::Polarity::Madurai);
+            assert_eq!(m.base_drain, 2);
+            assert_eq!(m.fusion_limit, 3);
+            assert_eq!(m.compat_name, Some("Rifle".to_string()));
+        }
+        _ => panic!("Expected Regular variant"),
+    }
     assert!(serration.has_drops());
 }
 
@@ -425,7 +431,7 @@ fn test_mods_set_mod_fields() {
     let arr: itemdata::mods::Root = serde_json::from_str(&raw).unwrap();
     let vig = find_by_name(&arr, "Vigilante Offense");
 
-    assert!(vig.mod_set.is_some());
+    assert!(vig.is_set_member());
     assert!(matches!(
         vig.mod_category(),
         itemdata::ModCategory::SetMember { .. }
