@@ -65,7 +65,7 @@ Set endpoint via CLI flags or environment variables:
 | Flag | Environment Variable | Example |
 |------|---------------------|---------|
 | `--tcp` | `WF_INFO_API_TCP` | `127.0.0.1:47410` |
-| `--unix` | `WF_INFO_API_UNIX` | `/tmp/wf-info-2.sock` |
+| `--unix` | `WF_INFO_API_UNIX` | `${XDG_RUNTIME_DIR}/wf-info-2/control.sock` |
 | `--npipe` | `WF_INFO_API_NPIPE` | `wf-info-2-control` |
 
 **Defaults (when no options are set):**
@@ -101,7 +101,7 @@ echo '{"id":2,"op":"inventory.filter","params":{"category":"suits","contains":"p
 
 **Unix socket:**
 ```bash
-echo '{"id":1,"op":"ping"}' | socat - UNIX-CONNECT:/tmp/wf-info-2.sock
+echo '{"id":1,"op":"ping"}' | socat - UNIX-CONNECT:${XDG_RUNTIME_DIR}/wf-info-2/control.sock
 ```
 
 **Windows named pipe:**
