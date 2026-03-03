@@ -85,8 +85,11 @@ Set endpoint via CLI flags or environment variables:
 | `inventory.stale.update` | Mark inventory as stale |
 | `inventory.refresh` | Refresh inventory from game API (with `memory` feature enabled) |
 | `screenshot.trigger` | Capture and return a screenshot |
-| `market.price` | Get live warframe.market prices for an item (with set part breakdown) |
-| `market.refresh` | Force refresh the warframe.market item cache |
+| `wfm.price` | Get live warframe.market prices for an item (with set part breakdown) |
+| `wfm.refresh` | Force refresh the warframe.market item cache |
+| `wfm.signin` | Sign in to warframe.market (email/password) |
+| `wfm.signout` | Sign out from warframe.market |
+| `wfm.signstatus` | Get/set warframe.market online status |
 
 ### Examples
 
@@ -122,8 +125,11 @@ The `wf-info-cli` binary provides a convenient interface to the daemon.
 | `inventory-stale` | Mark inventory as stale |
 | `inventory-refresh` | Refresh inventory from game |
 | `screenshot` | Trigger screenshot capture |
-| `market-price` | Get live warframe.market prices for an item |
-| `market-refresh` | Force refresh warframe.market item cache |
+| `wfm-price` | Get live warframe.market prices for an item |
+| `wfm-refresh` | Force refresh warframe.market item cache |
+| `wfm-signin` | Sign in to warframe.market |
+| `wfm-signout` | Sign out from warframe.market |
+| `wfm-status` | Check/set warframe.market auth status |
 | `call` | Call any operation by name |
 
 ### Examples
@@ -148,14 +154,26 @@ The `wf-info-cli` binary provides a convenient interface to the daemon.
 ./target/release/wf-info-cli screenshot
 
 # Get market prices for an item (includes set parts and inventory counts)
-./target/release/wf-info-cli market-price --search "frost prime" --pretty
-./target/release/wf-info-cli market-price --item-type "/Lotus/Powersuits/Frost/FrostPrime" --pretty
+./target/release/wf-info-cli wfm-price --search "frost prime" --pretty
+./target/release/wf-info-cli wfm-price --item-type "/Lotus/Powersuits/Frost/FrostPrime" --pretty
 
 # Force refresh warframe.market cache
-./target/release/wf-info-cli market-refresh --pretty
+./target/release/wf-info-cli wfm-refresh --pretty
 
 # Filter inventory with market price data
 ./target/release/wf-info-cli inventory-filter --category suits --contains prime --include-details --include-market --pretty
+
+# Sign in to warframe.market
+./target/release/wf-info-cli wfm-signin --email user@example.com --password mypassword
+
+# Check auth status and token validity
+./target/release/wf-info-cli wfm-status --pretty
+
+# Set warframe.market online status
+./target/release/wf-info-cli wfm-status --status online
+
+# Sign out from warframe.market
+./target/release/wf-info-cli wfm-signout
 ```
 
 _**Note:** The screenshot will only do fullscreen capture, to avoid unintended consequences, ensure that the game window is active when capturing._

@@ -72,7 +72,7 @@ impl ServerArgs {
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     log::info!("Warframe Account Info Scanner started");
 
     // Fetch / update cached item data from upstream
@@ -81,6 +81,9 @@ async fn main() {
     }
 
     let cli = Cli::parse();
+
+    // Restore WFM session from cached token (if any)
+    wf_info_2::control::wfm_auth::try_restore_session().await;
 
     let _control_server = match cli.server.into_control_config() {
         Some(cfg) => match control::start_control_server(cfg).await {
@@ -148,6 +151,27 @@ async fn main() {
         let pid = process::wait_for_warframe_start().await;
         (None, Some(pid))
     };
+
+    // Auto-status: set WFM status based on game activity
+    tokio::spawn(async {
+        use wf_info_2::control::DaemonEvent;
+        let mut rx = wf_info_2::control::subscribe();
+        loop {
+            match rx.recv().await {
+                Ok(DaemonEvent::AccountLogin(_)) => {
+                    wf_info_2::control::wfm_auth::set_status_if_connected("ingame").await;
+                }
+                Ok(DaemonEvent::AccountLogout(_)) => {
+                    wf_info_2::control::wfm_auth::set_status_if_connected("invisible").await;
+                }
+                Ok(_) => {}
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    log::warn!("WFM auto-status missed {} events", n);
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
 
     // Start watching the log file
     let log_watcher = tokio::spawn(async move {

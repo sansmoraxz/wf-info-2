@@ -10,8 +10,11 @@ pub enum ControlOp {
     ScreenshotTrigger,
     InventoryRefresh,
     Subscribe,
-    MarketPrice,
-    MarketRefresh,
+    WFMarketPrice,
+    WFMarketRefresh,
+    WfmSignstatus,
+    WfmSignin,
+    WfmSignout,
 }
 
 impl ControlOp {
@@ -25,8 +28,11 @@ impl ControlOp {
             Self::ScreenshotTrigger => "screenshot.trigger",
             Self::InventoryRefresh => "inventory.refresh",
             Self::Subscribe => "subscribe",
-            Self::MarketPrice => "market.price",
-            Self::MarketRefresh => "market.refresh",
+            Self::WFMarketPrice => "wfm.price",
+            Self::WFMarketRefresh => "wfm.refresh",
+            Self::WfmSignstatus => "wfm.signstatus",
+            Self::WfmSignin => "wfm.signin",
+            Self::WfmSignout => "wfm.signout",
         }
     }
 
@@ -40,8 +46,11 @@ impl ControlOp {
             "screenshot.trigger" => Ok(Self::ScreenshotTrigger),
             "inventory.refresh" => Ok(Self::InventoryRefresh),
             "subscribe" => Ok(Self::Subscribe),
-            "market.price" => Ok(Self::MarketPrice),
-            "market.refresh" => Ok(Self::MarketRefresh),
+            "wfm.price" => Ok(Self::WFMarketPrice),
+            "wfm.refresh" => Ok(Self::WFMarketRefresh),
+            "wfm.signstatus" => Ok(Self::WfmSignstatus),
+            "wfm.signin" => Ok(Self::WfmSignin),
+            "wfm.signout" => Ok(Self::WfmSignout),
             _ => Err(anyhow!("Unknown operation '{}'", op)),
         }
     }

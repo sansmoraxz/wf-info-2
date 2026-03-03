@@ -10,6 +10,7 @@ use super::inventory::{
 use super::market::{handle_market_price, handle_market_refresh};
 use super::screenshot::handle_screenshot_trigger;
 use super::subscription::{self, EventFilter};
+use super::wfm_auth::{handle_wfm_signin, handle_wfm_signout, handle_wfm_signstatus};
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
@@ -90,8 +91,11 @@ async fn handle_request(req: Request) -> HandleResult {
         Ok(ControlOp::InventoryStaleUpdate) => handle_inventory_stale_update(req.params),
         Ok(ControlOp::ScreenshotTrigger) => handle_screenshot_trigger(req.params).await,
         Ok(ControlOp::InventoryRefresh) => handle_inventory_refresh(req.params).await,
-        Ok(ControlOp::MarketPrice) => handle_market_price(req.params).await,
-        Ok(ControlOp::MarketRefresh) => handle_market_refresh(req.params).await,
+        Ok(ControlOp::WFMarketPrice) => handle_market_price(req.params).await,
+        Ok(ControlOp::WFMarketRefresh) => handle_market_refresh(req.params).await,
+        Ok(ControlOp::WfmSignstatus) => handle_wfm_signstatus(req.params).await,
+        Ok(ControlOp::WfmSignin) => handle_wfm_signin(req.params).await,
+        Ok(ControlOp::WfmSignout) => handle_wfm_signout(req.params).await,
         Ok(ControlOp::Subscribe) => Err(anyhow::anyhow!("Unexpected subscribe operation")),
         Err(e) => Err(e),
     };

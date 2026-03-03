@@ -11,11 +11,8 @@ use crate::inventory::Inventory;
 use crate::storage;
 
 use super::item_data::lookup_item_info;
-use super::utils::parse_params;
+use super::utils::{WFM_API_BASE, parse_params};
 
-// ── WFM API base ──
-
-const WFM_API_BASE: &str = "https://api.warframe.market/v2";
 const CACHE_TTL: Duration = Duration::from_secs(3600); // 1 hour
 
 // ── Types for WFM API responses ──
@@ -398,7 +395,7 @@ pub(crate) async fn handle_market_price(params: Option<Value>) -> Result<Value> 
 
     if params.item_type.is_none() && params.search.is_none() {
         return Err(anyhow!(
-            "market.price requires 'item_type' or 'search' parameter"
+            "wfm.price requires 'item_type' or 'search' parameter"
         ));
     }
 

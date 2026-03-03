@@ -31,6 +31,9 @@ scopeguard = "1.2"
 image = "0.25"
 base64 = "0.22"
 clap = { version = "4.5", features = ["derive", "env"] }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3"
+uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(unix)'.dependencies]
 ashpd = { version = "0.12", default-features = false, features = ["tokio"] }

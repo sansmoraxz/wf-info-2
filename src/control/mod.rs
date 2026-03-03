@@ -11,8 +11,9 @@ mod server;
 mod state;
 mod subscription;
 mod utils;
+pub mod wfm_auth;
 
-pub use broadcaster::emit;
+pub use broadcaster::{emit, subscribe};
 pub use events::{
     AccountLoginEvent, AccountLogoutEvent, DaemonEvent, EventMessage, InventoryFetchedEvent,
     InventoryStaleEvent, ProfileUpdatedEvent, ScreenshotTriggeredEvent,
