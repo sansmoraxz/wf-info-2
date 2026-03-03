@@ -73,6 +73,83 @@ pub fn delete_profile() -> anyhow::Result<()> {
     Ok(())
 }
 
+// ── AES-256-GCM helpers (shared by profile & auth token) ──
+
+fn gcm_encrypt(plaintext: &[u8]) -> anyhow::Result<Vec<u8>> {
+    let mut hasher = Sha256::new();
+    hasher.update(RAW_KEY_ENV.as_bytes());
+    let key_bytes = hasher.finalize();
+    let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+    let cipher = Aes256Gcm::new(key);
+
+    let mut nonce_bytes = [0u8; 12];
+    rng().fill(&mut nonce_bytes);
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext)
+        .map_err(|e| anyhow::anyhow!("Encryption failure: {}", e))?;
+
+    let mut out = Vec::with_capacity(12 + ciphertext.len());
+    out.extend_from_slice(&nonce_bytes);
+    out.extend_from_slice(&ciphertext);
+    Ok(out)
+}
+
+fn gcm_decrypt(data: &[u8]) -> anyhow::Result<Vec<u8>> {
+    if data.len() < 12 {
+        anyhow::bail!("Data too short for AES-256-GCM");
+    }
+    let mut hasher = Sha256::new();
+    hasher.update(RAW_KEY_ENV.as_bytes());
+    let key_bytes = hasher.finalize();
+    let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+    let cipher = Aes256Gcm::new(key);
+
+    let nonce = Nonce::from_slice(&data[..12]);
+    let plaintext = cipher
+        .decrypt(nonce, &data[12..])
+        .map_err(|e| anyhow::anyhow!("Decryption failure: {}", e))?;
+    Ok(plaintext)
+}
+
+// ── Auth token storage (AES-256-GCM) ──
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthTokenData {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub device_id: String,
+    pub client_id: String,
+    pub device_name: String,
+    pub expires_at: DateTime<Utc>,
+}
+
+pub fn save_auth_token(data: &AuthTokenData) -> anyhow::Result<()> {
+    let json = serde_json::to_vec(data).context("Failed to serialize auth token")?;
+    let encrypted = gcm_encrypt(&json)?;
+    let file_path = app_cache_dir()?.join("auth_token.dat");
+    fs::write(&file_path, encrypted).context("Failed to write auth_token.dat")?;
+    log::info!("Saved encrypted auth token to {}", file_path.display());
+    Ok(())
+}
+
+pub fn read_auth_token() -> anyhow::Result<AuthTokenData> {
+    let file_path = app_cache_dir()?.join("auth_token.dat");
+    let data = fs::read(&file_path).context("Failed to read auth_token.dat")?;
+    let plaintext = gcm_decrypt(&data)?;
+    serde_json::from_slice(&plaintext).context("Failed to parse auth token JSON")
+}
+
+pub fn delete_auth_token() -> anyhow::Result<()> {
+    let file_path = app_cache_dir()?.join("auth_token.dat");
+    if file_path.exists() {
+        fs::remove_file(&file_path).context("Failed to delete auth token file")?;
+        log::info!("Deleted auth token at {}", file_path.display());
+    }
+    Ok(())
+}
+
 /// Saves inventory data as AES-128-CBC encrypted file.
 pub fn save_inventory(inventory: &inventory::Inventory) -> anyhow::Result<()> {
     let app_cache_dir = app_cache_dir()?;

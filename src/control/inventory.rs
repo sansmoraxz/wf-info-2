@@ -15,6 +15,7 @@ use crate::storage;
 use super::broadcaster;
 use super::events::{DaemonEvent, InventoryFetchedEvent, InventoryStaleEvent};
 use super::item_data::lookup_item_info;
+use super::market::fetch_market_summary;
 use super::search::{
     build_tantivy_index, collect_inventory_items, get_or_build_inventory_index, search_inventory,
 };
@@ -100,6 +101,7 @@ pub(crate) struct FilterParams {
     pub limit: Option<usize>,
     pub offset: Option<usize>,
     pub include_details: Option<bool>,
+    pub include_market: Option<bool>,
     pub path: Option<String>,
     pub encrypted: Option<bool>,
 }
@@ -252,6 +254,19 @@ pub(crate) async fn handle_inventory_filter(params: Option<Value>) -> Result<Val
         }
 
         filtered_values.push(value);
+    }
+
+    let include_market = params.include_market.unwrap_or(false);
+    if include_market {
+        for value in &mut filtered_values {
+            if let Value::Object(map) = value {
+                if let Some(item_type) = map.get("item_type").and_then(Value::as_str) {
+                    if let Some(market) = fetch_market_summary(item_type).await {
+                        map.insert("market".to_string(), market);
+                    }
+                }
+            }
+        }
     }
 
     let filtered = filtered_values.len();

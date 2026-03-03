@@ -2,6 +2,7 @@ mod broadcaster;
 mod events;
 mod inventory;
 mod item_data;
+mod market;
 pub mod item_data_fetch;
 mod requests;
 mod screenshot;
@@ -10,8 +11,9 @@ mod server;
 mod state;
 mod subscription;
 mod utils;
+pub mod wfm_auth;
 
-pub use broadcaster::emit;
+pub use broadcaster::{emit, subscribe};
 pub use events::{
     AccountLoginEvent, AccountLogoutEvent, DaemonEvent, EventMessage, InventoryFetchedEvent,
     InventoryStaleEvent, ProfileUpdatedEvent, ScreenshotTriggeredEvent,

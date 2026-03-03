@@ -80,6 +80,26 @@ enum Commands {
     /// Trigger a screenshot capture
     Screenshot(ScreenshotArgs),
 
+    /// Query market prices for an item
+    #[command(name = "wfm-price")]
+    WFMarketPrice(WFMarketPriceArgs),
+
+    /// Refresh warframe.market item cache
+    #[command(name = "wfm-refresh")]
+    WFMarketRefresh,
+
+    /// Sign in to warframe.market
+    #[command(name = "wfm-signin")]
+    WfmSignin(WfmSigninArgs),
+
+    /// Sign out from warframe.market
+    #[command(name = "wfm-signout")]
+    WfmSignout,
+
+    /// Check warframe.market auth status
+    #[command(name = "wfm-status")]
+    WfmStatus(WfmStatusArgs),
+
     /// Call a generic operation by name
     Call(CallArgs),
 }
@@ -145,6 +165,10 @@ struct InventoryFilterArgs {
     #[arg(long)]
     include_details: bool,
 
+    /// Include warframe.market price data
+    #[arg(long)]
+    include_market: bool,
+
     /// Path filter
     #[arg(long)]
     path: Option<String>,
@@ -182,10 +206,6 @@ struct InventoryRefreshArgs {
     /// Source identifier
     #[arg(long)]
     source: Option<String>,
-
-    /// Deprecated: daemon uses current login
-    #[arg(long, hide = true)]
-    account_id: Option<String>,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -193,6 +213,51 @@ struct ScreenshotArgs {
     /// Additional metadata (JSON)
     #[arg(long, value_parser = parse_jsonish_clap)]
     metadata: Option<Value>,
+}
+
+#[derive(Args, Debug, Clone)]
+struct WFMarketPriceArgs {
+    /// Item type (gameRef / unique_name path)
+    #[arg(long)]
+    item_type: Option<String>,
+
+    /// Text search against warframe.market item names
+    #[arg(long)]
+    search: Option<String>,
+
+    /// Include set component prices and inventory counts
+    #[arg(long)]
+    include_parts: Option<bool>,
+}
+
+#[derive(Args, Debug, Clone)]
+struct WfmSigninArgs {
+    /// Account email
+    #[arg(long)]
+    email: String,
+
+    /// Account password
+    #[arg(long)]
+    password: String,
+
+    /// Client ID
+    #[arg(long, default_value = "wf-info-2")]
+    client_id: String,
+
+    /// Device name
+    #[arg(long)]
+    device_name: Option<String>,
+}
+
+#[derive(Args, Debug, Clone)]
+struct WfmStatusArgs {
+    /// Set status (online, invisible, ingame)
+    #[arg(long)]
+    status: Option<String>,
+
+    /// Set status duration (seconds), use "null" to clear
+    #[arg(long, value_parser = parse_jsonish_clap)]
+    duration: Option<Value>,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -410,6 +475,45 @@ impl Commands {
                 op: CliOp::Known(ControlOp::ScreenshotTrigger),
                 params: Some(args.into_params()),
             },
+            Commands::WFMarketPrice(args) => Command {
+                op: CliOp::Known(ControlOp::WFMarketPrice),
+                params: Some(args.into_params()),
+            },
+            Commands::WFMarketRefresh => Command {
+                op: CliOp::Known(ControlOp::WFMarketRefresh),
+                params: None,
+            },
+            Commands::WfmSignin(args) => {
+                let mut params = json!({
+                    "email": args.email,
+                    "password": args.password,
+                    "client_id": args.client_id,
+                });
+                if let Some(name) = args.device_name {
+                    params["device_name"] = Value::String(name);
+                }
+                Command {
+                    op: CliOp::Known(ControlOp::WfmSignin),
+                    params: Some(params),
+                }
+            }
+            Commands::WfmSignout => Command {
+                op: CliOp::Known(ControlOp::WfmSignout),
+                params: None,
+            },
+            Commands::WfmStatus(args) => {
+                let mut params = json!({});
+                if let Some(s) = args.status {
+                    params["status"] = Value::String(s);
+                }
+                if let Some(d) = args.duration {
+                    params["duration"] = d;
+                }
+                Command {
+                    op: CliOp::Known(ControlOp::WfmSignstatus),
+                    params: Some(params),
+                }
+            }
             Commands::Call(args) => Command {
                 op: CliOp::Call(args.op),
                 params: Some(args.params.unwrap_or_else(|| json!({}))),
@@ -465,6 +569,9 @@ impl InventoryFilterArgs {
         if self.include_details {
             params["include_details"] = Value::Bool(true);
         }
+        if self.include_market {
+            params["include_market"] = Value::Bool(true);
+        }
         if let Some(v) = self.path {
             params["path"] = Value::String(v);
         }
@@ -490,10 +597,6 @@ impl InventoryStaleArgs {
 
 impl InventoryRefreshArgs {
     fn into_params(self) -> Value {
-        if self.account_id.is_some() {
-            eprintln!("warning: --account-id no longer needed; daemon uses current login");
-        }
-
         let mut params = json!({});
         if let Some(v) = self.scan_retries {
             params["scan_retries"] = Value::Number(v.into());
@@ -516,6 +619,22 @@ impl ScreenshotArgs {
         let mut params = json!({});
         if let Some(v) = self.metadata {
             params["metadata"] = v;
+        }
+        params
+    }
+}
+
+impl WFMarketPriceArgs {
+    fn into_params(self) -> Value {
+        let mut params = json!({});
+        if let Some(v) = self.item_type {
+            params["item_type"] = Value::String(v);
+        }
+        if let Some(v) = self.search {
+            params["search"] = Value::String(v);
+        }
+        if let Some(v) = self.include_parts {
+            params["include_parts"] = Value::Bool(v);
         }
         params
     }
