@@ -12,10 +12,7 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite};
 
-use crate::control::utils::{
-    WFM_AUTH_BASE, WFM_SUB_PROTOCOL, WFM_WS_URL,
-    parse_params,
-};
+use crate::control::utils::{WFM_AUTH_BASE, WFM_SUB_PROTOCOL, WFM_WS_URL, parse_params};
 use crate::storage::{self, AuthTokenData};
 
 // ── WS message types ──
@@ -56,11 +53,7 @@ fn session_lock() -> &'static RwLock<Option<WfmSession>> {
 // Authorization response header as "JWT <token>".
 
 /// Sign in via v1 API. Returns the JWT access token.
-async fn rest_signin(
-    email: &str,
-    password: &str,
-    device_id: &str,
-) -> Result<String> {
+async fn rest_signin(email: &str, password: &str, device_id: &str) -> Result<String> {
     let client = reqwest::Client::new();
     let raw_resp = client
         .post(format!("{}/auth/signin", WFM_AUTH_BASE))
@@ -90,7 +83,10 @@ async fn rest_signin(
         .to_string();
 
     if !auth_header.starts_with("JWT ") {
-        return Err(anyhow!("Unexpected Authorization header format: {}", auth_header));
+        return Err(anyhow!(
+            "Unexpected Authorization header format: {}",
+            auth_header
+        ));
     }
 
     let jwt = auth_header[4..].to_string();
@@ -181,13 +177,21 @@ async fn ws_recv_loop(
             }
         };
 
-        log::debug!("WFM WS parsed: route={:?}, id={:?}, refId={:?}", parsed.route, parsed.id, parsed.ref_id);
+        log::debug!(
+            "WFM WS parsed: route={:?}, id={:?}, refId={:?}",
+            parsed.route,
+            parsed.id,
+            parsed.ref_id
+        );
 
         // If this is a response to a pending command, deliver it.
         // Server responds with route like "cmd/foo:ok" or "cmd/foo:error"
         // for a command sent as "cmd/foo". Match by stripping the suffix.
         if let Some(ref route) = parsed.route {
-            if let Some(base_route) = route.strip_suffix(":ok").or_else(|| route.strip_suffix(":error")) {
+            if let Some(base_route) = route
+                .strip_suffix(":ok")
+                .or_else(|| route.strip_suffix(":error"))
+            {
                 let mut map = pending.lock().await;
                 if let Some(tx) = map.remove(base_route) {
                     let _ = tx.send(parsed);
@@ -354,8 +358,9 @@ fn default_device_name() -> String {
 
 pub(crate) async fn handle_wfm_signin(params: Option<Value>) -> Result<Value> {
     let p: SigninParams = match params {
-        Some(value) => serde_json::from_value(value)
-            .map_err(|e| anyhow!("Invalid signin params: {}", e))?,
+        Some(value) => {
+            serde_json::from_value(value).map_err(|e| anyhow!("Invalid signin params: {}", e))?
+        }
         None => return Err(anyhow!("Missing signin params (email, password required)")),
     };
 

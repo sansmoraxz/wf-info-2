@@ -338,7 +338,10 @@ mod tests {
         // Ciphertext should not be empty and should differ from plaintext
         assert!(!encrypted.is_empty());
         let json_bytes = serde_json::to_vec(&inventory).unwrap();
-        assert_ne!(encrypted, json_bytes, "ciphertext must differ from plaintext");
+        assert_ne!(
+            encrypted, json_bytes,
+            "ciphertext must differ from plaintext"
+        );
 
         let decrypted = decrypt_inventory_bytes(&encrypted).expect("decryption should succeed");
         assert_eq!(inventory, decrypted);
@@ -353,15 +356,18 @@ mod tests {
         rng().fill(&mut key);
         rng().fill(&mut iv);
 
-        let encrypted =
-            encrypt_inventory_bytes_with_key(&inventory, &key, &iv).expect("encryption should succeed");
+        let encrypted = encrypt_inventory_bytes_with_key(&inventory, &key, &iv)
+            .expect("encryption should succeed");
 
         assert!(!encrypted.is_empty());
         let json_bytes = serde_json::to_vec(&inventory).unwrap();
-        assert_ne!(encrypted, json_bytes, "ciphertext must differ from plaintext");
+        assert_ne!(
+            encrypted, json_bytes,
+            "ciphertext must differ from plaintext"
+        );
 
-        let decrypted =
-            decrypt_inventory_bytes_with_key(&encrypted, &key, &iv).expect("decryption should succeed");
+        let decrypted = decrypt_inventory_bytes_with_key(&encrypted, &key, &iv)
+            .expect("decryption should succeed");
         assert_eq!(inventory, decrypted);
     }
 
@@ -374,8 +380,8 @@ mod tests {
         rng().fill(&mut key);
         rng().fill(&mut iv);
 
-        let encrypted =
-            encrypt_inventory_bytes_with_key(&inventory, &key, &iv).expect("encryption should succeed");
+        let encrypted = encrypt_inventory_bytes_with_key(&inventory, &key, &iv)
+            .expect("encryption should succeed");
 
         // Use a different random key — decryption should fail
         let mut wrong_key = [0u8; 16];
@@ -406,6 +412,9 @@ mod tests {
         let enc1 = encrypt_inventory_bytes_with_key(&inventory, &key1, &iv1).unwrap();
         let enc2 = encrypt_inventory_bytes_with_key(&inventory, &key2, &iv2).unwrap();
 
-        assert_ne!(enc1, enc2, "different keys should produce different ciphertext");
+        assert_ne!(
+            enc1, enc2,
+            "different keys should produce different ciphertext"
+        );
     }
 }

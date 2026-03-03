@@ -22,7 +22,6 @@ pub struct Ship {
     pub other: Option<Value>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -37,9 +36,6 @@ mod tests {
 
         let item: Ship = from_str(json_data).unwrap();
 
-        assert_eq!(
-            item.item_type,
-            "/Lotus/Types/Items/Ships/DefaultShip"
-        );
+        assert_eq!(item.item_type, "/Lotus/Types/Items/Ships/DefaultShip");
     }
 }

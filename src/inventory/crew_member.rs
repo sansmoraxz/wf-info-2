@@ -31,7 +31,6 @@ pub struct CrewMember {
     pub other: Option<Value>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

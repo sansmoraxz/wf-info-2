@@ -28,7 +28,6 @@ pub struct MoaPet {
     pub other: Option<Value>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -46,7 +46,12 @@ pub struct Skin {
 
 impl ProductCategory for Skin {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["WeaponSkins".to_string(), "ShipDecorations".to_string(), "FlavourItems".to_string(), "CrewShipWeaponSkins".to_string()]
+        vec![
+            "WeaponSkins".to_string(),
+            "ShipDecorations".to_string(),
+            "FlavourItems".to_string(),
+            "CrewShipWeaponSkins".to_string(),
+        ]
     }
 }
 

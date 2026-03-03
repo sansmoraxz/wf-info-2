@@ -173,7 +173,11 @@ pub struct RivenModData {
 
 impl ProductCategory for ModEntry {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["Upgrades".to_string(), "RawUpgrades".to_string(), "FocusUpgrades".to_string()]
+        vec![
+            "Upgrades".to_string(),
+            "RawUpgrades".to_string(),
+            "FocusUpgrades".to_string(),
+        ]
     }
 }
 
