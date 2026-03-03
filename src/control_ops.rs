@@ -10,6 +10,8 @@ pub enum ControlOp {
     ScreenshotTrigger,
     InventoryRefresh,
     Subscribe,
+    MarketPrice,
+    MarketRefresh,
 }
 
 impl ControlOp {
@@ -23,6 +25,8 @@ impl ControlOp {
             Self::ScreenshotTrigger => "screenshot.trigger",
             Self::InventoryRefresh => "inventory.refresh",
             Self::Subscribe => "subscribe",
+            Self::MarketPrice => "market.price",
+            Self::MarketRefresh => "market.refresh",
         }
     }
 
@@ -36,6 +40,8 @@ impl ControlOp {
             "screenshot.trigger" => Ok(Self::ScreenshotTrigger),
             "inventory.refresh" => Ok(Self::InventoryRefresh),
             "subscribe" => Ok(Self::Subscribe),
+            "market.price" => Ok(Self::MarketPrice),
+            "market.refresh" => Ok(Self::MarketRefresh),
             _ => Err(anyhow!("Unknown operation '{}'", op)),
         }
     }

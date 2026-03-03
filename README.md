@@ -85,6 +85,8 @@ Set endpoint via CLI flags or environment variables:
 | `inventory.stale.update` | Mark inventory as stale |
 | `inventory.refresh` | Refresh inventory from game API (with `memory` feature enabled) |
 | `screenshot.trigger` | Capture and return a screenshot |
+| `market.price` | Get live warframe.market prices for an item (with set part breakdown) |
+| `market.refresh` | Force refresh the warframe.market item cache |
 
 ### Examples
 
@@ -120,6 +122,8 @@ The `wf-info-cli` binary provides a convenient interface to the daemon.
 | `inventory-stale` | Mark inventory as stale |
 | `inventory-refresh` | Refresh inventory from game |
 | `screenshot` | Trigger screenshot capture |
+| `market-price` | Get live warframe.market prices for an item |
+| `market-refresh` | Force refresh warframe.market item cache |
 | `call` | Call any operation by name |
 
 ### Examples
@@ -142,6 +146,16 @@ The `wf-info-cli` binary provides a convenient interface to the daemon.
 
 # Trigger screenshot
 ./target/release/wf-info-cli screenshot
+
+# Get market prices for an item (includes set parts and inventory counts)
+./target/release/wf-info-cli market-price --search "frost prime" --pretty
+./target/release/wf-info-cli market-price --item-type "/Lotus/Powersuits/Frost/FrostPrime" --pretty
+
+# Force refresh warframe.market cache
+./target/release/wf-info-cli market-refresh --pretty
+
+# Filter inventory with market price data
+./target/release/wf-info-cli inventory-filter --category suits --contains prime --include-details --include-market --pretty
 ```
 
 _**Note:** The screenshot will only do fullscreen capture, to avoid unintended consequences, ensure that the game window is active when capturing._

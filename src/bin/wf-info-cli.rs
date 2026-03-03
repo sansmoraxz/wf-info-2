@@ -80,6 +80,14 @@ enum Commands {
     /// Trigger a screenshot capture
     Screenshot(ScreenshotArgs),
 
+    /// Query market prices for an item
+    #[command(name = "market-price")]
+    MarketPrice(MarketPriceArgs),
+
+    /// Refresh warframe.market item cache
+    #[command(name = "market-refresh")]
+    MarketRefresh,
+
     /// Call a generic operation by name
     Call(CallArgs),
 }
@@ -145,6 +153,10 @@ struct InventoryFilterArgs {
     #[arg(long)]
     include_details: bool,
 
+    /// Include warframe.market price data
+    #[arg(long)]
+    include_market: bool,
+
     /// Path filter
     #[arg(long)]
     path: Option<String>,
@@ -193,6 +205,21 @@ struct ScreenshotArgs {
     /// Additional metadata (JSON)
     #[arg(long, value_parser = parse_jsonish_clap)]
     metadata: Option<Value>,
+}
+
+#[derive(Args, Debug, Clone)]
+struct MarketPriceArgs {
+    /// Item type (gameRef / unique_name path)
+    #[arg(long)]
+    item_type: Option<String>,
+
+    /// Text search against warframe.market item names
+    #[arg(long)]
+    search: Option<String>,
+
+    /// Include set component prices and inventory counts
+    #[arg(long)]
+    include_parts: Option<bool>,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -410,6 +437,14 @@ impl Commands {
                 op: CliOp::Known(ControlOp::ScreenshotTrigger),
                 params: Some(args.into_params()),
             },
+            Commands::MarketPrice(args) => Command {
+                op: CliOp::Known(ControlOp::MarketPrice),
+                params: Some(args.into_params()),
+            },
+            Commands::MarketRefresh => Command {
+                op: CliOp::Known(ControlOp::MarketRefresh),
+                params: None,
+            },
             Commands::Call(args) => Command {
                 op: CliOp::Call(args.op),
                 params: Some(args.params.unwrap_or_else(|| json!({}))),
@@ -465,6 +500,9 @@ impl InventoryFilterArgs {
         if self.include_details {
             params["include_details"] = Value::Bool(true);
         }
+        if self.include_market {
+            params["include_market"] = Value::Bool(true);
+        }
         if let Some(v) = self.path {
             params["path"] = Value::String(v);
         }
@@ -516,6 +554,22 @@ impl ScreenshotArgs {
         let mut params = json!({});
         if let Some(v) = self.metadata {
             params["metadata"] = v;
+        }
+        params
+    }
+}
+
+impl MarketPriceArgs {
+    fn into_params(self) -> Value {
+        let mut params = json!({});
+        if let Some(v) = self.item_type {
+            params["item_type"] = Value::String(v);
+        }
+        if let Some(v) = self.search {
+            params["search"] = Value::String(v);
+        }
+        if let Some(v) = self.include_parts {
+            params["include_parts"] = Value::Bool(v);
         }
         params
     }
