@@ -22,7 +22,6 @@ pub struct Drone {
     pub other: Option<Value>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -37,9 +36,6 @@ mod tests {
 
         let item: Drone = from_str(json_data).unwrap();
 
-        assert_eq!(
-            item.item_type,
-            "/Lotus/Types/Ship/BasicResourceDrone"
-        );
+        assert_eq!(item.item_type, "/Lotus/Types/Ship/BasicResourceDrone");
     }
 }

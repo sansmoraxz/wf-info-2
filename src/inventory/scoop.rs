@@ -22,7 +22,6 @@ pub struct Scoop {
     pub other: Option<Value>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

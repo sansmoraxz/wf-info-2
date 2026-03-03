@@ -28,7 +28,6 @@ pub struct SpecialItem {
     pub other: Option<Value>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -43,10 +42,7 @@ mod tests {
 
         let item: SpecialItem = from_str(json_data).unwrap();
 
-        assert_eq!(
-            item.item_type,
-            "/Lotus/Powersuits/Excalibur/DoomSword"
-        );
+        assert_eq!(item.item_type, "/Lotus/Powersuits/Excalibur/DoomSword");
         assert_eq!(item.xp.unwrap(), 2212912);
     }
 }

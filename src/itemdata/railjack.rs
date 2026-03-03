@@ -46,7 +46,11 @@ pub struct Railjack {
 
 impl ProductCategory for Railjack {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["CrewShipWeapons".to_string(), "CrewShipRawSalvage".to_string(), "CrewShipSalvagedWeapons".to_string()]
+        vec![
+            "CrewShipWeapons".to_string(),
+            "CrewShipRawSalvage".to_string(),
+            "CrewShipSalvagedWeapons".to_string(),
+        ]
     }
 }
 

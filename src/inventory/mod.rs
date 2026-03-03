@@ -137,7 +137,6 @@ pub struct DateWrapper {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Inventory {
     // ── Equipment ──
-
     /// Warframes
     #[serde(rename = "Suits")]
     pub suits: Vec<suit::Suit>,
@@ -275,7 +274,6 @@ pub struct Inventory {
     pub antiques: Option<Vec<antique::Antique>>,
 
     // ── Mods & Upgrades ──
-
     /// Mods + Arcanes (unupgraded)
     #[serde(rename = "RawUpgrades")]
     pub raw_upgrades: Vec<upgrades::RawUpgrade>,
@@ -285,7 +283,6 @@ pub struct Inventory {
     pub upgrades: Vec<upgrades::Upgrade>,
 
     // ── Blueprints ──
-
     /// Blueprints
     #[serde(rename = "Recipes")]
     pub recipes: Vec<recipe::Recipe>,
@@ -295,7 +292,6 @@ pub struct Inventory {
     pub pending_recipes: Vec<recipe::PendingRecipe>,
 
     // ── Collections ──
-
     /// Consumable items (ciphers, restores, etc.)
     #[serde(rename = "Consumables")]
     pub consumables: Option<Vec<common::CountableItem>>,
@@ -357,7 +353,6 @@ pub struct Inventory {
     pub spectre_loadouts: Option<Vec<collections::SpectreLoadout>>,
 
     // ── Progress & Standing ──
-
     /// Syndicate/faction standings
     #[serde(rename = "Affiliations")]
     pub affiliations: Option<Vec<progress::Affiliation>>,
@@ -375,7 +370,6 @@ pub struct Inventory {
     pub lore_fragment_scans: Option<Vec<progress::LoreFragmentScan>>,
 
     // ── Scalar fields ──
-
     /// Player remaining trades for the day
     #[serde(rename = "TradesRemaining")]
     pub trades_remaining: Option<i64>,
@@ -441,7 +435,6 @@ pub struct Inventory {
     pub archwing_enabled: Option<bool>,
 
     // ── Slot bins ──
-
     /// Warframe slots
     #[serde(rename = "SuitBin")]
     pub suit_bin: Option<common::SlotBin>,
@@ -491,7 +484,6 @@ pub struct Inventory {
     pub pvp_bonus_loadout_bin: Option<common::SlotBin>,
 
     // ── Additional list collections ──
-
     /// Challenge instance states
     #[serde(rename = "ChallengeInstanceStates")]
     pub challenge_instance_states: Option<Vec<collections::ChallengeInstanceState>>,
@@ -625,7 +617,6 @@ pub struct Inventory {
     pub entrati_lab_conquest_active_frame_variants: Option<Vec<String>>,
 
     // ── Simple string/id lists ──
-
     /// Completed alerts
     #[serde(rename = "CompletedAlerts")]
     pub completed_alerts: Option<Vec<String>>,
@@ -675,7 +666,6 @@ pub struct Inventory {
     pub one_time_purchases: Option<Vec<String>>,
 
     // ── Additional scalar fields ──
-
     /// Active dojo color research
     #[serde(rename = "ActiveDojoColorResearch")]
     pub active_dojo_color_research: Option<String>,
@@ -797,7 +787,6 @@ pub struct Inventory {
     pub use_adult_operator_loadout: Option<bool>,
 
     // ── Daily affiliation caps ──
-
     #[serde(rename = "DailyAffiliationCavia")]
     pub daily_affiliation_cavia: Option<i64>,
 
@@ -838,7 +827,6 @@ pub struct Inventory {
     pub daily_affiliation_zariman: Option<i64>,
 
     // ── Date fields ──
-
     /// Account creation date
     #[serde(rename = "Created")]
     pub created: Option<DateWrapper>,
@@ -864,7 +852,6 @@ pub struct Inventory {
     pub training_date: Option<DateWrapper>,
 
     // ── Complex dict fields ──
-
     /// Alignment (morality system)
     #[serde(rename = "Alignment")]
     pub alignment: Option<Value>,
@@ -934,7 +921,6 @@ pub struct Inventory {
     pub web_flags: Option<Value>,
 
     // ── Catch-all for remaining fields ──
-
     #[serde(flatten)]
     pub other: Option<Value>,
 }

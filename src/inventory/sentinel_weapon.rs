@@ -25,7 +25,6 @@ pub struct SentinelWeapon {
     pub other: Option<Value>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

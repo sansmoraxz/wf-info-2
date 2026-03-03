@@ -100,17 +100,21 @@ fn is_cache_stale() -> bool {
     let guard = lock.read().unwrap();
     match guard.as_ref() {
         None => true,
-        Some(cache) => Utc::now().signed_duration_since(cache.last_refreshed_at)
-            > chrono::Duration::from_std(CACHE_TTL).unwrap_or(chrono::Duration::hours(1)),
+        Some(cache) => {
+            Utc::now().signed_duration_since(cache.last_refreshed_at)
+                > chrono::Duration::from_std(CACHE_TTL).unwrap_or(chrono::Duration::hours(1))
+        }
     }
 }
 
 fn cache_age_secs() -> Option<i64> {
     let lock = get_cache_lock();
     let guard = lock.read().unwrap();
-    guard
-        .as_ref()
-        .map(|c| Utc::now().signed_duration_since(c.last_refreshed_at).num_seconds())
+    guard.as_ref().map(|c| {
+        Utc::now()
+            .signed_duration_since(c.last_refreshed_at)
+            .num_seconds()
+    })
 }
 
 async fn ensure_cache() -> Result<()> {
@@ -182,9 +186,7 @@ fn lookup_by_game_ref(game_ref: &str) -> Option<WfmItem> {
 fn lookup_by_id(id: &str) -> Option<WfmItem> {
     let lock = get_cache_lock();
     let guard = lock.read().unwrap();
-    guard
-        .as_ref()
-        .and_then(|c| c.id_index.get(id).cloned())
+    guard.as_ref().and_then(|c| c.id_index.get(id).cloned())
 }
 
 fn search_items(query: &str) -> Vec<WfmItem> {
@@ -219,9 +221,7 @@ fn search_items(query: &str) -> Vec<WfmItem> {
     results.sort_by(|(score_a, item_a), (score_b, item_b)| {
         let a_is_set = item_a.tags.contains(&"set".to_string());
         let b_is_set = item_b.tags.contains(&"set".to_string());
-        score_a
-            .cmp(score_b)
-            .then_with(|| b_is_set.cmp(&a_is_set))
+        score_a.cmp(score_b).then_with(|| b_is_set.cmp(&a_is_set))
     });
     results.into_iter().map(|(_, item)| item.clone()).collect()
 }
@@ -425,14 +425,12 @@ pub(crate) async fn handle_market_price(params: Option<Value>) -> Result<Value> 
 
     // Inventory count (graceful)
     let inventory = storage::read_inventory().ok();
-    let owned = inventory
-        .as_ref()
-        .and_then(|inv| {
-            wfm_item
-                .game_ref
-                .as_ref()
-                .map(|gr| count_in_inventory(inv, gr))
-        });
+    let owned = inventory.as_ref().and_then(|inv| {
+        wfm_item
+            .game_ref
+            .as_ref()
+            .map(|gr| count_in_inventory(inv, gr))
+    });
 
     // Item details from itemdata
     let details = wfm_item
@@ -459,9 +457,7 @@ pub(crate) async fn handle_market_price(params: Option<Value>) -> Result<Value> 
                             let part_prices = summarize_orders(&part_orders);
 
                             let part_owned = inventory.as_ref().and_then(|inv| {
-                                part.game_ref
-                                    .as_ref()
-                                    .map(|gr| count_in_inventory(inv, gr))
+                                part.game_ref.as_ref().map(|gr| count_in_inventory(inv, gr))
                             });
 
                             parts.push(json!({

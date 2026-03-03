@@ -34,7 +34,6 @@ pub struct MechSuit {
     pub other: Option<Value>,
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -49,10 +48,7 @@ mod tests {
 
         let item: MechSuit = from_str(json_data).unwrap();
 
-        assert_eq!(
-            item.item_type,
-            "/Lotus/Powersuits/EntratiMech/NechroTech"
-        );
+        assert_eq!(item.item_type, "/Lotus/Powersuits/EntratiMech/NechroTech");
         assert_eq!(item.xp.unwrap(), 503210);
     }
 }
