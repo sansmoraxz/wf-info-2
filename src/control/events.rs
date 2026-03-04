@@ -12,6 +12,7 @@ pub enum DaemonEvent {
     InventoryStale(InventoryStaleEvent),
     ProfileUpdated(ProfileUpdatedEvent),
     ScreenshotTriggered(ScreenshotTriggeredEvent),
+    DmTabOpened(DmTabOpenedEvent),
 }
 
 impl DaemonEvent {
@@ -23,6 +24,7 @@ impl DaemonEvent {
             DaemonEvent::InventoryStale(_) => "inventory_stale",
             DaemonEvent::ProfileUpdated(_) => "profile_updated",
             DaemonEvent::ScreenshotTriggered(_) => "screenshot_triggered",
+            DaemonEvent::DmTabOpened(_) => "dm_tab_opened",
         }
     }
 }
@@ -63,6 +65,13 @@ pub struct ProfileUpdatedEvent {
 pub struct ScreenshotTriggeredEvent {
     pub timestamp: DateTime<Utc>,
     pub event_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DmTabOpenedEvent {
+    pub timestamp: DateTime<Utc>,
+    pub username: String,
+    pub platform: String,
 }
 
 /// Wire format for pushing events to subscribed clients.
