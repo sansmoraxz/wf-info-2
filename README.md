@@ -188,6 +188,7 @@ The daemon emits events that clients can subscribe to via the `subscribe` operat
 - `inventory_stale` - Inventory marked as stale
 - `profile_updated` - Profile data updated
 - `screenshot_triggered` - Screenshot captured
+- `dm_tab_opened` - New DM chat tab opened
 
 ## Environment Variables
 

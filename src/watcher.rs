@@ -3,6 +3,7 @@ use notify::RecursiveMode;
 use notify_debouncer_mini::{DebounceEventResult, new_debouncer};
 #[cfg(feature = "memory")]
 use serde_json::json;
+use std::collections::HashSet;
 use std::fs::{File, metadata};
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::PathBuf;
@@ -11,7 +12,10 @@ use tokio::sync::mpsc;
 use tokio::time::sleep;
 
 use crate::account::AccountInfo;
-use crate::control::{AccountLoginEvent, AccountLogoutEvent, DaemonEvent, ProfileUpdatedEvent};
+use crate::control::{
+    AccountLoginEvent, AccountLogoutEvent, DaemonEvent, DmTabOpenedEvent,
+    ProfileUpdatedEvent,
+};
 use crate::logs::{self, LogEntryParser, LogEvent};
 
 use crate::storage;
@@ -26,6 +30,9 @@ struct WatchState {
     current_account_id: Option<String>,
     log_parser: LogEntryParser,
     read_file: File,
+    /// Usernames for which we issued `IRC out: WHO` (self-initiated DMs).
+    /// Used to suppress DmTabOpened events for tabs we opened ourselves.
+    self_initiated_dms: HashSet<String>,
 }
 
 impl WatchState {
@@ -39,6 +46,7 @@ impl WatchState {
             current_account_id: None,
             log_parser: LogEntryParser::new(),
             read_file,
+            self_initiated_dms: HashSet::new(),
         })
     }
 
@@ -47,6 +55,7 @@ impl WatchState {
         self.last_position = 0;
         self.current_account_id = None;
         self.log_parser.reset();
+        self.self_initiated_dms.clear();
         self.read_file = File::open(log_path)?;
         Ok(())
     }
@@ -297,6 +306,31 @@ pub async fn observe_warframe_activity(
                         log::error!("Failed to delete profile: {}", e);
                     }
                 }
+                Some(LogEvent::DmWhoQuery(username)) => {
+                    log::debug!("Self-initiated DM WHO query for {}", username);
+                    state.self_initiated_dms.insert(username);
+                }
+                Some(LogEvent::DmTabOpened(info)) => {
+                    if state.self_initiated_dms.remove(&info.username) {
+                        log::debug!(
+                            "Ignoring self-initiated DM tab for {}",
+                            info.username
+                        );
+                    } else {
+                        log::info!(
+                            "DM tab opened: username={}, platform={}",
+                            info.username,
+                            info.platform
+                        );
+                        control::emit(DaemonEvent::DmTabOpened(
+                            DmTabOpenedEvent {
+                                timestamp: Utc::now(),
+                                username: info.username,
+                                platform: info.platform.to_string(),
+                            },
+                        ));
+                    }
+                }
                 None => {}
             }
         }
@@ -363,10 +397,10 @@ mod tests {
 
         // ── T=0s: startup diagnostics ────────────────────────────────────────
         append(
-            "0.049 Sys [Diag]: Build Label: 2026.02.13.16.03 Retail Windows x64 [Stripped]\n\
-             0.100 Sys [Info]: Loading packages took 0.0ms\n\
-             2.272 Net [Info]: RMI::Initialize - Methods: 431\n\
-             71.730 Gfx [Error]: Flushed 63 active-prefetch PSO jobs\n",
+            "0.049 Sys [Diag]: Build Label: 2026.02.13.16.03 Retail Windows x64 [Stripped]\r\n\
+             0.100 Sys [Info]: Loading packages took 0.0ms\r\n\
+             2.272 Net [Info]: RMI::Initialize - Methods: 431\r\n\
+             71.730 Gfx [Error]: Flushed 63 active-prefetch PSO jobs\r\n",
         );
         let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
         last_pos = metadata(&path).unwrap().len();
@@ -376,7 +410,7 @@ mod tests {
         );
 
         // ── T=72s: account login ──────────────────────────────────────────────
-        append("72.458 Sys [Info]: Logged in sample_account (2baaaaaaaaaaaaaaaaaaaaaa)\n");
+        append("72.458 Sys [Info]: Logged in sample_account (2baaaaaaaaaaaaaaaaaaaaaa)\r\n");
         let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
         last_pos = metadata(&path).unwrap().len();
         let events = parse_events(entries);
@@ -386,13 +420,13 @@ mod tests {
                 assert_eq!(info.account_id, ACCOUNT_ID);
                 assert_eq!(info.username, USERNAME);
             }
-            LogEvent::Logout => panic!("expected Login, got Logout"),
+            _ => panic!("expected Login"),
         }
 
         // ── T=72-84s: mid-session activity ───────────────────────────────────
         append(
-            "72.459 Sys [Info]: Using profile dir C:\\Warframe\\3684EDC75CAB924E0418513469C6EE3B\n\
-             72.460 Sys [Info]: Profile hash on read: 6501EF2950164301C055C2A2EC6AD536\n",
+            "72.459 Sys [Info]: Using profile dir C:\\Warframe\\3684EDC75CAB924E0418513469C6EE3B\r\n\
+             72.460 Sys [Info]: Profile hash on read: 6501EF2950164301C055C2A2EC6AD536\r\n",
         );
         let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
         last_pos = metadata(&path).unwrap().len();
@@ -404,7 +438,7 @@ mod tests {
         // ── T=84s: player name change (account confirmation) ──────────────────
         append(
             "84.333 Sys [Info]: Player name changed to sample_account \
-             Clan: TestC#963 AccountId: 2baaaaaaaaaaaaaaaaaaaaaa\n",
+             Clan: TestC#963 AccountId: 2baaaaaaaaaaaaaaaaaaaaaa\r\n",
         );
         let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
         last_pos = metadata(&path).unwrap().len();
@@ -419,14 +453,14 @@ mod tests {
                 assert_eq!(info.account_id, ACCOUNT_ID);
                 assert_eq!(info.username, USERNAME);
             }
-            LogEvent::Logout => panic!("expected Login from name-change, got Logout"),
+            _ => panic!("expected Login from name-change"),
         }
 
         // ── T=167s: shutdown sequence + logout ────────────────────────────────
         append(
-            "167.073 Sys [Info]: Discord Service has begun shut down.\n\
-             167.073 Sys [Info]: ===[ Exiting main loop ]===\n\
-             167.073 Net [Info]: IRC out: QUIT :Logged out of game\n",
+            "167.073 Sys [Info]: Discord Service has begun shut down.\r\n\
+             167.073 Sys [Info]: ===[ Exiting main loop ]===\r\n\
+             167.073 Net [Info]: IRC out: QUIT :Logged out of game\r\n",
         );
         let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
         let events = parse_events(entries);
@@ -435,5 +469,267 @@ mod tests {
             matches!(events[0], LogEvent::Logout),
             "expected Logout event"
         );
+    }
+
+    /// Simulates DM tab events arriving during a session.
+    ///
+    /// Timeline:
+    ///   T=0s    startup + login
+    ///   T=88s   first DM tab (redacted_alpha, PC)
+    ///   T=113s  second DM tab (redacted_bravo, PC)
+    ///   T=125s  third DM tab (redacted_charlie, PC) + non-DM chat noise
+    ///   T=161s  fourth DM tab (redacted_delta, PC)
+    #[test]
+    fn test_incremental_dm_tab_detection() {
+        let path = std::env::temp_dir().join(format!(
+            "wf_dm_test_{}.log",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
+        scopeguard::defer! {
+            let _ = std::fs::remove_file(&path);
+        }
+
+        let append = |content: &str| {
+            OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(&path)
+                .unwrap()
+                .write_all(content.as_bytes())
+                .unwrap();
+        };
+
+        let mut parser = LogEntryParser::new();
+        let mut read_file = File::open({
+            append("");
+            &path
+        })
+        .unwrap();
+        let mut last_pos = 0u64;
+
+        // ── T=0s: startup + login ────────────────────────────────────────────
+        append(
+            "0.049 Sys [Diag]: Build Label: 2026.02.13.16.03\r\n\
+             72.458 Sys [Info]: Logged in sample_account (2baaaaaaaaaaaaaaaaaaaaaa)\r\n",
+        );
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        last_pos = metadata(&path).unwrap().len();
+        let events = parse_events(entries);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], LogEvent::Login(_)));
+
+        // ── T=88s: first DM (PC platform \u{E000}) ──────────────────────────
+        append(
+            "88.663 Net [Info]: IRC out: WHOIS `redacted_alpha\r\n\
+             88.906 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_alpha\u{E000} to index 6\r\n\
+             88.907 Script [Info]: ChatRedux.lua: Chat: Filters for Fredacted_alpha\u{E000}:\r\n",
+        );
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        last_pos = metadata(&path).unwrap().len();
+        let events = parse_events(entries);
+        assert_eq!(events.len(), 1, "expected one DM event for redacted_alpha");
+        match &events[0] {
+            LogEvent::DmTabOpened(info) => {
+                assert_eq!(info.username, "redacted_alpha");
+                assert_eq!(info.platform, "pc");
+            }
+            _ => panic!("expected DirectMessage"),
+        }
+
+        // ── T=113s: second DM (PC) ──────────────────────────────────────────
+        append(
+            "113.428 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_bravo\u{E000} to index 6\r\n",
+        );
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        last_pos = metadata(&path).unwrap().len();
+        let events = parse_events(entries);
+        assert_eq!(events.len(), 1, "expected one DM event for redacted_bravo");
+        match &events[0] {
+            LogEvent::DmTabOpened(info) => {
+                assert_eq!(info.username, "redacted_bravo");
+                assert_eq!(info.platform, "pc");
+            }
+            _ => panic!("expected DirectMessage"),
+        }
+
+        // ── T=125s: third DM + non-DM AddTab noise ──────────────────────────
+        append(
+            "125.000 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Q_EN_AS to index 3\r\n\
+             125.994 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_charlie\u{E000} to index 7\r\n",
+        );
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        last_pos = metadata(&path).unwrap().len();
+        let events = parse_events(entries);
+        assert_eq!(
+            events.len(),
+            1,
+            "non-DM tab (Q_EN_AS) should not produce an event"
+        );
+        match &events[0] {
+            LogEvent::DmTabOpened(info) => {
+                assert_eq!(info.username, "redacted_charlie");
+                assert_eq!(info.platform, "pc");
+            }
+            _ => panic!("expected DirectMessage"),
+        }
+
+        // ── T=161s: fourth DM (Xbox platform \u{E001}) ──────────────────────
+        append(
+            "161.805 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_delta\u{E001} to index 8\r\n",
+        );
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        let events = parse_events(entries);
+        assert_eq!(events.len(), 1, "expected one DM event for redacted_delta");
+        match &events[0] {
+            LogEvent::DmTabOpened(info) => {
+                assert_eq!(info.username, "redacted_delta");
+                assert_eq!(info.platform, "xbox");
+            }
+            _ => panic!("expected DirectMessage"),
+        }
+    }
+
+    /// Verifies that self-initiated DM tabs (preceded by `IRC out: WHO`)
+    /// are filtered out by watcher state, while incoming DMs are emitted.
+    #[test]
+    fn test_self_initiated_dm_filtered_out() {
+        let path = std::env::temp_dir().join(format!(
+            "wf_dm_who_test_{}.log",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
+        scopeguard::defer! {
+            let _ = std::fs::remove_file(&path);
+        }
+
+        let append = |content: &str| {
+            OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(&path)
+                .unwrap()
+                .write_all(content.as_bytes())
+                .unwrap();
+        };
+
+        let mut parser = LogEntryParser::new();
+        let mut read_file = File::open({
+            append("");
+            &path
+        })
+        .unwrap();
+        let mut last_pos = 0u64;
+        let mut self_initiated: HashSet<String> = HashSet::new();
+
+        // Helper: simulate watcher state filtering on parsed events
+        let filter_events = |events: Vec<LogEvent>, initiated: &mut HashSet<String>| -> Vec<LogEvent> {
+            events
+                .into_iter()
+                .filter(|e| match e {
+                    LogEvent::DmWhoQuery(username) => {
+                        initiated.insert(username.clone());
+                        false
+                    }
+                    LogEvent::DmTabOpened(info) => !initiated.remove(&info.username),
+                    _ => true,
+                })
+                .collect()
+        };
+
+        // ── T=0s: startup ────────────────────────────────────────────────────
+        append("0.049 Sys [Diag]: Build Label: 2026.02.13.16.03\r\n");
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        last_pos = metadata(&path).unwrap().len();
+        let events = filter_events(parse_events(entries), &mut self_initiated);
+        assert!(events.is_empty());
+
+        // ── T=163s: incoming DM from redacted_echo (no preceding WHO) ───────────────
+        append(
+            "163.252 Net [Info]: Received IT_FROM_PEER introduction request\r\n\
+             163.502 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_echo\u{E000} to index 9\r\n",
+        );
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        last_pos = metadata(&path).unwrap().len();
+        let events = filter_events(parse_events(entries), &mut self_initiated);
+        assert_eq!(events.len(), 1, "incoming DM should produce an event");
+        match &events[0] {
+            LogEvent::DmTabOpened(info) => {
+                assert_eq!(info.username, "redacted_echo");
+                assert_eq!(info.platform, "pc");
+            }
+            _ => panic!("expected DmTabOpened"),
+        }
+
+        // ── T=344s: tabs closed (irrelevant noise) ──────────────────────────
+        append(
+            "344.886 Script [Info]: ChatRedux.lua: ChatRedux::RemoveTab: Removing tab with name Fredacted_echo\r\n",
+        );
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        last_pos = metadata(&path).unwrap().len();
+        let events = filter_events(parse_events(entries), &mut self_initiated);
+        assert!(events.is_empty());
+
+        // ── T=353s: self-initiated DM to redacted_echo (WHO → AddTab) ──────────────
+        append(
+            "353.340 Net [Info]: IRC out: WHO redacted_echo??? n%nu\r\n\
+             353.596 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_echo\u{E000} to index 8\r\n\
+             353.599 Net [Info]: IRC out: PRIVMSG redacted_echo :hello\r\n",
+        );
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        last_pos = metadata(&path).unwrap().len();
+        let events = filter_events(parse_events(entries), &mut self_initiated);
+        assert!(
+            events.is_empty(),
+            "self-initiated DM (preceded by WHO) should be filtered out"
+        );
+
+        // ── T=360s: another incoming DM from a different user ────────────────
+        append(
+            "360.100 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_foxtrot\u{E002} to index 9\r\n",
+        );
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        last_pos = metadata(&path).unwrap().len();
+        let events = filter_events(parse_events(entries), &mut self_initiated);
+        assert_eq!(events.len(), 1, "incoming DM should produce an event");
+        match &events[0] {
+            LogEvent::DmTabOpened(info) => {
+                assert_eq!(info.username, "redacted_foxtrot");
+                assert_eq!(info.platform, "playstation");
+            }
+            _ => panic!("expected DmTabOpened"),
+        }
+
+        // ── T=400s: close redacted_echo tab again, then redacted_echo initiates ───────────
+        append(
+            "400.000 Script [Info]: ChatRedux.lua: ChatRedux::RemoveTab: Removing tab with name Fredacted_echo\r\n",
+        );
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        last_pos = metadata(&path).unwrap().len();
+        let events = filter_events(parse_events(entries), &mut self_initiated);
+        assert!(events.is_empty());
+
+        // ── T=420s: redacted_echo DMs us again (no WHO — they initiated) ───────────
+        append(
+            "420.000 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_echo\u{E000} to index 8\r\n",
+        );
+        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        let events = filter_events(parse_events(entries), &mut self_initiated);
+        assert_eq!(
+            events.len(),
+            1,
+            "redacted_echo re-initiating after our earlier WHO should still emit"
+        );
+        match &events[0] {
+            LogEvent::DmTabOpened(info) => {
+                assert_eq!(info.username, "redacted_echo");
+                assert_eq!(info.platform, "pc");
+            }
+            _ => panic!("expected DmTabOpened"),
+        }
     }
 }

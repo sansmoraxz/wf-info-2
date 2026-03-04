@@ -16,7 +16,8 @@ pub mod wfm_auth;
 pub use broadcaster::{emit, subscribe};
 pub use events::{
     AccountLoginEvent, AccountLogoutEvent, DaemonEvent, EventMessage, InventoryFetchedEvent,
-    InventoryStaleEvent, ProfileUpdatedEvent, ScreenshotTriggeredEvent,
+    DmTabOpenedEvent, InventoryStaleEvent, ProfileUpdatedEvent,
+    ScreenshotTriggeredEvent,
 };
 pub use server::{
     ControlConfig, ControlEndpoint, ControlServer, start_control_server,
