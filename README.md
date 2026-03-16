@@ -13,12 +13,24 @@ This warning does not apply for other features like screenshot capture, log moni
 ## Building
 
 ```bash
-cargo build --release
+WF_PROFILE_KEY=change-me cargo build --release --workspace
 ```
 
-This produces two binaries:
+The build produces two user-facing binaries:
 - `wf-info-daemon` - The main daemon that monitors Warframe
 - `wf-info-cli` - CLI client to interact with the daemon
+
+To build only the binaries:
+
+```bash
+WF_PROFILE_KEY=change-me cargo build --release -p wf-info-daemon -p wf-info-cli
+```
+
+To enable live inventory refresh from process memory:
+
+```bash
+WF_PROFILE_KEY=change-me cargo build --release -p wf-info-daemon --features memory
+```
 
 ## Usage (Linux)
 
@@ -113,6 +125,13 @@ echo {"id":1,"op":"ping"} | ncat --exec "cmd /c type con" --no-shutdown \\.\pipe
 
 The `wf-info-cli` binary provides a convenient interface to the daemon.
 
+For ad-hoc development runs from the workspace root, you can also use:
+
+```bash
+cargo run -p wf-info-cli -- --help
+cargo run -p wf-info-daemon -- --help
+```
+
 ### Commands
 
 | Command | Description |
@@ -139,7 +158,7 @@ The `wf-info-cli` binary provides a convenient interface to the daemon.
 ./target/release/wf-info-cli --tcp 127.0.0.1:47410 ping --pretty
 
 # Load inventory from file
-./target/release/wf-info-cli inventory-load --path testdata/pretty.json
+./target/release/wf-info-cli inventory-load --path testdata/inventory/sample_inventory.json
 
 # Filter inventory
 ./target/release/wf-info-cli inventory-filter --category suits --contains prime --include-details --limit 10
@@ -197,6 +216,12 @@ The daemon emits events that clients can subscribe to via the `subscribe` operat
 | `WF_INFO_API_TCP` | TCP endpoint for control API |
 | `WF_INFO_API_UNIX` | Unix socket endpoint (Unix only) |
 | `WF_INFO_API_NPIPE` | Named pipe endpoint (Windows only) |
-| `WF_ITEMDATA_DIR` | Path to warframe-items-data JSON directory |
+| `WF_ITEM_DATA_BASE_URL` | Override the upstream base URL used to refresh cached item-data JSON files |
 | `WARFRAME_APP_CONFIG` | Custom path to Warframe config directory |
 | `RUST_LOG` | Logging level (e.g., `debug`, `info`) |
+
+## Build-time Environment
+
+| Variable | Description |
+|----------|-------------|
+| `WF_PROFILE_KEY` | Required at build time; used as the encryption key source for cached profile/auth data |
