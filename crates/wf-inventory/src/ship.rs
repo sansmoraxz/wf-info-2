@@ -1,0 +1,41 @@
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use crate::ObjectId;
+
+/// Represents a landing craft (ship) in the inventory.
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Ship {
+    #[serde(rename = "ItemType")]
+    pub item_type: String,
+
+    #[serde(rename = "ItemId")]
+    pub item_id: ObjectId,
+
+    #[serde(rename = "AirSupportPower")]
+    pub air_support_power: Option<String>,
+
+    #[serde(rename = "ShipExterior")]
+    pub ship_exterior: Option<Value>,
+
+    #[serde(flatten)]
+    pub other: Option<Value>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::from_str;
+
+    #[test]
+    fn test_deserialize_ship() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/inventory/inventory_ship_test.json"
+        ));
+
+        let item: Ship = from_str(json_data).unwrap();
+
+        assert_eq!(item.item_type, "/Lotus/Types/Items/Ships/DefaultShip");
+    }
+}
