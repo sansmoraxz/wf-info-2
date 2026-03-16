@@ -73,6 +73,8 @@ impl ServerArgs {
 
 #[tokio::main]
 async fn main() {
+    let cli = Cli::parse();
+
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     log::info!("Warframe Account Info Scanner started");
 
@@ -80,8 +82,6 @@ async fn main() {
     if let Err(e) = item_data_fetch::update_cache().await {
         log::warn!("Failed to update item data cache: {}", e);
     }
-
-    let cli = Cli::parse();
 
     // Restore WFM session from cached token (if any)
     wf_control::wfm_auth::try_restore_session().await;
