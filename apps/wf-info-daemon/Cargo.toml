@@ -1,0 +1,17 @@
+[package]
+name = "wf-info-daemon"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+clap.workspace = true
+env_logger.workspace = true
+log.workspace = true
+tokio.workspace = true
+wf-control = { path = "../../crates/wf-control" }
+wf-core = { path = "../../crates/wf-core" }
+wf-itemdata = { path = "../../crates/wf-itemdata" }
+
+[features]
+default = []
+memory = ["wf-control/memory", "wf-core/memory"]

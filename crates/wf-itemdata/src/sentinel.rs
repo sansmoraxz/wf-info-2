@@ -1,0 +1,238 @@
+//! Sentinel companion item data.
+
+use serde::{Deserialize, Serialize};
+
+use crate::ProductCategory;
+use crate::common::Patchlog;
+use crate::enums::{Polarity, SentinelProductCategory, SentinelType, Slot};
+use crate::props::{
+    BuildableProps, CharacterStats, EquippableProps, ItemDetailProps, ItemIdentityProps,
+    PrimeProps, TradableProps, WikiaProps,
+};
+use crate::traits::{Buildable, Character, Equippable, Item, Prime, WikiaLinked};
+
+pub type Root = Vec<Sentinel>;
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Sentinel {
+    #[serde(flatten)]
+    pub identity: ItemIdentityProps,
+    #[serde(rename = "type")]
+    pub type_field: SentinelType,
+    #[serde(flatten)]
+    pub detail: ItemDetailProps,
+    #[serde(flatten)]
+    pub trade: TradableProps,
+
+    pub product_category: SentinelProductCategory,
+
+    #[serde(default)]
+    pub patchlogs: Vec<Patchlog>,
+
+    // Grouped props
+    #[serde(flatten)]
+    pub stats: CharacterStats,
+    #[serde(flatten)]
+    pub build: BuildableProps,
+    #[serde(flatten)]
+    pub equip: EquippableProps,
+    #[serde(flatten)]
+    pub prime: PrimeProps,
+    #[serde(flatten)]
+    pub wikia: WikiaProps,
+}
+
+impl ProductCategory for Sentinel {
+    fn get_product_categories(&self) -> Vec<String> {
+        vec![self.product_category.as_str().to_string()]
+    }
+}
+
+impl Item for Sentinel {
+    fn unique_name(&self) -> &str {
+        &self.identity.unique_name
+    }
+    fn name(&self) -> &str {
+        &self.identity.name
+    }
+    fn category(&self) -> &str {
+        &self.identity.category
+    }
+    fn type_field(&self) -> &str {
+        self.type_field.as_str()
+    }
+    fn image_name(&self) -> Option<&str> {
+        self.detail.image_name.as_deref()
+    }
+    fn tradable(&self) -> bool {
+        self.trade.tradable
+    }
+    fn masterable(&self) -> bool {
+        self.trade.masterable
+    }
+    fn patchlogs(&self) -> &[Patchlog] {
+        &self.patchlogs
+    }
+}
+
+impl Buildable for Sentinel {
+    fn build_price(&self) -> Option<i64> {
+        self.build.build_price
+    }
+    fn build_quantity(&self) -> Option<i64> {
+        self.build.build_quantity
+    }
+    fn build_time(&self) -> Option<i64> {
+        self.build.build_time
+    }
+    fn skip_build_time_price(&self) -> Option<i64> {
+        self.build.skip_build_time_price
+    }
+    fn consume_on_build(&self) -> Option<bool> {
+        self.build.consume_on_build
+    }
+    fn mastery_req(&self) -> Option<i64> {
+        self.build.mastery_req
+    }
+    fn market_cost(&self) -> Option<i64> {
+        self.build.market_cost
+    }
+    fn bp_cost(&self) -> Option<i64> {
+        self.build.bp_cost
+    }
+    fn components(&self) -> &[crate::components::Component] {
+        &self.build.components
+    }
+}
+
+impl Prime for Sentinel {
+    fn is_prime(&self) -> bool {
+        self.prime.is_prime
+    }
+    fn vaulted(&self) -> Option<bool> {
+        self.prime.vaulted
+    }
+    fn vault_date(&self) -> Option<&str> {
+        self.prime.vault_date.as_deref()
+    }
+    fn estimated_vault_date(&self) -> Option<&str> {
+        self.prime.estimated_vault_date.as_deref()
+    }
+}
+
+impl WikiaLinked for Sentinel {
+    fn wiki_available(&self) -> Option<bool> {
+        self.wikia.wiki_available
+    }
+    fn wikia_url(&self) -> Option<&str> {
+        self.wikia.wikia_url.as_deref()
+    }
+    fn wikia_thumbnail(&self) -> Option<&str> {
+        self.wikia.wikia_thumbnail.as_deref()
+    }
+    fn introduced(&self) -> Option<&crate::common::Introduced> {
+        self.wikia.introduced.as_ref()
+    }
+    fn release_date(&self) -> Option<&str> {
+        self.wikia.release_date.as_deref()
+    }
+}
+
+impl Character for Sentinel {
+    fn health(&self) -> i64 {
+        self.stats.health
+    }
+    fn shield(&self) -> i64 {
+        self.stats.shield
+    }
+    fn armor(&self) -> i64 {
+        self.stats.armor
+    }
+    fn power(&self) -> i64 {
+        self.stats.power
+    }
+    fn stamina(&self) -> i64 {
+        self.stats.stamina
+    }
+    fn sprint_speed(&self) -> Option<f64> {
+        self.stats.sprint_speed
+    }
+}
+
+impl Equippable for Sentinel {
+    fn polarities(&self) -> &[Polarity] {
+        &self.equip.polarities
+    }
+    fn slot(&self) -> Option<&Slot> {
+        self.equip.slot.as_ref()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::from_str;
+
+    #[test]
+    fn test_deserialize_pet() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/sentinel_test.json"
+        ));
+
+        let rec: Sentinel = from_str(json_data).unwrap();
+
+        assert_eq!(
+            rec.identity.unique_name,
+            "/Lotus/Types/Sentinels/SentinelPowersuits/CarrierPowerSuit"
+        );
+        assert_eq!(rec.identity.name, "Carrier");
+        assert_eq!(rec.identity.category, "Sentinels");
+        assert!(!rec.trade.tradable);
+        assert!(rec.trade.masterable);
+
+        // Character stats
+        assert_eq!(rec.stats.health, 560);
+        assert_eq!(rec.stats.shield, 250);
+        assert_eq!(rec.stats.armor, 80);
+        assert_eq!(rec.stats.power, 100);
+
+        // Buildable
+        assert_eq!(rec.build.build_price, Some(15000));
+        assert_eq!(rec.build.components.len(), 5);
+
+        assert!(!rec.prime.is_prime);
+    }
+
+    #[test]
+    fn test_deserialize_sentinel_prime() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/sentinel_test_2.json"
+        ));
+        let rec: Sentinel = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Carrier Prime");
+        assert_eq!(rec.stats.health, 650);
+        assert_eq!(rec.stats.armor, 150);
+        assert_eq!(rec.stats.shield, 300);
+        assert!(rec.prime.is_prime);
+        assert_eq!(rec.prime.vaulted, Some(true));
+    }
+
+    #[test]
+    fn test_deserialize_sentinel_shade() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/sentinel_test_3.json"
+        ));
+        let rec: Sentinel = from_str(json_data).unwrap();
+
+        assert_eq!(rec.identity.name, "Shade");
+        assert_eq!(rec.stats.health, 600);
+        assert_eq!(rec.stats.armor, 80);
+        assert_eq!(rec.stats.shield, 130);
+        assert!(!rec.prime.is_prime);
+    }
+}

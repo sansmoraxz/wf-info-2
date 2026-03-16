@@ -1,0 +1,39 @@
+[package]
+name = "wf-control"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+chrono.workspace = true
+dirs.workspace = true
+futures-util.workspace = true
+image.workspace = true
+log.workspace = true
+notify.workspace = true
+notify-debouncer-mini.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tantivy.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+uuid.workspace = true
+wf-core = { path = "../wf-core" }
+wf-inventory = { path = "../wf-inventory" }
+wf-itemdata = { path = "../wf-itemdata" }
+
+[features]
+default = []
+memory = ["wf-core/memory"]
+
+[dev-dependencies]
+scopeguard.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+ashpd.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+win-screenshot.workspace = true

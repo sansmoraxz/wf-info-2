@@ -1,0 +1,36 @@
+[package]
+name = "wf-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aes.workspace = true
+aes-gcm.workspace = true
+anyhow.workspace = true
+cbc.workspace = true
+chrono.workspace = true
+dirs.workspace = true
+log.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sysinfo.workspace = true
+tokio.workspace = true
+wf-inventory = { path = "../wf-inventory" }
+
+[features]
+default = []
+memory = ["dep:memchr", "dep:scopeguard", "dep:winapi"]
+
+[dependencies.memchr]
+workspace = true
+optional = true
+
+[dependencies.scopeguard]
+workspace = true
+optional = true
+
+[target.'cfg(windows)'.dependencies]
+winapi = { workspace = true, optional = true }
