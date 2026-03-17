@@ -3,11 +3,7 @@ use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 use tokio::time::sleep;
 
 #[cfg(feature = "memory")]
-use {
-    anyhow::{Context, Result},
-    memchr::memmem,
-    std::collections::HashMap,
-};
+use {anyhow::Result, memchr::memmem, std::collections::HashMap};
 
 #[cfg(all(feature = "memory", target_os = "linux"))]
 use std::{
@@ -225,16 +221,14 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
 /// Requires appropriate process access rights (PROCESS_VM_READ | PROCESS_QUERY_INFORMATION)
 #[cfg(all(feature = "memory", target_os = "windows"))]
 pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQuery>> {
-    use std::ptr;
     use winapi::shared::minwindef::{FALSE, LPVOID};
     use winapi::um::handleapi::CloseHandle;
     use winapi::um::memoryapi::ReadProcessMemory;
     use winapi::um::memoryapi::VirtualQueryEx;
     use winapi::um::processthreadsapi::OpenProcess;
     use winapi::um::winnt::{
-        MEM_COMMIT, MEM_FREE, MEM_RESERVE, MEMORY_BASIC_INFORMATION, PAGE_EXECUTE_READ,
-        PAGE_EXECUTE_READWRITE, PAGE_READONLY, PAGE_READWRITE, PROCESS_QUERY_INFORMATION,
-        PROCESS_VM_READ,
+        MEM_COMMIT, MEMORY_BASIC_INFORMATION, PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE,
+        PAGE_READONLY, PAGE_READWRITE, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
     };
 
     log::info!(

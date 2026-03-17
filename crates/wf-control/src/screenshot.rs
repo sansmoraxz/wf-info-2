@@ -2,7 +2,7 @@ use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use base64::Engine;
 use chrono::{DateTime, Utc};
 use rand::random;
@@ -49,7 +49,7 @@ async fn capture_screen() -> Result<(String, String)> {
     use image::{ImageBuffer, Rgb};
     use win_screenshot::prelude::*;
 
-    let buf = capture_display().context("Failed to capture display")?;
+    let buf = capture_display().map_err(|e| anyhow!("Failed to capture display: {:?}", e))?;
 
     let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
         ImageBuffer::from_raw(buf.width as u32, buf.height as u32, buf.pixels)

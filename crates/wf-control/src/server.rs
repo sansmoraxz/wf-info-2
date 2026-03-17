@@ -159,7 +159,7 @@ async fn spawn_npipe_server(path: String) -> Result<JoinHandle<()>> {
                 .first_pipe_instance(first_instance)
                 .create(&pipe_path);
 
-            let mut server = match server {
+            let server = match server {
                 Ok(server) => server,
                 Err(e) => {
                     log::error!("Failed to create npipe {}: {}", pipe_path, e);
