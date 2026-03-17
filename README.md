@@ -1,14 +1,16 @@
 # WF Info
 
-Alternative Warframe companion app with Linux support.
+Alternative Warframe companion app.
+
+Yes it also works with both linux and windows.
 
 This app is designed to run as a background daemon that monitors the Warframe process and provides an API for fetching inventory data, account information, and other game-related details. It can be used in conjunction with a CLI client or integrated into other applications.
 
-> <font color="red">_Warning_</font>: DE has not officially granted permission to access Warframe's process, so use the `memory` feature with caution. It is used to load live inventory data using your account from DE's API but could potentially lead to risk of loosing access to your account. Use proper judgement and ensure you understand the implications of enabling this feature.
+> _WARNING_: DE has not officially granted permission to access Warframe's process, so use the `memory` feature with caution. It is used to load live inventory data using your account from DE's API but could potentially lead to risk of loosing access to your account. Use proper judgement and ensure you understand the implications of enabling this feature.
 > 
-> For inventory you may use other apps like [Overwolf's Allecaframe](https://www.overwolf.com/app/alejandro_cabrerizo-alecaframe), and load their exported inventory data into this app for filtering and querying without needing the `memory` feature.
+> _NOTE_: The above warning does not apply if you don't build with the `memory` feature enabled.
 
-This warning does not apply for other features like screenshot capture, log monitoring, etc. which uses standard OS APIs and does not interact with the game process directly.
+It's not necessary to have the `memory` feature to use this tool, all it provides is just some additional APIs (mentioned below). If you feel like you don't want to risk your account, but still use this tool you may skip it (only your actual inventory tracking via this tool will be unavailable not trade watch, nor warframe market usage, nor screenshots or fissure runs). In fact you may use other apps like [Overwolf's Allecaframe](https://www.overwolf.com/app/alejandro_cabrerizo-alecaframe), and load their exported inventory data. (Please note that the above warning still apply for Overwolf or any other third party tool that touches inventory)
 
 ## Building
 
@@ -26,13 +28,13 @@ To build only the binaries:
 WF_PROFILE_KEY=change-me cargo build --release -p wf-info-daemon -p wf-info-cli
 ```
 
-To enable live inventory refresh from process memory:
+Or with memory features enabled (needed for live inventory)
 
 ```bash
 WF_PROFILE_KEY=change-me cargo build --release -p wf-info-daemon --features memory
 ```
 
-## Usage (Linux)
+## Daemon Usage (Linux)
 
 ### Option 1: Wrapper Mode (No sudo required with default kernel settings)
 
@@ -49,9 +51,15 @@ Run as a parent process that launches Warframe as a child. This allows the daemo
 
 The daemon will automatically exit when Warframe closes.
 
-### Option 2: Standalone Mode (Requires elevated permissions)
+### Option 2: Standalone Mode
 
 Run independently and monitor an already-running Warframe instance:
+
+```bash
+./target/release/wf-info-daemon
+```
+
+Please note that most linux distros prevent reading memory from another process unless it's a child process. So for the memory feature you have options:-
 
 ```bash
 # With capabilities (recommended):
@@ -61,10 +69,14 @@ sudo setcap cap_sys_ptrace=eip ./target/release/wf-info-daemon
 # Or with sudo:
 sudo ./target/release/wf-info-daemon
 
-# Or relax ptrace restrictions (security risk):
+# Or relax ptrace restrictions (security risk, not recommended):
 sudo sysctl kernel.yama.ptrace_scope=0
 ./target/release/wf-info-daemon
 ```
+
+## Daemon Usage (Windows)
+
+As above. There's no special restrictions that prevent reading the game data unless it's running with elevated privileges.
 
 ## Control API
 
@@ -95,7 +107,7 @@ Set endpoint via CLI flags or environment variables:
 | `inventory.filter` | Filter and search inventory items |
 | `inventory.meta.get` | Get inventory metadata |
 | `inventory.stale.update` | Mark inventory as stale |
-| `inventory.refresh` | Refresh inventory from game API (with `memory` feature enabled) |
+| `inventory.refresh` | Refresh inventory from game API (only available with `memory` feature) |
 | `screenshot.trigger` | Capture and return a screenshot |
 | `wfm.price` | Get live warframe.market prices for an item (with set part breakdown) |
 | `wfm.refresh` | Force refresh the warframe.market item cache |
@@ -124,13 +136,6 @@ echo {"id":1,"op":"ping"} | ncat --exec "cmd /c type con" --no-shutdown \\.\pipe
 ## CLI Client
 
 The `wf-info-cli` binary provides a convenient interface to the daemon.
-
-For ad-hoc development runs from the workspace root, you can also use:
-
-```bash
-cargo run -p wf-info-cli -- --help
-cargo run -p wf-info-daemon -- --help
-```
 
 ### Commands
 
@@ -220,8 +225,9 @@ The daemon emits events that clients can subscribe to via the `subscribe` operat
 | `WARFRAME_APP_CONFIG` | Custom path to Warframe config directory |
 | `RUST_LOG` | Logging level (e.g., `debug`, `info`) |
 
-## Build-time Environment
+## Build-time Environment Variables
 
 | Variable | Description |
 |----------|-------------|
 | `WF_PROFILE_KEY` | Required at build time; used as the encryption key source for cached profile/auth data |
+
