@@ -9,7 +9,7 @@ use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tokio::time::sleep;
+use tokio::time::{interval, sleep};
 
 use crate::{
     AccountLoginEvent, AccountLogoutEvent, DaemonEvent, DmTabOpenedEvent, ProfileUpdatedEvent,
@@ -201,131 +201,230 @@ pub async fn observe_warframe_activity(
         .watcher()
         .watch(&app_config_path, RecursiveMode::NonRecursive)?;
 
+    let mut interval = interval(Duration::from_secs(1));
+
     loop {
-        let Some(event) = rx.recv().await else {
-            continue;
-        };
-
-        let is_our_file = event
-            .path
-            .file_name()
-            .map(|name| name == log_filename.as_os_str())
-            .unwrap_or(false);
-
-        if !is_our_file {
-            continue;
-        }
-
-        log::trace!("Event for EE.log: {:?}", event);
-
-        // Handle deletion — wait with backoff for recreation
-        if !log_path.exists() {
-            log::info!("File deleted, waiting for recreation");
-            let mut backoff = Duration::from_millis(100);
-            let max_backoff = Duration::from_secs(15);
-            while !log_path.exists() {
-                sleep(backoff).await;
-                backoff = (backoff * 2).min(max_backoff);
-            }
-            log::info!("File recreated, game restarted");
-            state.reset(&log_path)?;
-            continue;
-        }
-
-        let current_size = match metadata(&log_path) {
-            Ok(meta) => meta.len(),
-            Err(_) => continue,
-        };
-
-        // Handle truncation (game restart without deletion)
-        if current_size < state.last_size {
-            log::info!("File truncated, game restarted");
-            state.reset(&log_path)?;
-            continue;
-        }
-
-        state.last_size = current_size;
-
-        if current_size <= state.last_position {
-            continue;
-        }
-
-        log::debug!(
-            "Reading from position {} to {}",
-            state.last_position,
-            current_size
-        );
-
-        let entries = match read_new_entries(
-            &mut state.read_file,
-            state.last_position,
-            &mut state.log_parser,
-        ) {
-            Ok(e) => e,
-            Err(e) => {
-                log::error!("Failed to read log entries: {}", e);
-                continue;
-            }
-        };
-        state.last_position = current_size;
-
-        for entry in entries {
-            log::trace!("Complete log entry: {}", entry);
-            match logs::parse_log_line(&entry) {
-                Some(LogEvent::Login(AccountInfo {
-                    username,
-                    account_id,
-                })) => {
-                    if state.current_account_id.as_deref() == Some(&account_id) {
-                        log::debug!("Duplicate login event for account_id={}", account_id);
+        tokio::select! {
+            event = rx.recv() => {
+                let Some(event) = event else { continue; };
+                let is_our_file = event
+                    .path
+                    .file_name()
+                    .map(|name| name == log_filename.as_os_str())
+                    .unwrap_or(false);
+                if !is_our_file {
+                    continue;
+                }
+                log::trace!("Event for EE.log: {:?}", event);
+                // Handle deletion — wait with backoff for recreation
+                if !log_path.exists() {
+                    log::info!("File deleted, waiting for recreation");
+                    let mut backoff = Duration::from_millis(100);
+                    let max_backoff = Duration::from_secs(15);
+                    while !log_path.exists() {
+                        sleep(backoff).await;
+                        backoff = (backoff * 2).min(max_backoff);
+                    }
+                    log::info!("File recreated, game restarted");
+                    state.reset(&log_path)?;
+                    continue;
+                }
+                let current_size = match metadata(&log_path) {
+                    Ok(meta) => meta.len(),
+                    Err(_) => continue,
+                };
+                // Handle truncation (game restart without deletion)
+                if current_size < state.last_size {
+                    log::info!("File truncated, game restarted");
+                    state.reset(&log_path)?;
+                    continue;
+                }
+                state.last_size = current_size;
+                if current_size <= state.last_position {
+                    continue;
+                }
+                log::debug!(
+                    "Reading from position {} to {}",
+                    state.last_position,
+                    current_size
+                );
+                let entries = match read_new_entries(
+                    &mut state.read_file,
+                    state.last_position,
+                    &mut state.log_parser,
+                ) {
+                    Ok(e) => e,
+                    Err(e) => {
+                        log::error!("Failed to read log entries: {}", e);
                         continue;
                     }
-                    state.current_account_id = Some(account_id.clone());
-                    crate::set_current_account(Some(account_id.clone()));
-                    log::info!(
-                        "User logged in: username={}, account_id={}",
-                        username,
-                        account_id
-                    );
-                    crate::emit(DaemonEvent::AccountLogin(AccountLoginEvent {
-                        timestamp: Utc::now(),
-                        account_id: account_id.clone(),
-                        username: username.clone(),
-                    }));
-                    tokio::spawn(handle_login_event(account_id, username, warframe_pid));
-                }
-                Some(LogEvent::Logout) => {
-                    state.current_account_id = None;
-                    crate::set_current_account(None);
-                    log::info!("User logged out");
-                    crate::emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
-                        timestamp: Utc::now(),
-                    }));
-                    if let Err(e) = storage::delete_profile() {
-                        log::error!("Failed to delete profile: {}", e);
+                };
+                state.last_position = current_size;
+                for entry in entries {
+                    log::trace!("Complete log entry: {}", entry);
+                    match logs::parse_log_line(&entry) {
+                        Some(LogEvent::Login(AccountInfo {
+                            username,
+                            account_id,
+                        })) => {
+                            if state.current_account_id.as_deref() == Some(&account_id) {
+                                log::debug!("Duplicate login event for account_id={}", account_id);
+                                continue;
+                            }
+                            state.current_account_id = Some(account_id.clone());
+                            crate::set_current_account(Some(account_id.clone()));
+                            log::info!(
+                                "User logged in: username={}, account_id={}",
+                                username,
+                                account_id
+                            );
+                            crate::emit(DaemonEvent::AccountLogin(AccountLoginEvent {
+                                timestamp: Utc::now(),
+                                account_id: account_id.clone(),
+                                username: username.clone(),
+                            }));
+                            tokio::spawn(handle_login_event(account_id, username, warframe_pid));
+                        }
+                        Some(LogEvent::Logout) => {
+                            state.current_account_id = None;
+                            crate::set_current_account(None);
+                            log::info!("User logged out");
+                            crate::emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
+                                timestamp: Utc::now(),
+                            }));
+                            if let Err(e) = storage::delete_profile() {
+                                log::error!("Failed to delete profile: {}", e);
+                            }
+                        }
+                        Some(LogEvent::DmWhoQuery(username)) => {
+                            log::debug!("Self-initiated DM WHO query for {}", username);
+                            state.self_initiated_dms.insert(username);
+                        }
+                        Some(LogEvent::DmTabOpened(info)) => {
+                            if state.self_initiated_dms.remove(&info.username) {
+                                log::debug!("Ignoring self-initiated DM tab for {}", info.username);
+                            } else {
+                                log::info!(
+                                    "DM tab opened: username={}, platform={}",
+                                    info.username,
+                                    info.platform
+                                );
+                                crate::emit(DaemonEvent::DmTabOpened(DmTabOpenedEvent {
+                                    timestamp: Utc::now(),
+                                    username: info.username,
+                                    platform: info.platform.to_string(),
+                                }));
+                            }
+                        }
+                        None => {}
                     }
                 }
-                Some(LogEvent::DmWhoQuery(username)) => {
-                    log::debug!("Self-initiated DM WHO query for {}", username);
-                    state.self_initiated_dms.insert(username);
+            }
+            _ = interval.tick() => {
+                log::trace!("Polling for EE.log changes");
+                // Handle deletion — wait with backoff for recreation
+                if !log_path.exists() {
+                    log::info!("File deleted, waiting for recreation");
+                    let mut backoff = Duration::from_millis(100);
+                    let max_backoff = Duration::from_secs(15);
+                    while !log_path.exists() {
+                        sleep(backoff).await;
+                        backoff = (backoff * 2).min(max_backoff);
+                    }
+                    log::info!("File recreated, game restarted");
+                    state.reset(&log_path)?;
+                    continue;
                 }
-                Some(LogEvent::DmTabOpened(info)) => {
-                    if state.self_initiated_dms.remove(&info.username) {
-                        log::debug!("Ignoring self-initiated DM tab for {}", info.username);
-                    } else {
-                        log::info!(
-                            "DM tab opened: username={}, platform={}",
-                            info.username,
-                            info.platform
-                        );
-                        crate::emit(DaemonEvent::DmTabOpened(DmTabOpenedEvent {
-                            timestamp: Utc::now(),
-                            username: info.username,
-                            platform: info.platform.to_string(),
-                        }));
+                let current_size = match metadata(&log_path) {
+                    Ok(meta) => meta.len(),
+                    Err(_) => continue,
+                };
+                // Handle truncation (game restart without deletion)
+                if current_size < state.last_size {
+                    log::info!("File truncated, game restarted");
+                    state.reset(&log_path)?;
+                    continue;
+                }
+                state.last_size = current_size;
+                if current_size <= state.last_position {
+                    continue;
+                }
+                log::debug!(
+                    "Reading from position {} to {}",
+                    state.last_position,
+                    current_size
+                );
+                let entries = match read_new_entries(
+                    &mut state.read_file,
+                    state.last_position,
+                    &mut state.log_parser,
+                ) {
+                    Ok(e) => e,
+                    Err(e) => {
+                        log::error!("Failed to read log entries: {}", e);
+                        continue;
+                    }
+                };
+                state.last_position = current_size;
+                for entry in entries {
+                    log::trace!("Complete log entry: {}", entry);
+                    match logs::parse_log_line(&entry) {
+                        Some(LogEvent::Login(AccountInfo {
+                            username,
+                            account_id,
+                        })) => {
+                            if state.current_account_id.as_deref() == Some(&account_id) {
+                                log::debug!("Duplicate login event for account_id={}", account_id);
+                                continue;
+                            }
+                            state.current_account_id = Some(account_id.clone());
+                            crate::set_current_account(Some(account_id.clone()));
+                            log::info!(
+                                "User logged in: username={}, account_id={}",
+                                username,
+                                account_id
+                            );
+                            crate::emit(DaemonEvent::AccountLogin(AccountLoginEvent {
+                                timestamp: Utc::now(),
+                                account_id: account_id.clone(),
+                                username: username.clone(),
+                            }));
+                            tokio::spawn(handle_login_event(account_id, username, warframe_pid));
+                        }
+                        Some(LogEvent::Logout) => {
+                            state.current_account_id = None;
+                            crate::set_current_account(None);
+                            log::info!("User logged out");
+                            crate::emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
+                                timestamp: Utc::now(),
+                            }));
+                            if let Err(e) = storage::delete_profile() {
+                                log::error!("Failed to delete profile: {}", e);
+                            }
+                        }
+                        Some(LogEvent::DmWhoQuery(username)) => {
+                            log::debug!("Self-initiated DM WHO query for {}", username);
+                            state.self_initiated_dms.insert(username);
+                        }
+                        Some(LogEvent::DmTabOpened(info)) => {
+                            if state.self_initiated_dms.remove(&info.username) {
+                                log::debug!("Ignoring self-initiated DM tab for {}", info.username);
+                            } else {
+                                log::info!(
+                                    "DM tab opened: username={}, platform={}",
+                                    info.username,
+                                    info.platform
+                                );
+                                crate::emit(DaemonEvent::DmTabOpened(DmTabOpenedEvent {
+                                    timestamp: Utc::now(),
+                                    username: info.username,
+                                    platform: info.platform.to_string(),
+                                }));
+                            }
+                        }
+                        None => {}
                     }
                 }
-                None => {}
             }
         }
     }
