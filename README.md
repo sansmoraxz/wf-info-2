@@ -1,14 +1,16 @@
 # WF Info
 
-Alternative Warframe companion app with Linux support.
+Alternative Warframe companion app.
+
+Yes it also works with both linux and windows.
 
 This app is designed to run as a background daemon that monitors the Warframe process and provides an API for fetching inventory data, account information, and other game-related details. It can be used in conjunction with a CLI client or integrated into other applications.
 
 > _WARNING_: DE has not officially granted permission to access Warframe's process, so use the `memory` feature with caution. It is used to load live inventory data using your account from DE's API but could potentially lead to risk of loosing access to your account. Use proper judgement and ensure you understand the implications of enabling this feature.
 > 
-> For inventory you may use other apps like [Overwolf's Allecaframe](https://www.overwolf.com/app/alejandro_cabrerizo-alecaframe), and load their exported inventory data into this app for filtering and querying without needing the `memory` feature.
->
-> _NOTE_: The above warning does not apply if you skip don't build with the `memory` feature enabled.
+> _NOTE_: The above warning does not apply if you don't build with the `memory` feature enabled.
+
+It's not necessary to have the `memory` feature to use this tool, all it provides is just some additional APIs (mentioned below). If you feel like you don't want to risk your account, but still use this tool you may skip it (only your actual inventory tracking via this tool will be unavailable not trade watch, nor warframe market usage, nor screenshots or fissure runs). In fact you may use other apps like [Overwolf's Allecaframe](https://www.overwolf.com/app/alejandro_cabrerizo-alecaframe), and load their exported inventory data. (Please note that the above warning still apply for Overwolf or any other third party tool that touches inventory)
 
 ## Building
 
