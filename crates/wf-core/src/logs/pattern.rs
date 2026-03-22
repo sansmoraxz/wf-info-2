@@ -1,4 +1,5 @@
-use regex::{Captures, Regex};
+use anyhow::Error;
+use regex::{Captures, Regex, RegexSet};
 
 use crate::{
     account::AccountInfo,
@@ -9,6 +10,10 @@ use std::sync::LazyLock;
 
 pub trait RegMatcher {
     fn pattern(&self) -> &Regex;
+}
+
+pub trait LogEntryTransformer: RegMatcher + Sync + Send {
+    fn transform(&self, c: &Captures) -> Option<LogEvent>;
 }
 
 /// Helper to create structs and regex patterns for matching
@@ -28,8 +33,44 @@ macro_rules! lgreg {
     };
 }
 
-pub trait LogEntryTransformer: RegMatcher {
-    fn transform(&self, c: &Captures) -> Option<LogEvent>;
+pub struct LogProcessingEngine {
+    transformers: Vec<Box<dyn LogEntryTransformer>>,
+    reset: RegexSet,
+}
+
+impl LogProcessingEngine {
+    pub fn new() -> Result<Self, Error> {
+        let t0 = Box::new(WhoQueryEntry);
+        let t1 = Box::new(TradeConfirmEntry);
+        let t2 = Box::new(TradeSuccessEntry);
+        let t3 = Box::new(TradeFailEntry);
+        let t4 = Box::new(LoginEntry);
+        let t5 = Box::new(LogoutEntry);
+        let t6 = Box::new(DMTabEntry);
+        let v: Vec<Box<dyn LogEntryTransformer>> = vec![t0, t1, t2, t3, t4, t5, t6];
+        let rv: Vec<&str> = v.iter().map(|p| p.pattern().as_str()).collect();
+        let reset: RegexSet = RegexSet::new(rv)?;
+        Ok(Self {
+            transformers: v,
+            reset: reset,
+        })
+    }
+
+    pub fn extract_events(&self, s: &str) -> Vec<LogEvent> {
+        let set = &self.reset;
+        let container = &self.transformers;
+        set.matches(s)
+            .into_iter()
+            .filter_map(|index| {
+                // Dereference the match index to get the corresponding
+                // compiled pattern.
+                if let Some(caps) = &container[index].pattern().captures(s) {
+                    return container[index].transform(caps);
+                }
+                return None;
+            })
+            .collect()
+    }
 }
 
 lgreg!(
@@ -148,7 +189,7 @@ lgreg!(
 
 impl LogEntryTransformer for LogoutEntry {
     /// implicit
-    fn transform(&self, c: &Captures) -> Option<LogEvent> {
+    fn transform(&self, _: &Captures) -> Option<LogEvent> {
         Some(LogEvent::Logout)
     }
 }
@@ -164,7 +205,7 @@ impl LogEntryTransformer for DMTabEntry {
     fn transform(&self, c: &Captures) -> Option<LogEvent> {
         let username = c.get(1)?.as_str().to_string();
         let platform = c.get(2)?.as_str().into();
-        let dm_info = DirectMessageInfo{username, platform};
+        let dm_info = DirectMessageInfo { username, platform };
         Some(LogEvent::DmTabOpened(dm_info))
     }
 }
