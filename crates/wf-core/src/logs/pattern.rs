@@ -1,6 +1,9 @@
-use regex::{CaptureMatches, Captures, Match, Regex};
+use regex::{Captures, Regex};
 
-use crate::logs::{LogEvent, TradeItem};
+use crate::{
+    account::AccountInfo,
+    logs::{DirectMessageInfo, LogEvent, TradeItem},
+};
 
 use std::sync::LazyLock;
 
@@ -109,5 +112,73 @@ impl LogEntryTransformer for TradeFailEntry {
     fn transform(&self, c: &Captures<'_>) -> Option<LogEvent> {
         let reason = c.get(1)?.as_str().to_string();
         Some(LogEvent::TradeFail(reason))
+    }
+}
+
+lgreg!(
+    LoginEntry,
+    LOGIN_DETAILS_REGEX,
+    r"(?mu)(?m)^\d+\.\d+ Sys \[Info\]: Player name changed to (.*)(.) Clan: (.*)#(\d+) AccountId: (\w+)$"
+);
+
+impl LogEntryTransformer for LoginEntry {
+    /// G1: name, G2: platform, G3: clan, G4: clan hash, G5: account_id
+    fn transform(&self, c: &Captures) -> Option<LogEvent> {
+        let name = c.get(1)?.as_str().to_string();
+        let platform = c.get(2)?.as_str().into();
+        let clan_name = c.get(3)?.as_str().to_string();
+        let clan_id = c.get(3)?.as_str().to_string();
+        let account_id = c.get(5)?.as_str().to_string();
+        let clan = [clan_name, "#".to_string(), clan_id].concat();
+        let account_info = AccountInfo {
+            username: name,
+            platform: platform,
+            account_id: account_id,
+            clan: clan,
+        };
+        Some(LogEvent::Login(account_info))
+    }
+}
+
+lgreg!(
+    LogoutEntry,
+    LOGOUT_DETAILS_REGEX,
+    r"(?mu)(?m)^\d+\.\d+ Net \[Info\]: IRC out: QUIT :Logged out of game$"
+);
+
+impl LogEntryTransformer for LogoutEntry {
+    /// implicit
+    fn transform(&self, c: &Captures) -> Option<LogEvent> {
+        Some(LogEvent::Logout)
+    }
+}
+
+lgreg!(
+    DMTabEntry,
+    DM_TAB_REGEX,
+    r"(?mu)(?m)^\d+\.\d+ Script \[Info\]: ChatRedux\.lua: ChatRedux::AddTab: Adding tab with channel name: F(.*)(.) to index \d+$"
+);
+
+impl LogEntryTransformer for DMTabEntry {
+    /// G1: name, G2: platform
+    fn transform(&self, c: &Captures) -> Option<LogEvent> {
+        let username = c.get(1)?.as_str().to_string();
+        let platform = c.get(2)?.as_str().into();
+        let dm_info = DirectMessageInfo{username, platform};
+        Some(LogEvent::DmTabOpened(dm_info))
+    }
+}
+
+lgreg!(
+    WhoQueryEntry,
+    WHO_REGEX,
+    r"(?mu)(?m)^\d+\.\d+ Net \[Info\]: IRC out: WHO (\w+)\?\?\? n%nu$"
+);
+
+impl LogEntryTransformer for WhoQueryEntry {
+    /// G1: name
+    fn transform(&self, c: &Captures) -> Option<LogEvent> {
+        let username = c.get(1)?.as_str().to_string();
+        Some(LogEvent::WhoQuery(username))
     }
 }

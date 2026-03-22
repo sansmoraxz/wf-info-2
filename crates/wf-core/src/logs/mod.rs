@@ -1,7 +1,7 @@
 use std::env;
 use std::path::PathBuf;
 
-use crate::account::AccountInfo;
+use crate::account::{AccountInfo, Platform};
 
 mod pattern;
 
@@ -12,13 +12,12 @@ pub enum LogEvent {
     DmTabOpened(DirectMessageInfo),
     /// The local client issued an `IRC out: WHO <username>` query,
     /// indicating the user initiated a DM conversation.
-    DmWhoQuery(String),
+    WhoQuery(String),
     TradeConfirmPopup(TradeInfo),
     TradeSuccess,
     /// Trade failed with wrapped reason
-    TradeFail(String)
+    TradeFail(String),
 }
-
 
 #[derive(Debug)]
 pub struct TradeInfo {
@@ -37,7 +36,7 @@ pub struct TradeItem {
 #[derive(Debug)]
 pub struct DirectMessageInfo {
     pub username: String,
-    pub platform: &'static str,
+    pub platform: Platform,
 }
 
 #[cfg(target_os = "linux")]
@@ -181,6 +180,8 @@ fn parse_login(line: &str) -> Option<AccountInfo> {
     Some(AccountInfo {
         username: username.to_string(),
         account_id: rest.to_string(),
+        clan: "".to_string(),
+        platform: crate::account::Platform::PC,
     })
 }
 
@@ -200,40 +201,9 @@ fn parse_account_change(line: &str) -> Option<AccountInfo> {
     Some(AccountInfo {
         username: username.to_string(),
         account_id: id.to_string(),
+        clan: "".to_string(),
+        platform: crate::account::Platform::PC,
     })
-}
-
-/// Platform suffix mapping for chat tab names.
-fn platform_from_suffix(ch: char) -> Option<&'static str> {
-    match ch {
-        '\u{e000}' => Some("pc"),
-        '\u{e001}' => Some("xbox"),
-        '\u{e002}' => Some("playstation"),
-        '\u{e003}' => Some("nintendo"),
-        '\u{e004}' => Some("ios"),
-        '\u{e005}' => Some("android"),
-        _ => None,
-    }
-}
-
-/// Parses: `Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: F<username><platform_suffix> to index <N>`
-fn parse_dm_tab(line: &str) -> Option<DirectMessageInfo> {
-    let rest = line
-        .split_once(
-            "Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: F",
-        )?
-        .1;
-    // Strip trailing " to index <N>"
-    let channel = rest.rsplit_once(" to index ")?.0;
-    // The last character is the platform suffix
-    let last_char = channel.chars().last()?;
-    let platform = platform_from_suffix(last_char)?;
-    // Username is everything before the platform suffix
-    let username: String = channel.chars().take(channel.chars().count() - 1).collect();
-    if username.is_empty() {
-        return None;
-    }
-    Some(DirectMessageInfo { username, platform })
 }
 
 pub fn parse_log_line(line: &str) -> Option<LogEvent> {
@@ -247,15 +217,11 @@ pub fn parse_log_line(line: &str) -> Option<LogEvent> {
         }
     } else if line.contains("QUIT :Logged out") {
         return Some(LogEvent::Logout);
-    } else if line.contains("ChatRedux::AddTab: Adding tab with channel name: F") {
-        if let Some(info) = parse_dm_tab(line) {
-            return Some(LogEvent::DmTabOpened(info));
-        }
     } else if let Some(rest) = line.split_once("Net [Info]: IRC out: WHO ").map(|x| x.1) {
         // `IRC out: WHO <username>??? n%nu` — self-initiated DM query
         if let Some(username) = rest.split('?').next() {
             if !username.is_empty() {
-                return Some(LogEvent::DmWhoQuery(username.to_string()));
+                return Some(LogEvent::WhoQuery(username.to_string()));
             }
         }
     }
