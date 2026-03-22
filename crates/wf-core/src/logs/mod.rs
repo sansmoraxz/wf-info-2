@@ -3,6 +3,9 @@ use std::path::PathBuf;
 
 use crate::account::AccountInfo;
 
+mod pattern;
+
+#[derive(Debug)]
 pub enum LogEvent {
     Login(AccountInfo),
     Logout,
@@ -10,8 +13,28 @@ pub enum LogEvent {
     /// The local client issued an `IRC out: WHO <username>` query,
     /// indicating the user initiated a DM conversation.
     DmWhoQuery(String),
+    TradeConfirmPopup(TradeInfo),
+    TradeSuccess,
+    /// Trade failed with wrapped reason
+    TradeFail(String)
 }
 
+
+#[derive(Debug)]
+pub struct TradeInfo {
+    pub sent: Vec<TradeItem>,
+    pub received: Vec<TradeItem>,
+    pub name: String,
+    pub platform: String, // TODO: ENUM
+}
+
+#[derive(Debug)]
+pub struct TradeItem {
+    pub name: String,
+    pub count: u32,
+}
+
+#[derive(Debug)]
 pub struct DirectMessageInfo {
     pub username: String,
     pub platform: &'static str,
