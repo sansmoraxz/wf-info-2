@@ -1,4 +1,5 @@
-#[derive(Debug, Clone)]
+use serde::{Serialize, Deserialize};
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Platform {
     PC = 0,
     XBOX = 1,

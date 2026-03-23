@@ -76,7 +76,7 @@ impl LogProcessingEngine {
 lgreg!(
     TradeConfirmEntry,
     TRADE_CONFIRMATION_DIALOG_REGEX,
-    r"(?ums)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOkCancel\(description=Are you sure you want to accept this trade\? You are offering:(.*)and will receive from (.*)(.) the following:(.*), leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel\)$"
+    r"(?Rums)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOkCancel\(description=Are you sure you want to accept this trade\? You are offering:(.*)and will receive from (.*)(.) the following:(.*), leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel\)$"
 );
 
 fn trade_confirm_item_filter(a: &str) -> Option<TradeItem> {
@@ -117,7 +117,7 @@ impl LogEntryTransformer for TradeConfirmEntry {
             .lines()
             .filter_map(trade_confirm_item_filter)
             .collect();
-        let platform = c.get(3)?.as_str().to_string();
+        let platform = c.get(3)?.as_str().into();
 
         let info = crate::logs::TradeInfo {
             sent,
@@ -132,7 +132,7 @@ impl LogEntryTransformer for TradeConfirmEntry {
 lgreg!(
     TradeSuccessEntry,
     TRADE_SUCCESS_REGEX,
-    r"(?m)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade was successful!, leftItem=/Menu/Confirm_Item_Ok\)$"
+    r"(?Rm)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade was successful!, leftItem=/Menu/Confirm_Item_Ok\)$"
 );
 
 impl LogEntryTransformer for TradeSuccessEntry {
@@ -145,7 +145,7 @@ impl LogEntryTransformer for TradeSuccessEntry {
 lgreg!(
     TradeFailEntry,
     TRADE_FAIL_REGEX,
-    r"(?m)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade failed: ([\w+\s\.]+), leftItem=/Menu/Confirm_Item_Ok\)$"
+    r"(?Rm)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade failed: ([\w+\s\.]+), leftItem=/Menu/Confirm_Item_Ok\)$"
 );
 
 impl LogEntryTransformer for TradeFailEntry {
@@ -159,7 +159,7 @@ impl LogEntryTransformer for TradeFailEntry {
 lgreg!(
     LoginEntry,
     LOGIN_DETAILS_REGEX,
-    r"(?mu)(?m)^\d+\.\d+ Sys \[Info\]: Player name changed to (.*)(.) Clan: (.*)#(\d+) AccountId: (\w+)$"
+    r"(?Rmu)(?m)^\d+\.\d+ Sys \[Info\]: Player name changed to (.*)(.) Clan: (.*)#(\d+) AccountId: (\w+)$"
 );
 
 impl LogEntryTransformer for LoginEntry {
@@ -184,7 +184,7 @@ impl LogEntryTransformer for LoginEntry {
 lgreg!(
     LogoutEntry,
     LOGOUT_DETAILS_REGEX,
-    r"(?mu)(?m)^\d+\.\d+ Net \[Info\]: IRC out: QUIT :Logged out of game$"
+    r"(?Rmu)(?m)^\d+\.\d+ Net \[Info\]: IRC out: QUIT :Logged out of game$"
 );
 
 impl LogEntryTransformer for LogoutEntry {
@@ -197,7 +197,7 @@ impl LogEntryTransformer for LogoutEntry {
 lgreg!(
     DMTabEntry,
     DM_TAB_REGEX,
-    r"(?mu)(?m)^\d+\.\d+ Script \[Info\]: ChatRedux\.lua: ChatRedux::AddTab: Adding tab with channel name: F(.*)(.) to index \d+$"
+    r"(?Rmu)(?m)^\d+\.\d+ Script \[Info\]: ChatRedux\.lua: ChatRedux::AddTab: Adding tab with channel name: F(.*)(.) to index \d+$"
 );
 
 impl LogEntryTransformer for DMTabEntry {
@@ -213,7 +213,7 @@ impl LogEntryTransformer for DMTabEntry {
 lgreg!(
     WhoQueryEntry,
     WHO_REGEX,
-    r"(?mu)(?m)^\d+\.\d+ Net \[Info\]: IRC out: WHO (\w+)\?\?\? n%nu$"
+    r"(?Rmu)(?m)^\d+\.\d+ Net \[Info\]: IRC out: WHO (\w+)\?\?\? n%nu$"
 );
 
 impl LogEntryTransformer for WhoQueryEntry {

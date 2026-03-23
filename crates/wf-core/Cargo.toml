@@ -12,6 +12,7 @@ chrono.workspace = true
 dirs.workspace = true
 log.workspace = true
 rand.workspace = true
+regex = "1.12.3"
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
