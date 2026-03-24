@@ -98,15 +98,16 @@ lgreg!(
 );
 
 fn trade_confirm_item_filter(a: &str) -> Option<TradeItem> {
+    let a = a.trim();
     if a.len() == 0 {
         return None;
     }
     if let Some(csplit) = a.rfind(" x ") {
         if let Some(r) = a.get(csplit + 3..) {
-            if let Ok(count) = r.parse::<u32>() {
+            if let Ok(count) = r.trim().parse::<u32>() {
                 let l = a.get(..csplit)?;
                 return Some(TradeItem {
-                    name: l.to_string(),
+                    name: l.trim().to_string(),
                     count: count,
                 });
             }
