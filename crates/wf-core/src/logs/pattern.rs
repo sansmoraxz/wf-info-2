@@ -6,7 +6,7 @@ use crate::{
     logs::{DirectMessageInfo, LogEvent, TradeItem},
 };
 
-use std::sync::LazyLock;
+use std::{collections::VecDeque, sync::LazyLock};
 
 pub trait RegMatcher {
     fn pattern(&self) -> &Regex;
@@ -38,6 +38,12 @@ pub struct LogProcessingEngine {
     reset: RegexSet,
 }
 
+/// temp struct used for sorting events
+struct LogRecords {
+    pos: usize,
+    event: LogEvent,
+}
+
 impl LogProcessingEngine {
     pub fn new() -> Result<Self, Error> {
         let t0 = Box::new(WhoQueryEntry);
@@ -59,17 +65,29 @@ impl LogProcessingEngine {
     pub fn extract_events(&self, s: &str) -> Vec<LogEvent> {
         let set = &self.reset;
         let container = &self.transformers;
-        set.matches(s)
+        let mut v: VecDeque<_> = set
+            .matches(s)
             .into_iter()
-            .filter_map(|index| {
+            .filter_map(move |cap_idx| {
                 // Dereference the match index to get the corresponding
                 // compiled pattern.
-                if let Some(caps) = &container[index].pattern().captures(s) {
-                    return container[index].transform(caps);
-                }
-                return None;
+                let g = container[cap_idx]
+                    .pattern()
+                    .captures_iter(s)
+                    .filter_map(move |c| {
+                        let pos = c.get(0)?.start();
+                        let event = container[cap_idx].transform(&c)?;
+                        Some(LogRecords { pos, event })
+                    })
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                return Some(g);
             })
-            .collect()
+            .flatten()
+            .collect();
+
+        v.make_contiguous().sort_by(|a, b| a.pos.cmp(&b.pos));
+        v.drain(..).map(move |rec| rec.event).collect()
     }
 }
 
