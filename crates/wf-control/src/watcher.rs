@@ -481,7 +481,11 @@ mod tests {
         let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
         let events = log_processer.extract_events(&lines);
-        assert_eq!(events.len(), 0, "login event not tracked anymore, rely on profile activity");
+        assert_eq!(
+            events.len(),
+            0,
+            "login event not tracked anymore, rely on profile activity"
+        );
 
         // ── T=72-84s: mid-session activity ───────────────────────────────────
         append(

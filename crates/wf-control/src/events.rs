@@ -15,7 +15,7 @@ pub enum DaemonEvent {
     ScreenshotTriggered(ScreenshotTriggeredEvent),
     DmTabOpened(DmTabOpenedEvent),
     TradeSuccess(TradeSuccessEvent),
-    TradeFailed(TradeFailedEvent)
+    TradeFailed(TradeFailedEvent),
 }
 
 impl DaemonEvent {
@@ -29,7 +29,7 @@ impl DaemonEvent {
             DaemonEvent::ScreenshotTriggered(_) => "screenshot_triggered",
             DaemonEvent::DmTabOpened(_) => "dm_tab_opened",
             DaemonEvent::TradeSuccess(_) => "trade_success",
-            DaemonEvent::TradeFailed(_) => "trade_failed"
+            DaemonEvent::TradeFailed(_) => "trade_failed",
         }
     }
 }

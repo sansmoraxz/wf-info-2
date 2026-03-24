@@ -1,6 +1,6 @@
-use std::time::Duration;
 #[cfg(all(feature = "memory", target_os = "linux"))]
 use anyhow::Context;
+use std::time::Duration;
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 use tokio::time::sleep;
 
