@@ -6,7 +6,10 @@ use crate::{
     logs::{DirectMessageInfo, LogEvent, TradeItem},
 };
 
-use std::{collections::VecDeque, sync::LazyLock};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::LazyLock,
+};
 
 pub trait RegMatcher {
     fn pattern(&self) -> &Regex;
@@ -97,44 +100,12 @@ lgreg!(
     r"(?Rums)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOkCancel\(description=Are you sure you want to accept this trade\? You are offering:(.*?)and will receive from (.*?)(.) the following:(.*?), title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel\)$"
 );
 
-fn trade_confirm_item_filter(a: &str) -> Option<TradeItem> {
-    let a = a.trim();
-    if a.len() == 0 {
-        return None;
-    }
-    if let Some(csplit) = a.rfind(" x ") {
-        if let Some(r) = a.get(csplit + 3..) {
-            if let Ok(count) = r.trim().parse::<u32>() {
-                let l = a.get(..csplit)?;
-                return Some(TradeItem {
-                    name: l.trim().to_string(),
-                    count: count,
-                });
-            }
-        }
-    }
-    return Some(TradeItem {
-        name: a.to_string(),
-        count: 1,
-    });
-}
-
 impl LogEntryTransformer for TradeConfirmEntry {
     /// G1: sent, G2: other player name, G3: platform ucode, G4: received
     fn transform(&self, c: &Captures<'_>) -> Option<LogEvent> {
-        let sent = c
-            .get(1)?
-            .as_str()
-            .lines()
-            .filter_map(trade_confirm_item_filter)
-            .collect();
+        let sent = extract_trade_items(c.get(1)?.as_str());
         let name = c.get(2)?.as_str().to_string();
-        let received = c
-            .get(4)?
-            .as_str()
-            .lines()
-            .filter_map(trade_confirm_item_filter)
-            .collect();
+        let received = extract_trade_items(c.get(4)?.as_str());
         let platform = c.get(3)?.as_str().into();
 
         let info = crate::logs::TradeInfo {
@@ -145,6 +116,40 @@ impl LogEntryTransformer for TradeConfirmEntry {
         };
         Some(crate::logs::LogEvent::TradeConfirmPopup(info))
     }
+}
+
+fn trade_confirm_item_filter(a: &str) -> Option<(String, u32)> {
+    let a = a.trim();
+    if a.len() == 0 {
+        return None;
+    }
+    if let Some(csplit) = a.rfind(" x ") {
+        if let Some(r) = a.get(csplit + 3..) {
+            if let Ok(count) = r.trim().parse::<u32>() {
+                let l = a.get(..csplit)?;
+                return Some((l.trim().to_string(), count));
+            }
+        }
+    }
+    return Some((a.to_string(), 1));
+}
+
+fn extract_trade_items(s: &str) -> Vec<TradeItem> {
+    let d: Vec<_> = s.lines().filter_map(trade_confirm_item_filter).collect();
+    let mut m: HashMap<String, u32> = HashMap::new();
+    for e in d {
+        m.entry(e.0)
+            .and_modify(|c| *c += e.1)
+            .or_insert(e.1);
+    }
+    m.drain()
+        .map(|(name, count)| {
+            return TradeItem {
+                name: name,
+                count: count,
+            };
+        })
+        .collect()
 }
 
 lgreg!(

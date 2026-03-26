@@ -855,7 +855,7 @@ mod tests {
             LogEvent::TradeConfirmPopup(trade_info) => {
                 assert_eq!(trade_info.name, "redacted_alpha");
                 assert_eq!(trade_info.sent.len(), 1);
-                assert_eq!(trade_info.received.len(), 5);
+                assert_eq!(trade_info.received.len(), 3);
             },
             _ => panic!("expected TradeConfirmPopup"),
         }
