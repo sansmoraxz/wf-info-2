@@ -420,6 +420,16 @@ mod tests {
     const ACCOUNT_ID: &str = "AREDN0T1CE672";
     const USERNAME: &str = "Jasper123";
 
+    fn append(path: &PathBuf, content: &str) {
+        OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(&path)
+            .unwrap()
+            .write_all(content.as_bytes())
+            .unwrap();
+    }
+
     /// Simulates real game session by appending log chunks to a temp file and
     /// reading incrementally — matching exactly what the watcher does on each
     /// debounce event.
@@ -444,20 +454,10 @@ mod tests {
             let _ = std::fs::remove_file(&path);
         }
 
-        let append = |content: &str| {
-            OpenOptions::new()
-                .append(true)
-                .create(true)
-                .open(&path)
-                .unwrap()
-                .write_all(content.as_bytes())
-                .unwrap();
-        };
-
         let log_processer = LogProcessingEngine::new().unwrap();
 
         let mut read_file = File::open({
-            append("");
+            append(&path, "");
             &path
         })
         .unwrap();
@@ -465,6 +465,7 @@ mod tests {
 
         // ── T=0s: startup diagnostics ────────────────────────────────────────
         append(
+            &path,
             "0.049 Sys [Diag]: Build Label: 2026.02.13.16.03 Retail Windows x64 [Stripped]\r\n\
              0.100 Sys [Info]: Loading packages took 0.0ms\r\n\
              2.272 Net [Info]: RMI::Initialize - Methods: 431\r\n\
@@ -477,7 +478,10 @@ mod tests {
         assert!(entries.is_empty(), "no events expected during startup");
 
         // ── T=72s: account login ──────────────────────────────────────────────
-        append("72.458 Sys [Info]: Logged in Jasper123 (AREDN0T1CE672)\r\n");
+        append(
+            &path,
+            "72.458 Sys [Info]: Logged in Jasper123 (AREDN0T1CE672)\r\n",
+        );
         let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
         let events = log_processer.extract_events(&lines);
@@ -489,6 +493,7 @@ mod tests {
 
         // ── T=72-84s: mid-session activity ───────────────────────────────────
         append(
+            &path,
             "72.459 Sys [Info]: Using profile dir C:\\Warframe\\3684EDC75CAB924E0418513469C6EE3B\r\n\
              72.460 Sys [Info]: Profile hash on read: 6501EF2950164301C055C2A2EC6AD536\r\n",
         );
@@ -502,6 +507,7 @@ mod tests {
 
         // ── T=84s: player name change (account confirmation) ──────────────────
         append(
+            &path,
             "84.333 Sys [Info]: Player name changed to Jasper123 \
              Clan: TestC#963 AccountId: AREDN0T1CE672\r\n",
         );
@@ -523,6 +529,7 @@ mod tests {
 
         // ── T=167s: shutdown sequence + logout ────────────────────────────────
         append(
+            &path,
             "167.073 Sys [Info]: Discord Service has begun shut down.\r\n\
              167.073 Sys [Info]: ===[ Exiting main loop ]===\r\n\
              167.073 Net [Info]: IRC out: QUIT :Logged out of game\r\n",
@@ -557,19 +564,9 @@ mod tests {
             let _ = std::fs::remove_file(&path);
         }
 
-        let append = |content: &str| {
-            OpenOptions::new()
-                .append(true)
-                .create(true)
-                .open(&path)
-                .unwrap()
-                .write_all(content.as_bytes())
-                .unwrap();
-        };
-
         let log_processer = LogProcessingEngine::new().unwrap();
         let mut read_file = File::open({
-            append("");
+            append(&path, "");
             &path
         })
         .unwrap();
@@ -577,12 +574,14 @@ mod tests {
 
         // ── T=0s: startup + login ────────────────────────────────────────────
         append(
+            &path,
             "0.049 Sys [Diag]: Build Label: 2026.02.13.16.03\r\n\
              72.458 Sys [Info]: Logged in sample_account (2baaaaaaaaaaaaaaaaaaaaaa)\r\n",
         );
 
         // ── T=88s: first DM (PC platform \u{E000}) ──────────────────────────
         append(
+            &path,
             "88.663 Net [Info]: IRC out: WHOIS `redacted_alpha\r\n\
              88.906 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_alpha\u{E000} to index 6\r\n\
              88.907 Script [Info]: ChatRedux.lua: Chat: Filters for Fredacted_alpha\u{E000}:\r\n",
@@ -601,6 +600,7 @@ mod tests {
 
         // ── T=113s: second DM (PC) ──────────────────────────────────────────
         append(
+            &path,
             "113.428 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_bravo\u{E000} to index 6\r\n",
         );
         let lines = get_new_lines(&mut read_file, last_pos).unwrap();
@@ -617,6 +617,7 @@ mod tests {
 
         // ── T=125s: third DM + non-DM AddTab noise ──────────────────────────
         append(
+            &path,
             "125.000 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Q_EN_AS to index 3\r\n\
              125.994 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_charlie\u{E000} to index 7\r\n",
         );
@@ -638,6 +639,7 @@ mod tests {
 
         // ── T=161s: fourth DM (Xbox platform \u{E001}) ──────────────────────
         append(
+            &path,
             "161.805 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_delta\u{E001} to index 8\r\n",
         );
         let lines = get_new_lines(&mut read_file, last_pos).unwrap();
@@ -667,19 +669,9 @@ mod tests {
             let _ = std::fs::remove_file(&path);
         }
 
-        let append = |content: &str| {
-            OpenOptions::new()
-                .append(true)
-                .create(true)
-                .open(&path)
-                .unwrap()
-                .write_all(content.as_bytes())
-                .unwrap();
-        };
-
         let log_processer = LogProcessingEngine::new().unwrap();
         let mut read_file = File::open({
-            append("");
+            append(&path, "");
             &path
         })
         .unwrap();
@@ -703,7 +695,7 @@ mod tests {
             };
 
         // ── T=0s: startup ────────────────────────────────────────────────────
-        append("0.049 Sys [Diag]: Build Label: 2026.02.13.16.03\r\n");
+        append(&path, "0.049 Sys [Diag]: Build Label: 2026.02.13.16.03\r\n");
         let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
         let events = filter_events(log_processer.extract_events(&lines), &mut self_initiated);
@@ -711,6 +703,7 @@ mod tests {
 
         // ── T=163s: incoming DM from redacted_echo (no preceding WHO) ───────────────
         append(
+            &path,
             "163.252 Net [Info]: Received IT_FROM_PEER introduction request\r\n\
              163.502 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_echo\u{E000} to index 9\r\n",
         );
@@ -728,6 +721,7 @@ mod tests {
 
         // ── T=344s: tabs closed (irrelevant noise) ──────────────────────────
         append(
+            &path,
             "344.886 Script [Info]: ChatRedux.lua: ChatRedux::RemoveTab: Removing tab with name Fredacted_echo\r\n",
         );
         let lines = get_new_lines(&mut read_file, last_pos).unwrap();
@@ -737,6 +731,7 @@ mod tests {
 
         // ── T=353s: self-initiated DM to redacted_echo (WHO → AddTab) ──────────────
         append(
+            &path,
             "353.340 Net [Info]: IRC out: WHO redacted_echo??? n%nu\r\n\
              353.596 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_echo\u{E000} to index 8\r\n\
              353.599 Net [Info]: IRC out: PRIVMSG redacted_echo :hello\r\n",
@@ -751,6 +746,7 @@ mod tests {
 
         // ── T=360s: another incoming DM from a different user ────────────────
         append(
+            &path,
             "360.100 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_foxtrot\u{E002} to index 9\r\n",
         );
         let lines = get_new_lines(&mut read_file, last_pos).unwrap();
@@ -767,6 +763,7 @@ mod tests {
 
         // ── T=400s: close redacted_echo tab again, then redacted_echo initiates ───────────
         append(
+            &path,
             "400.000 Script [Info]: ChatRedux.lua: ChatRedux::RemoveTab: Removing tab with name Fredacted_echo\r\n",
         );
         let lines = get_new_lines(&mut read_file, last_pos).unwrap();
@@ -776,6 +773,7 @@ mod tests {
 
         // ── T=420s: redacted_echo DMs us again (no WHO — they initiated) ───────────
         append(
+            &path,
             "420.000 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_echo\u{E000} to index 8\r\n",
         );
         let lines = get_new_lines(&mut read_file, last_pos).unwrap();
@@ -791,6 +789,87 @@ mod tests {
                 assert_eq!(info.platform, wf_core::account::Platform::PC);
             }
             _ => panic!("expected DmTabOpened"),
+        }
+    }
+
+    /// Verify trade events flow
+    #[test]
+    fn test_trade_success() {
+        let path = std::env::temp_dir().join(format!(
+            "wf_trade_test_{}.log",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
+        scopeguard::defer! {
+            let _ = std::fs::remove_file(&path);
+        }
+
+        let log_processer = LogProcessingEngine::new().unwrap();
+        let mut read_file = File::open({
+            append(&path, "");
+            &path
+        })
+        .unwrap();
+        let mut last_pos = 0u64;
+
+        // ── T=0s: startup + login ────────────────────────────────────
+        append(
+            &path,
+            "0.049 Sys [Diag]: 2026.03.25.16.45 Retail Windows x64 [Stripped]\r\n\
+             72.458 Sys [Info]: Logged in sample_account (2baaaaaaaaaaaaaaaaaaaaaa)\r\n",
+        );
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
+        let events = log_processer.extract_events(&lines);
+        last_pos = metadata(&path).unwrap().len();
+        assert!(events.is_empty());
+
+        // ── T=478s: trade ────────────────────────────────────────────
+
+        append(
+            &path,
+            "478.779 Script [Info]: Dialog.lua: Dialog::CreateOkCancel(description=Are you sure you want to accept this trade? You are offering:\r\n\
+            \r\n\
+            Platinum x 30\r\n\
+            \r\n\
+            \r\n\
+            \r\n\
+            and will receive from redacted_alpha\u{E000} the following:\r\n\
+            \r\n\
+            Kestrel Prime Blueprint\r\n\
+            \r\n\
+            Kestrel Prime Grip\r\n\
+            \r\n\
+            Kestrel Prime Blade\r\n\
+            \r\n\
+            Kestrel Prime Blade\r\n\
+            \r\n\
+            Kestrel Prime Blade, title= leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel)",
+        );
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
+        let events = log_processer.extract_events(&lines);
+        last_pos = metadata(&path).unwrap().len();
+        assert_eq!(events.len(), 1, "confirm popup only captured");
+        match &events[0] {
+            LogEvent::TradeConfirmPopup(trade_info) => {
+                assert_eq!(trade_info.name, "redacted_alpha");
+                assert_eq!(trade_info.sent.len(), 1);
+                assert_eq!(trade_info.received.len(), 5);
+            },
+            _ => panic!("expected TradeConfirmPopup"),
+        }
+
+        append(
+            &path, 
+        "484.224 Script [Info]: Dialog.lua: Dialog::CreateOk(description=The trade was successful!, title= leftItem=/Menu/Confirm_Item_Ok)
+        ");
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
+        let events = log_processer.extract_events(&lines);
+        assert_eq!(events.len(), 1, "trade success");
+        match &events[0] {
+            LogEvent::TradeSuccess => {},
+            _ => panic!("expected TradeSuccess"),
         }
     }
 }
