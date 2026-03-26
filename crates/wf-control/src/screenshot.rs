@@ -2,7 +2,7 @@ use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use base64::Engine;
 use chrono::{DateTime, Utc};
 use rand::random;

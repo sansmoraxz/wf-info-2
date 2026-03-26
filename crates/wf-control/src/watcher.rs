@@ -6,16 +6,18 @@ use serde_json::json;
 use std::collections::HashSet;
 use std::fs::{File, metadata};
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
+
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::{interval, sleep};
+use wf_core::logs::pattern::LogProcessingEngine;
 
 use crate::{
     AccountLoginEvent, AccountLogoutEvent, DaemonEvent, DmTabOpenedEvent, ProfileUpdatedEvent,
 };
 use wf_core::account::AccountInfo;
-use wf_core::logs::{self, LogEntryParser, LogEvent};
+use wf_core::logs::{self, LogEvent};
 use wf_core::{api, storage};
 
 #[cfg(feature = "memory")]
@@ -27,11 +29,12 @@ struct WatchState {
     last_size: u64,
     last_position: u64,
     current_account_id: Option<String>,
-    log_parser: LogEntryParser,
     read_file: File,
     /// Usernames for which we issued `IRC out: WHO` (self-initiated DMs).
     /// Used to suppress DmTabOpened events for tabs we opened ourselves.
     self_initiated_dms: HashSet<String>,
+    /// Pending trade stored from recent confirmations
+    trades: Option<logs::TradeInfo>,
 }
 
 impl WatchState {
@@ -43,9 +46,9 @@ impl WatchState {
             last_size: initial_size,
             last_position: initial_size,
             current_account_id: None,
-            log_parser: LogEntryParser::new(),
             read_file,
             self_initiated_dms: HashSet::new(),
+            trades: None,
         })
     }
 
@@ -53,7 +56,6 @@ impl WatchState {
         self.last_size = 0;
         self.last_position = 0;
         self.current_account_id = None;
-        self.log_parser.reset();
         self.self_initiated_dms.clear();
         self.read_file = File::open(log_path)?;
         Ok(())
@@ -79,28 +81,120 @@ async fn wait_for_log_file(app_config_path: &PathBuf) -> PathBuf {
     log_path
 }
 
-fn read_new_entries(
-    read_file: &mut File,
-    last_position: u64,
-    log_parser: &mut LogEntryParser,
-) -> Result<Vec<String>, std::io::Error> {
+pub fn get_new_lines(read_file: &mut File, last_position: u64) -> Result<String, std::io::Error> {
     read_file.seek(SeekFrom::Start(last_position))?;
     let reader = BufReader::new(&*read_file);
 
-    let mut complete_entries: Vec<String> = Vec::new();
+    let mut s = String::new();
     for line_result in reader.lines() {
         if let Ok(line) = line_result {
-            log::trace!("New line: {}", line);
-            if let Some(entry) = log_parser.feed_line(&line) {
-                complete_entries.push(entry);
+            s = s + &line + "\r\n";
+        }
+    }
+    log::trace!("New lines: len: {}, lines: {:?}", s.len(), s);
+    Ok(s)
+}
+
+fn event_emitter_fn(
+    mut state: WatchState,
+    entries: Vec<LogEvent>,
+    warframe_pid: Option<u32>,
+) -> WatchState {
+    for entry in entries {
+        match entry {
+            LogEvent::Login(AccountInfo {
+                username,
+                account_id,
+                ..
+            }) => {
+                if state.current_account_id.as_deref() == Some(&account_id) {
+                    log::debug!("Duplicate login event for account_id={}", account_id);
+                    continue;
+                }
+                state.current_account_id = Some(account_id.clone());
+                crate::set_current_account(Some(account_id.clone()));
+                log::info!(
+                    "User logged in: username={}, account_id={}",
+                    username,
+                    account_id
+                );
+                crate::emit(DaemonEvent::AccountLogin(AccountLoginEvent {
+                    timestamp: Utc::now(),
+                    account_id: account_id.clone(),
+                    username: username.clone(),
+                }));
+                tokio::spawn(handle_login_event(account_id, username, warframe_pid));
+            }
+            LogEvent::Logout => {
+                state.current_account_id = None;
+                crate::set_current_account(None);
+                log::info!("User logged out");
+                crate::emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
+                    timestamp: Utc::now(),
+                }));
+                if let Err(e) = storage::delete_profile() {
+                    log::error!("Failed to delete profile: {}", e);
+                }
+            }
+            LogEvent::WhoQuery(username) => {
+                log::debug!("Self-initiated DM WHO query for {}", username);
+                state.self_initiated_dms.insert(username);
+            }
+            LogEvent::DmTabOpened(info) => {
+                if state.self_initiated_dms.remove(&info.username) {
+                    log::debug!("Ignoring self-initiated DM tab for {}", info.username);
+                } else {
+                    log::info!(
+                        "DM tab opened: username={}, platform={:?}",
+                        info.username,
+                        info.platform
+                    );
+                    crate::emit(DaemonEvent::DmTabOpened(DmTabOpenedEvent {
+                        timestamp: Utc::now(),
+                        username: info.username,
+                        platform: info.platform,
+                    }));
+                }
+            }
+            LogEvent::TradeSuccess => {
+                if let Some(trades) = state.trades.take() {
+                    log::info!("Trade confirmed: {:?}", &trades);
+                    let popup = crate::events::TradeConfirmPopupEvent {
+                        sent: trades.sent,
+                        received: trades.received,
+                        name: trades.name,
+                        platform: trades.platform,
+                    };
+                    crate::emit(DaemonEvent::TradeSuccess(crate::events::TradeSuccessEvent(
+                        popup,
+                    )));
+                } else {
+                    log::error!("No trade activity in watch buffer. Something's probably wrong");
+                }
+            }
+            LogEvent::TradeFail(reason) => {
+                if let Some(trades) = state.trades.take() {
+                    log::info!("Trade failed: {:?}, reason: {}", &trades, reason);
+                    let popup = crate::events::TradeConfirmPopupEvent {
+                        sent: trades.sent,
+                        received: trades.received,
+                        name: trades.name,
+                        platform: trades.platform,
+                    };
+                    crate::emit(DaemonEvent::TradeFailed(crate::events::TradeFailedEvent(
+                        popup, reason,
+                    )));
+                } else {
+                    log::error!("No trade in watch buffer. Something's probably wrong");
+                }
+            }
+            LogEvent::TradeConfirmPopup(info) => {
+                log::info!("Got trade request confirmation: {:?}", info);
+                state.trades = Some(info);
             }
         }
     }
-    if let Some(entry) = log_parser.flush() {
-        complete_entries.push(entry);
-    }
-
-    Ok(complete_entries)
+    state
 }
 
 #[cfg_attr(not(feature = "memory"), allow(unused_variables))]
@@ -181,6 +275,7 @@ pub async fn observe_warframe_activity(
     warframe_pid: Option<u32>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Watching for Warframe activity...");
+    let log_processer = LogProcessingEngine::new()?;
 
     let log_path = wait_for_log_file(&app_config_path).await;
     let log_filename = log_path.file_name().ok_or("Invalid log path")?.to_owned();
@@ -248,78 +343,21 @@ pub async fn observe_warframe_activity(
                     state.last_position,
                     current_size
                 );
-                let entries = match read_new_entries(
+                let lines = match get_new_lines(
                     &mut state.read_file,
                     state.last_position,
-                    &mut state.log_parser,
                 ) {
                     Ok(e) => e,
                     Err(e) => {
-                        log::error!("Failed to read log entries: {}", e);
+                        log::error!("Failed to read log lines: {}", e);
                         continue;
                     }
                 };
                 state.last_position = current_size;
-                for entry in entries {
-                    log::trace!("Complete log entry: {}", entry);
-                    match logs::parse_log_line(&entry) {
-                        Some(LogEvent::Login(AccountInfo {
-                            username,
-                            account_id,
-                        })) => {
-                            if state.current_account_id.as_deref() == Some(&account_id) {
-                                log::debug!("Duplicate login event for account_id={}", account_id);
-                                continue;
-                            }
-                            state.current_account_id = Some(account_id.clone());
-                            crate::set_current_account(Some(account_id.clone()));
-                            log::info!(
-                                "User logged in: username={}, account_id={}",
-                                username,
-                                account_id
-                            );
-                            crate::emit(DaemonEvent::AccountLogin(AccountLoginEvent {
-                                timestamp: Utc::now(),
-                                account_id: account_id.clone(),
-                                username: username.clone(),
-                            }));
-                            tokio::spawn(handle_login_event(account_id, username, warframe_pid));
-                        }
-                        Some(LogEvent::Logout) => {
-                            state.current_account_id = None;
-                            crate::set_current_account(None);
-                            log::info!("User logged out");
-                            crate::emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
-                                timestamp: Utc::now(),
-                            }));
-                            if let Err(e) = storage::delete_profile() {
-                                log::error!("Failed to delete profile: {}", e);
-                            }
-                        }
-                        Some(LogEvent::DmWhoQuery(username)) => {
-                            log::debug!("Self-initiated DM WHO query for {}", username);
-                            state.self_initiated_dms.insert(username);
-                        }
-                        Some(LogEvent::DmTabOpened(info)) => {
-                            if state.self_initiated_dms.remove(&info.username) {
-                                log::debug!("Ignoring self-initiated DM tab for {}", info.username);
-                            } else {
-                                log::info!(
-                                    "DM tab opened: username={}, platform={}",
-                                    info.username,
-                                    info.platform
-                                );
-                                crate::emit(DaemonEvent::DmTabOpened(DmTabOpenedEvent {
-                                    timestamp: Utc::now(),
-                                    username: info.username,
-                                    platform: info.platform.to_string(),
-                                }));
-                            }
-                        }
-                        None => {}
-                    }
+                let entries = log_processer.extract_events(&lines);
+                log::debug!("Observed entries: {:?}", entries);
+                state = event_emitter_fn(state, entries, warframe_pid);
                 }
-            }
             _ = interval.tick() => {
                 log::trace!("Polling for EE.log changes");
                 // Handle deletion — wait with backoff for recreation
@@ -354,77 +392,20 @@ pub async fn observe_warframe_activity(
                     state.last_position,
                     current_size
                 );
-                let entries = match read_new_entries(
+                let lines = match get_new_lines(
                     &mut state.read_file,
                     state.last_position,
-                    &mut state.log_parser,
                 ) {
                     Ok(e) => e,
                     Err(e) => {
-                        log::error!("Failed to read log entries: {}", e);
+                        log::error!("Failed to read log lines: {}", e);
                         continue;
                     }
                 };
                 state.last_position = current_size;
-                for entry in entries {
-                    log::trace!("Complete log entry: {}", entry);
-                    match logs::parse_log_line(&entry) {
-                        Some(LogEvent::Login(AccountInfo {
-                            username,
-                            account_id,
-                        })) => {
-                            if state.current_account_id.as_deref() == Some(&account_id) {
-                                log::debug!("Duplicate login event for account_id={}", account_id);
-                                continue;
-                            }
-                            state.current_account_id = Some(account_id.clone());
-                            crate::set_current_account(Some(account_id.clone()));
-                            log::info!(
-                                "User logged in: username={}, account_id={}",
-                                username,
-                                account_id
-                            );
-                            crate::emit(DaemonEvent::AccountLogin(AccountLoginEvent {
-                                timestamp: Utc::now(),
-                                account_id: account_id.clone(),
-                                username: username.clone(),
-                            }));
-                            tokio::spawn(handle_login_event(account_id, username, warframe_pid));
-                        }
-                        Some(LogEvent::Logout) => {
-                            state.current_account_id = None;
-                            crate::set_current_account(None);
-                            log::info!("User logged out");
-                            crate::emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
-                                timestamp: Utc::now(),
-                            }));
-                            if let Err(e) = storage::delete_profile() {
-                                log::error!("Failed to delete profile: {}", e);
-                            }
-                        }
-                        Some(LogEvent::DmWhoQuery(username)) => {
-                            log::debug!("Self-initiated DM WHO query for {}", username);
-                            state.self_initiated_dms.insert(username);
-                        }
-                        Some(LogEvent::DmTabOpened(info)) => {
-                            if state.self_initiated_dms.remove(&info.username) {
-                                log::debug!("Ignoring self-initiated DM tab for {}", info.username);
-                            } else {
-                                log::info!(
-                                    "DM tab opened: username={}, platform={}",
-                                    info.username,
-                                    info.platform
-                                );
-                                crate::emit(DaemonEvent::DmTabOpened(DmTabOpenedEvent {
-                                    timestamp: Utc::now(),
-                                    username: info.username,
-                                    platform: info.platform.to_string(),
-                                }));
-                            }
-                        }
-                        None => {}
-                    }
-                }
+                let entries = log_processer.extract_events(&lines);
+                log::debug!("Observed entries: {:?}", entries);
+                state = event_emitter_fn(state, entries, warframe_pid);
             }
         }
     }
@@ -436,14 +417,17 @@ mod tests {
     use std::fs::OpenOptions;
     use std::io::Write;
 
-    const ACCOUNT_ID: &str = "2baaaaaaaaaaaaaaaaaaaaaa";
-    const USERNAME: &str = "sample_account";
+    const ACCOUNT_ID: &str = "AREDN0T1CE672";
+    const USERNAME: &str = "Jasper123";
 
-    fn parse_events(entries: Vec<String>) -> Vec<LogEvent> {
-        entries
-            .into_iter()
-            .filter_map(|e| logs::parse_log_line(&e))
-            .collect()
+    fn append(path: &PathBuf, content: &str) {
+        OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(&path)
+            .unwrap()
+            .write_all(content.as_bytes())
+            .unwrap();
     }
 
     /// Simulates real game session by appending log chunks to a temp file and
@@ -453,7 +437,7 @@ mod tests {
     /// Timeline (timestamps are seconds from game start, from
     /// testdata/logs/login-logout-shutdown.log):
     ///   T=0s   startup diagnostics  → no events
-    ///   T=72s  "Logged in"          → Login event
+    ///   T=72s  "Logged in"          → Login event (no longer tracked)
     ///   T=72-84s mid-session lines  → no events
     ///   T=84s  "Player name changed"→ Login event (account confirmation)
     ///   T=167s shutdown + QUIT      → Logout event
@@ -470,19 +454,10 @@ mod tests {
             let _ = std::fs::remove_file(&path);
         }
 
-        let append = |content: &str| {
-            OpenOptions::new()
-                .append(true)
-                .create(true)
-                .open(&path)
-                .unwrap()
-                .write_all(content.as_bytes())
-                .unwrap();
-        };
+        let log_processer = LogProcessingEngine::new().unwrap();
 
-        let mut parser = LogEntryParser::new();
         let mut read_file = File::open({
-            append("");
+            append(&path, "");
             &path
         })
         .unwrap();
@@ -490,52 +465,55 @@ mod tests {
 
         // ── T=0s: startup diagnostics ────────────────────────────────────────
         append(
+            &path,
             "0.049 Sys [Diag]: Build Label: 2026.02.13.16.03 Retail Windows x64 [Stripped]\r\n\
              0.100 Sys [Info]: Loading packages took 0.0ms\r\n\
              2.272 Net [Info]: RMI::Initialize - Methods: 431\r\n\
              71.730 Gfx [Error]: Flushed 63 active-prefetch PSO jobs\r\n",
         );
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
-        assert!(
-            parse_events(entries).is_empty(),
-            "no events expected during startup"
-        );
+        let entries = log_processer.extract_events(&lines);
+
+        assert!(entries.is_empty(), "no events expected during startup");
 
         // ── T=72s: account login ──────────────────────────────────────────────
-        append("72.458 Sys [Info]: Logged in sample_account (2baaaaaaaaaaaaaaaaaaaaaa)\r\n");
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        append(
+            &path,
+            "72.458 Sys [Info]: Logged in Jasper123 (AREDN0T1CE672)\r\n",
+        );
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
-        let events = parse_events(entries);
-        assert_eq!(events.len(), 1, "expected exactly one login event");
-        match &events[0] {
-            LogEvent::Login(info) => {
-                assert_eq!(info.account_id, ACCOUNT_ID);
-                assert_eq!(info.username, USERNAME);
-            }
-            _ => panic!("expected Login"),
-        }
+        let events = log_processer.extract_events(&lines);
+        assert_eq!(
+            events.len(),
+            0,
+            "login event not tracked anymore, rely on profile activity"
+        );
 
         // ── T=72-84s: mid-session activity ───────────────────────────────────
         append(
+            &path,
             "72.459 Sys [Info]: Using profile dir C:\\Warframe\\3684EDC75CAB924E0418513469C6EE3B\r\n\
              72.460 Sys [Info]: Profile hash on read: 6501EF2950164301C055C2A2EC6AD536\r\n",
         );
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
+        let events = log_processer.extract_events(&lines);
         assert!(
-            parse_events(entries).is_empty(),
+            events.is_empty(),
             "no events expected during mid-session activity"
         );
 
         // ── T=84s: player name change (account confirmation) ──────────────────
         append(
-            "84.333 Sys [Info]: Player name changed to sample_account \
-             Clan: TestC#963 AccountId: 2baaaaaaaaaaaaaaaaaaaaaa\r\n",
+            &path,
+            "84.333 Sys [Info]: Player name changed to Jasper123 \
+             Clan: TestC#963 AccountId: AREDN0T1CE672\r\n",
         );
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
-        let events = parse_events(entries);
+        let events = log_processer.extract_events(&lines);
         assert_eq!(
             events.len(),
             1,
@@ -551,12 +529,13 @@ mod tests {
 
         // ── T=167s: shutdown sequence + logout ────────────────────────────────
         append(
+            &path,
             "167.073 Sys [Info]: Discord Service has begun shut down.\r\n\
              167.073 Sys [Info]: ===[ Exiting main loop ]===\r\n\
              167.073 Net [Info]: IRC out: QUIT :Logged out of game\r\n",
         );
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
-        let events = parse_events(entries);
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
+        let events = log_processer.extract_events(&lines);
         assert_eq!(events.len(), 1, "expected exactly one logout event");
         assert!(
             matches!(events[0], LogEvent::Logout),
@@ -564,14 +543,14 @@ mod tests {
         );
     }
 
-    /// Simulates DM tab events arriving during a session.
-    ///
-    /// Timeline:
-    ///   T=0s    startup + login
-    ///   T=88s   first DM tab (redacted_alpha, PC)
-    ///   T=113s  second DM tab (redacted_bravo, PC)
-    ///   T=125s  third DM tab (redacted_charlie, PC) + non-DM chat noise
-    ///   T=161s  fourth DM tab (redacted_delta, PC)
+    // /// Simulates DM tab events arriving during a session.
+    // ///
+    // /// Timeline:
+    // ///   T=0s    startup + login
+    // ///   T=88s   first DM tab (redacted_alpha, PC)
+    // ///   T=113s  second DM tab (redacted_bravo, PC)
+    // ///   T=125s  third DM tab (redacted_charlie, PC) + non-DM chat noise
+    // ///   T=161s  fourth DM tab (redacted_delta, PC)
     #[test]
     fn test_incremental_dm_tab_detection() {
         let path = std::env::temp_dir().join(format!(
@@ -585,19 +564,9 @@ mod tests {
             let _ = std::fs::remove_file(&path);
         }
 
-        let append = |content: &str| {
-            OpenOptions::new()
-                .append(true)
-                .create(true)
-                .open(&path)
-                .unwrap()
-                .write_all(content.as_bytes())
-                .unwrap();
-        };
-
-        let mut parser = LogEntryParser::new();
+        let log_processer = LogProcessingEngine::new().unwrap();
         let mut read_file = File::open({
-            append("");
+            append(&path, "");
             &path
         })
         .unwrap();
@@ -605,57 +574,56 @@ mod tests {
 
         // ── T=0s: startup + login ────────────────────────────────────────────
         append(
+            &path,
             "0.049 Sys [Diag]: Build Label: 2026.02.13.16.03\r\n\
              72.458 Sys [Info]: Logged in sample_account (2baaaaaaaaaaaaaaaaaaaaaa)\r\n",
         );
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
-        last_pos = metadata(&path).unwrap().len();
-        let events = parse_events(entries);
-        assert_eq!(events.len(), 1);
-        assert!(matches!(events[0], LogEvent::Login(_)));
 
         // ── T=88s: first DM (PC platform \u{E000}) ──────────────────────────
         append(
+            &path,
             "88.663 Net [Info]: IRC out: WHOIS `redacted_alpha\r\n\
              88.906 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_alpha\u{E000} to index 6\r\n\
              88.907 Script [Info]: ChatRedux.lua: Chat: Filters for Fredacted_alpha\u{E000}:\r\n",
         );
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
-        let events = parse_events(entries);
+        let events = log_processer.extract_events(&lines);
         assert_eq!(events.len(), 1, "expected one DM event for redacted_alpha");
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_alpha");
-                assert_eq!(info.platform, "pc");
+                assert_eq!(info.platform, wf_core::account::Platform::PC);
             }
             _ => panic!("expected DirectMessage"),
         }
 
         // ── T=113s: second DM (PC) ──────────────────────────────────────────
         append(
+            &path,
             "113.428 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_bravo\u{E000} to index 6\r\n",
         );
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
-        let events = parse_events(entries);
+        let events = log_processer.extract_events(&lines);
         assert_eq!(events.len(), 1, "expected one DM event for redacted_bravo");
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_bravo");
-                assert_eq!(info.platform, "pc");
+                assert_eq!(info.platform, wf_core::account::Platform::PC);
             }
             _ => panic!("expected DirectMessage"),
         }
 
         // ── T=125s: third DM + non-DM AddTab noise ──────────────────────────
         append(
+            &path,
             "125.000 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Q_EN_AS to index 3\r\n\
              125.994 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_charlie\u{E000} to index 7\r\n",
         );
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
-        let events = parse_events(entries);
+        let events = log_processer.extract_events(&lines);
         assert_eq!(
             events.len(),
             1,
@@ -664,22 +632,23 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_charlie");
-                assert_eq!(info.platform, "pc");
+                assert_eq!(info.platform, wf_core::account::Platform::PC);
             }
             _ => panic!("expected DirectMessage"),
         }
 
         // ── T=161s: fourth DM (Xbox platform \u{E001}) ──────────────────────
         append(
+            &path,
             "161.805 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_delta\u{E001} to index 8\r\n",
         );
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
-        let events = parse_events(entries);
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
+        let events = log_processer.extract_events(&lines);
         assert_eq!(events.len(), 1, "expected one DM event for redacted_delta");
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_delta");
-                assert_eq!(info.platform, "xbox");
+                assert_eq!(info.platform, wf_core::account::Platform::XBOX);
             }
             _ => panic!("expected DirectMessage"),
         }
@@ -700,19 +669,9 @@ mod tests {
             let _ = std::fs::remove_file(&path);
         }
 
-        let append = |content: &str| {
-            OpenOptions::new()
-                .append(true)
-                .create(true)
-                .open(&path)
-                .unwrap()
-                .write_all(content.as_bytes())
-                .unwrap();
-        };
-
-        let mut parser = LogEntryParser::new();
+        let log_processer = LogProcessingEngine::new().unwrap();
         let mut read_file = File::open({
-            append("");
+            append(&path, "");
             &path
         })
         .unwrap();
@@ -725,7 +684,7 @@ mod tests {
                 events
                     .into_iter()
                     .filter(|e| match e {
-                        LogEvent::DmWhoQuery(username) => {
+                        LogEvent::WhoQuery(username) => {
                             initiated.insert(username.clone());
                             false
                         }
@@ -736,47 +695,50 @@ mod tests {
             };
 
         // ── T=0s: startup ────────────────────────────────────────────────────
-        append("0.049 Sys [Diag]: Build Label: 2026.02.13.16.03\r\n");
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        append(&path, "0.049 Sys [Diag]: Build Label: 2026.02.13.16.03\r\n");
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
-        let events = filter_events(parse_events(entries), &mut self_initiated);
+        let events = filter_events(log_processer.extract_events(&lines), &mut self_initiated);
         assert!(events.is_empty());
 
         // ── T=163s: incoming DM from redacted_echo (no preceding WHO) ───────────────
         append(
+            &path,
             "163.252 Net [Info]: Received IT_FROM_PEER introduction request\r\n\
              163.502 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_echo\u{E000} to index 9\r\n",
         );
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
-        let events = filter_events(parse_events(entries), &mut self_initiated);
+        let events = filter_events(log_processer.extract_events(&lines), &mut self_initiated);
         assert_eq!(events.len(), 1, "incoming DM should produce an event");
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_echo");
-                assert_eq!(info.platform, "pc");
+                assert_eq!(info.platform, wf_core::account::Platform::PC);
             }
             _ => panic!("expected DmTabOpened"),
         }
 
         // ── T=344s: tabs closed (irrelevant noise) ──────────────────────────
         append(
+            &path,
             "344.886 Script [Info]: ChatRedux.lua: ChatRedux::RemoveTab: Removing tab with name Fredacted_echo\r\n",
         );
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
-        let events = filter_events(parse_events(entries), &mut self_initiated);
+        let events = filter_events(log_processer.extract_events(&lines), &mut self_initiated);
         assert!(events.is_empty());
 
         // ── T=353s: self-initiated DM to redacted_echo (WHO → AddTab) ──────────────
         append(
+            &path,
             "353.340 Net [Info]: IRC out: WHO redacted_echo??? n%nu\r\n\
              353.596 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_echo\u{E000} to index 8\r\n\
              353.599 Net [Info]: IRC out: PRIVMSG redacted_echo :hello\r\n",
         );
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
-        let events = filter_events(parse_events(entries), &mut self_initiated);
+        let events = filter_events(log_processer.extract_events(&lines), &mut self_initiated);
         assert!(
             events.is_empty(),
             "self-initiated DM (preceded by WHO) should be filtered out"
@@ -784,35 +746,38 @@ mod tests {
 
         // ── T=360s: another incoming DM from a different user ────────────────
         append(
+            &path,
             "360.100 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_foxtrot\u{E002} to index 9\r\n",
         );
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
-        let events = filter_events(parse_events(entries), &mut self_initiated);
+        let events = filter_events(log_processer.extract_events(&lines), &mut self_initiated);
         assert_eq!(events.len(), 1, "incoming DM should produce an event");
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_foxtrot");
-                assert_eq!(info.platform, "playstation");
+                assert_eq!(info.platform, wf_core::account::Platform::PLAYSTATION);
             }
             _ => panic!("expected DmTabOpened"),
         }
 
         // ── T=400s: close redacted_echo tab again, then redacted_echo initiates ───────────
         append(
+            &path,
             "400.000 Script [Info]: ChatRedux.lua: ChatRedux::RemoveTab: Removing tab with name Fredacted_echo\r\n",
         );
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         last_pos = metadata(&path).unwrap().len();
-        let events = filter_events(parse_events(entries), &mut self_initiated);
+        let events = filter_events(log_processer.extract_events(&lines), &mut self_initiated);
         assert!(events.is_empty());
 
         // ── T=420s: redacted_echo DMs us again (no WHO — they initiated) ───────────
         append(
+            &path,
             "420.000 Script [Info]: ChatRedux.lua: ChatRedux::AddTab: Adding tab with channel name: Fredacted_echo\u{E000} to index 8\r\n",
         );
-        let entries = read_new_entries(&mut read_file, last_pos, &mut parser).unwrap();
-        let events = filter_events(parse_events(entries), &mut self_initiated);
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
+        let events = filter_events(log_processer.extract_events(&lines), &mut self_initiated);
         assert_eq!(
             events.len(),
             1,
@@ -821,9 +786,90 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_echo");
-                assert_eq!(info.platform, "pc");
+                assert_eq!(info.platform, wf_core::account::Platform::PC);
             }
             _ => panic!("expected DmTabOpened"),
+        }
+    }
+
+    /// Verify trade events flow
+    #[test]
+    fn test_trade_success() {
+        let path = std::env::temp_dir().join(format!(
+            "wf_trade_test_{}.log",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
+        scopeguard::defer! {
+            let _ = std::fs::remove_file(&path);
+        }
+
+        let log_processer = LogProcessingEngine::new().unwrap();
+        let mut read_file = File::open({
+            append(&path, "");
+            &path
+        })
+        .unwrap();
+        let mut last_pos = 0u64;
+
+        // ── T=0s: startup + login ────────────────────────────────────
+        append(
+            &path,
+            "0.049 Sys [Diag]: 2026.03.25.16.45 Retail Windows x64 [Stripped]\r\n\
+             72.458 Sys [Info]: Logged in sample_account (2baaaaaaaaaaaaaaaaaaaaaa)\r\n",
+        );
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
+        let events = log_processer.extract_events(&lines);
+        last_pos = metadata(&path).unwrap().len();
+        assert!(events.is_empty());
+
+        // ── T=478s: trade ────────────────────────────────────────────
+
+        append(
+            &path,
+            "478.779 Script [Info]: Dialog.lua: Dialog::CreateOkCancel(description=Are you sure you want to accept this trade? You are offering:\r\n\
+            \r\n\
+            Platinum x 30\r\n\
+            \r\n\
+            \r\n\
+            \r\n\
+            and will receive from redacted_alpha\u{E000} the following:\r\n\
+            \r\n\
+            Kestrel Prime Blueprint\r\n\
+            \r\n\
+            Kestrel Prime Grip\r\n\
+            \r\n\
+            Kestrel Prime Blade\r\n\
+            \r\n\
+            Kestrel Prime Blade\r\n\
+            \r\n\
+            Kestrel Prime Blade, title= leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel)",
+        );
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
+        let events = log_processer.extract_events(&lines);
+        last_pos = metadata(&path).unwrap().len();
+        assert_eq!(events.len(), 1, "confirm popup only captured");
+        match &events[0] {
+            LogEvent::TradeConfirmPopup(trade_info) => {
+                assert_eq!(trade_info.name, "redacted_alpha");
+                assert_eq!(trade_info.sent.len(), 1);
+                assert_eq!(trade_info.received.len(), 3);
+            }
+            _ => panic!("expected TradeConfirmPopup"),
+        }
+
+        append(
+            &path,
+        "484.224 Script [Info]: Dialog.lua: Dialog::CreateOk(description=The trade was successful!, title= leftItem=/Menu/Confirm_Item_Ok)
+        ");
+        let lines = get_new_lines(&mut read_file, last_pos).unwrap();
+        let events = log_processer.extract_events(&lines);
+        assert_eq!(events.len(), 1, "trade success");
+        match &events[0] {
+            LogEvent::TradeSuccess => {}
+            _ => panic!("expected TradeSuccess"),
         }
     }
 }

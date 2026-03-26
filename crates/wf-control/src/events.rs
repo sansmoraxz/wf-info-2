@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use wf_core::{account::Platform, logs::TradeItem};
 
 /// All daemon events that can be emitted and subscribed to.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -13,6 +14,8 @@ pub enum DaemonEvent {
     ProfileUpdated(ProfileUpdatedEvent),
     ScreenshotTriggered(ScreenshotTriggeredEvent),
     DmTabOpened(DmTabOpenedEvent),
+    TradeSuccess(TradeSuccessEvent),
+    TradeFailed(TradeFailedEvent),
 }
 
 impl DaemonEvent {
@@ -25,6 +28,8 @@ impl DaemonEvent {
             DaemonEvent::ProfileUpdated(_) => "profile_updated",
             DaemonEvent::ScreenshotTriggered(_) => "screenshot_triggered",
             DaemonEvent::DmTabOpened(_) => "dm_tab_opened",
+            DaemonEvent::TradeSuccess(_) => "trade_success",
+            DaemonEvent::TradeFailed(_) => "trade_failed",
         }
     }
 }
@@ -71,8 +76,22 @@ pub struct ScreenshotTriggeredEvent {
 pub struct DmTabOpenedEvent {
     pub timestamp: DateTime<Utc>,
     pub username: String,
-    pub platform: String,
+    pub platform: Platform,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TradeConfirmPopupEvent {
+    pub sent: Vec<TradeItem>,
+    pub received: Vec<TradeItem>,
+    pub name: String,
+    pub platform: Platform,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TradeSuccessEvent(pub TradeConfirmPopupEvent);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TradeFailedEvent(pub TradeConfirmPopupEvent, pub String);
 
 /// Wire format for pushing events to subscribed clients.
 #[derive(Debug, Clone, Serialize, Deserialize)]
