@@ -138,9 +138,7 @@ fn extract_trade_items(s: &str) -> Vec<TradeItem> {
     let d: Vec<_> = s.lines().filter_map(trade_confirm_item_filter).collect();
     let mut m: HashMap<String, u32> = HashMap::new();
     for e in d {
-        m.entry(e.0)
-            .and_modify(|c| *c += e.1)
-            .or_insert(e.1);
+        m.entry(e.0).and_modify(|c| *c += e.1).or_insert(e.1);
     }
     m.drain()
         .map(|(name, count)| {

@@ -856,19 +856,19 @@ mod tests {
                 assert_eq!(trade_info.name, "redacted_alpha");
                 assert_eq!(trade_info.sent.len(), 1);
                 assert_eq!(trade_info.received.len(), 3);
-            },
+            }
             _ => panic!("expected TradeConfirmPopup"),
         }
 
         append(
-            &path, 
+            &path,
         "484.224 Script [Info]: Dialog.lua: Dialog::CreateOk(description=The trade was successful!, title= leftItem=/Menu/Confirm_Item_Ok)
         ");
         let lines = get_new_lines(&mut read_file, last_pos).unwrap();
         let events = log_processer.extract_events(&lines);
         assert_eq!(events.len(), 1, "trade success");
         match &events[0] {
-            LogEvent::TradeSuccess => {},
+            LogEvent::TradeSuccess => {}
             _ => panic!("expected TradeSuccess"),
         }
     }
