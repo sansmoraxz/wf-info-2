@@ -94,7 +94,7 @@ impl LogProcessingEngine {
 lgreg!(
     TradeConfirmEntry,
     TRADE_CONFIRMATION_DIALOG_REGEX,
-    r"(?Rums)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOkCancel\(description=Are you sure you want to accept this trade\? You are offering:(.*?)and will receive from (.*?)(.) the following:(.*?), leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel\)$"
+    r"(?Rums)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOkCancel\(description=Are you sure you want to accept this trade\? You are offering:(.*?)and will receive from (.*?)(.) the following:(.*?), title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel\)$"
 );
 
 fn trade_confirm_item_filter(a: &str) -> Option<TradeItem> {
@@ -150,7 +150,7 @@ impl LogEntryTransformer for TradeConfirmEntry {
 lgreg!(
     TradeSuccessEntry,
     TRADE_SUCCESS_REGEX,
-    r"(?Rm)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade was successful!, leftItem=/Menu/Confirm_Item_Ok\)$"
+    r"(?Rm)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade was successful!, title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok\)$"
 );
 
 impl LogEntryTransformer for TradeSuccessEntry {
@@ -163,7 +163,7 @@ impl LogEntryTransformer for TradeSuccessEntry {
 lgreg!(
     TradeFailEntry,
     TRADE_FAIL_REGEX,
-    r"(?Rmu)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade failed: (.+?), leftItem=/Menu/Confirm_Item_Ok\)$"
+    r"(?Rmu)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade failed: (.+?), title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok\)$"
 );
 
 impl LogEntryTransformer for TradeFailEntry {
