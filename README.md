@@ -221,6 +221,7 @@ The daemon emits events that clients can subscribe to via the `subscribe` operat
 | `WF_INFO_API_TCP` | TCP endpoint for control API |
 | `WF_INFO_API_UNIX` | Unix socket endpoint (Unix only) |
 | `WF_INFO_API_NPIPE` | Named pipe endpoint (Windows only) |
+| `WF_SKIP_AUTO_CALLBACK` | Skip callback events viz. market status set and auto inventory state updates |
 | `WF_ITEM_DATA_BASE_URL` | Override the upstream base URL used to refresh cached item-data JSON files |
 | `WARFRAME_APP_CONFIG` | Custom path to Warframe config directory |
 | `RUST_LOG` | Logging level (e.g., `debug`, `info`) |
@@ -230,4 +231,3 @@ The daemon emits events that clients can subscribe to via the `subscribe` operat
 | Variable | Description |
 |----------|-------------|
 | `WF_PROFILE_KEY` | Required at build time; used as the encryption key source for cached profile/auth data |
-

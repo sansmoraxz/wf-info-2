@@ -99,6 +99,7 @@ fn event_emitter_fn(
     mut state: WatchState,
     entries: Vec<LogEvent>,
     warframe_pid: Option<u32>,
+    skip_cb: bool,
 ) -> WatchState {
     for entry in entries {
         match entry {
@@ -123,7 +124,12 @@ fn event_emitter_fn(
                     account_id: account_id.clone(),
                     username: username.clone(),
                 }));
-                tokio::spawn(handle_login_event(account_id, username, warframe_pid));
+                tokio::spawn(handle_login_event(
+                    account_id,
+                    username,
+                    warframe_pid,
+                    skip_cb,
+                ));
             }
             LogEvent::Logout => {
                 state.current_account_id = None;
@@ -132,9 +138,6 @@ fn event_emitter_fn(
                 crate::emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
                     timestamp: Utc::now(),
                 }));
-                if let Err(e) = storage::delete_profile() {
-                    log::error!("Failed to delete profile: {}", e);
-                }
             }
             LogEvent::WhoQuery(username) => {
                 log::debug!("Self-initiated DM WHO query for {}", username);
@@ -197,9 +200,13 @@ fn event_emitter_fn(
     state
 }
 
-#[cfg_attr(not(feature = "memory"), allow(unused_variables))]
-async fn handle_login_event(acc_id: String, user_name: String, known_pid: Option<u32>) {
-    // 1. Fetch profile
+async fn handle_login_event(
+    acc_id: String,
+    user_name: String,
+    known_pid: Option<u32>,
+    skip_cb: bool,
+) {
+    // 1. Fetch profile (safe action generally)
     match api::fetch_player_profile(&acc_id).await {
         Ok(profile) => {
             log::info!("Fetched profile for {}: {:?}", user_name, profile);
@@ -219,7 +226,9 @@ async fn handle_login_event(acc_id: String, user_name: String, known_pid: Option
 
     // 2. Scan memory & fetch inventory (if memory feature enabled)
     #[cfg(feature = "memory")]
-    if let Some(pid) = known_pid.or_else(process::get_warframe_pid) {
+    if skip_cb {
+        log::info!("Skipping auto fetch inventory. Fetch manually if required.");
+    } else if let Some(pid) = known_pid.or_else(process::get_warframe_pid) {
         log::info!(
             "Warframe running (PID: {}), attempting to extract inventory auth...",
             pid
@@ -273,6 +282,7 @@ async fn handle_login_event(acc_id: String, user_name: String, known_pid: Option
 pub async fn observe_warframe_activity(
     app_config_path: PathBuf,
     warframe_pid: Option<u32>,
+    skip_cb: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Watching for Warframe activity...");
     let log_processer = LogProcessingEngine::new()?;
@@ -356,7 +366,7 @@ pub async fn observe_warframe_activity(
                 state.last_position = current_size;
                 let entries = log_processer.extract_events(&lines);
                 log::debug!("Observed entries: {:?}", entries);
-                state = event_emitter_fn(state, entries, warframe_pid);
+                state = event_emitter_fn(state, entries, warframe_pid, skip_cb);
                 }
             _ = interval.tick() => {
                 log::trace!("Polling for EE.log changes");
@@ -405,7 +415,7 @@ pub async fn observe_warframe_activity(
                 state.last_position = current_size;
                 let entries = log_processer.extract_events(&lines);
                 log::debug!("Observed entries: {:?}", entries);
-                state = event_emitter_fn(state, entries, warframe_pid);
+                state = event_emitter_fn(state, entries, warframe_pid, skip_cb);
             }
         }
     }
