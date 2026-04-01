@@ -28,6 +28,10 @@ const INVENTORY_IV: [u8; 16] = [
     49, 50, 70, 71, 66, 51, 54, 45, 76, 69, 51, 45, 113, 61, 57, 0,
 ];
 
+const PROFILE_FILE: &str = "userstats.dat";
+const AUTH_TOKEN_FILE: &str = "auth_token.dat";
+const INVENTORY_FILE: &str = "inventory_data.dat";
+
 pub fn save_encrypted_profile(profile: &ProfileData) -> anyhow::Result<()> {
     let json = serde_json::to_vec(profile).context("Failed to serialize profile")?;
 
@@ -53,7 +57,7 @@ pub fn save_encrypted_profile(profile: &ProfileData) -> anyhow::Result<()> {
     final_data.extend_from_slice(&nonce_bytes);
     final_data.extend_from_slice(&ciphertext);
 
-    let file_path = app_cache_dir()?.join("userstats.dat");
+    let file_path = app_cache_dir()?.join(PROFILE_FILE);
     let mut file = File::create(&file_path).context("Failed to create output file")?;
     file.write_all(&final_data)
         .context("Failed to write to file")?;
@@ -64,7 +68,7 @@ pub fn save_encrypted_profile(profile: &ProfileData) -> anyhow::Result<()> {
 }
 
 pub fn delete_profile() -> anyhow::Result<()> {
-    let file_path = app_cache_dir()?.join("userstats.dat");
+    let file_path = app_cache_dir()?.join(PROFILE_FILE);
 
     if file_path.exists() {
         fs::remove_file(&file_path).context("Failed to delete profile file")?;
@@ -74,8 +78,7 @@ pub fn delete_profile() -> anyhow::Result<()> {
     Ok(())
 }
 
-// ── AES-256-GCM helpers (shared by profile & auth token) ──
-
+// AES-256-GCM helpers (shared by profile & auth token)
 fn gcm_encrypt(plaintext: &[u8]) -> anyhow::Result<Vec<u8>> {
     let mut hasher = Sha256::new();
     hasher.update(RAW_KEY_ENV.as_bytes());
@@ -114,8 +117,7 @@ fn gcm_decrypt(data: &[u8]) -> anyhow::Result<Vec<u8>> {
     Ok(plaintext)
 }
 
-// ── Auth token storage (AES-256-GCM) ──
-
+/// Auth token storage (AES-256-GCM)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthTokenData {
     pub access_token: String,
@@ -129,23 +131,23 @@ pub struct AuthTokenData {
 pub fn save_auth_token(data: &AuthTokenData) -> anyhow::Result<()> {
     let json = serde_json::to_vec(data).context("Failed to serialize auth token")?;
     let encrypted = gcm_encrypt(&json)?;
-    let file_path = app_cache_dir()?.join("auth_token.dat");
-    fs::write(&file_path, encrypted).context("Failed to write auth_token.dat")?;
+    let file_path = app_cache_dir()?.join(AUTH_TOKEN_FILE);
+    fs::write(&file_path, encrypted).context(format!("Failed to write {:?}", file_path))?;
     log::info!("Saved encrypted auth token to {}", file_path.display());
     Ok(())
 }
 
 pub fn read_auth_token() -> anyhow::Result<AuthTokenData> {
-    let file_path = app_cache_dir()?.join("auth_token.dat");
-    let data = fs::read(&file_path).context("Failed to read auth_token.dat")?;
+    let file_path = app_cache_dir()?.join(AUTH_TOKEN_FILE);
+    let data = fs::read(&file_path).context(format!("Failed to read {:?}", file_path))?;
     let plaintext = gcm_decrypt(&data)?;
     serde_json::from_slice(&plaintext).context("Failed to parse auth token JSON")
 }
 
 pub fn delete_auth_token() -> anyhow::Result<()> {
-    let file_path = app_cache_dir()?.join("auth_token.dat");
+    let file_path = app_cache_dir()?.join(AUTH_TOKEN_FILE);
     if file_path.exists() {
-        fs::remove_file(&file_path).context("Failed to delete auth token file")?;
+        fs::remove_file(&file_path).context(format!("Failed to delete {:?}", file_path))?;
         log::info!("Deleted auth token at {}", file_path.display());
     }
     Ok(())
@@ -157,9 +159,9 @@ pub fn save_inventory(inventory: &inventory::Inventory) -> anyhow::Result<()> {
 
     let ciphertext = encrypt_inventory_bytes(inventory)?;
 
-    let dat_path = app_cache_dir.join("inventoryData.dat");
-    fs::write(&dat_path, ciphertext).context("Failed to write inventoryData.dat")?;
-    log::info!("Saved encrypted inventory to {}", dat_path.display());
+    let file_path = app_cache_dir.join(INVENTORY_FILE);
+    fs::write(&file_path, ciphertext).context(format!("Failed to write {:?}", file_path))?;
+    log::info!("Saved encrypted inventory to {}", file_path.display());
 
     if let Err(e) = touch_inventory_updated(None) {
         log::warn!("Failed to update inventory metadata: {}", e);
@@ -196,8 +198,8 @@ pub fn decrypt_inventory_bytes(data: &[u8]) -> anyhow::Result<inventory::Invento
 }
 
 pub fn read_inventory() -> anyhow::Result<inventory::Inventory> {
-    let dat_path = app_cache_dir()?.join("inventoryData.dat");
-    let data = fs::read(&dat_path).context("Failed to read inventoryData.dat")?;
+    let file_path = app_cache_dir()?.join(INVENTORY_FILE);
+    let data = fs::read(&file_path).context(format!("Failed to read {:?}", file_path))?;
     decrypt_inventory_bytes(&data)
 }
 

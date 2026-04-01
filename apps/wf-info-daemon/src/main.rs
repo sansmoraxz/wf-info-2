@@ -71,9 +71,14 @@ impl ServerArgs {
     }
 }
 
+fn skip_auto_events() -> bool {
+    std::env::var("WF_SKIP_AUTO_CALLBACK").map_or(false, |v| v.eq_ignore_ascii_case("TRUE"))
+}
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
+    let skip_cb = skip_auto_events();
 
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     log::info!("Warframe Account Info Scanner started");
@@ -154,30 +159,34 @@ async fn main() {
     };
 
     // Auto-status: set WFM status based on game activity
-    tokio::spawn(async {
-        use wf_control::DaemonEvent;
-        let mut rx = wf_control::subscribe();
-        loop {
-            match rx.recv().await {
-                Ok(DaemonEvent::AccountLogin(_)) => {
-                    wf_control::wfm_auth::set_status_if_connected("ingame").await;
+    if skip_cb {
+        log::info!("Skipping auto set of warframe market status...");
+    } else {
+        tokio::spawn(async {
+            use wf_control::DaemonEvent;
+            let mut rx = wf_control::subscribe();
+            loop {
+                match rx.recv().await {
+                    Ok(DaemonEvent::AccountLogin(_)) => {
+                        wf_control::wfm_auth::set_status_if_connected("ingame").await;
+                    }
+                    Ok(DaemonEvent::AccountLogout(_)) => {
+                        wf_control::wfm_auth::set_status_if_connected("invisible").await;
+                    }
+                    Ok(_) => {}
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        log::warn!("WFM auto-status missed {} events", n);
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 }
-                Ok(DaemonEvent::AccountLogout(_)) => {
-                    wf_control::wfm_auth::set_status_if_connected("invisible").await;
-                }
-                Ok(_) => {}
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                    log::warn!("WFM auto-status missed {} events", n);
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
             }
-        }
-    });
+        });
+    }
 
     // Start watching the log file
     let log_watcher = tokio::spawn(async move {
         if let Err(e) =
-            wf_control::watcher::observe_warframe_activity(wf_config, warframe_pid).await
+            wf_control::watcher::observe_warframe_activity(wf_config, warframe_pid, skip_cb).await
         {
             log::error!("Error watching file: {}", e);
         }
