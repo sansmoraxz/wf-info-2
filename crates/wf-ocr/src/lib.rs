@@ -7,6 +7,15 @@ use std::{
     collections::HashMap,
 };
 
+mod ocr;
+
+pub use ocr::new_default_ocr_engine;
+
+#[test]
+fn test_load_ocr_engine() {
+    new_default_ocr_engine();
+}
+
 pub struct RelicRecognizer<'a> {
     ocr_engine: &'a OcrEngine,
     pub start_x: u32,

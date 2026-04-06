@@ -7,6 +7,7 @@ edition.workspace = true
 anyhow.workspace = true
 log.workspace = true
 serde.workspace = true
+rust-embed.workspace = true
 ocr-rs = "2.2.2"
 image = "0.25"
 imageproc = "0.25"

@@ -1,0 +1,1 @@
+Sourced from https://github.com/zibo-chen/rust-paddle-ocr/tree/v2.2.2/models
