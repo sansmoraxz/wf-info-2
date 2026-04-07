@@ -19,6 +19,11 @@ pub enum LogEvent {
     TradeSuccess,
     /// Trade failed with wrapped reason
     TradeFail(String),
+    /// Relic crack countdown start (user should take screenshot and run ocr)
+    /// There's no other known way to extract rewards directly yet
+    RelicOpen,
+    // Relic crack countdown end
+    RelicClose
 }
 
 #[derive(Debug)]

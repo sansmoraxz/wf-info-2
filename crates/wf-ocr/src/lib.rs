@@ -10,7 +10,7 @@ use std::{
 
 mod ocr;
 
-pub use ocr::{new_default_ocr_engine, DEFAULT_OCR_ENGINE};
+pub use ocr::{DEFAULT_OCR_ENGINE, new_default_ocr_engine};
 
 pub fn load_png_image(bytes: Vec<u8>) -> anyhow::Result<image::DynamicImage> {
     let mut reader = ImageReader::new(Cursor::new(bytes));
