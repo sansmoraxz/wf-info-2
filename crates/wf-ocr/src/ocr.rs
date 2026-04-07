@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use ocr_rs::OcrEngine;
 
 #[derive(rust_embed::Embed)]
@@ -13,6 +15,8 @@ pub fn new_default_ocr_engine() -> OcrEngine {
     )
     .unwrap()
 }
+
+pub static DEFAULT_OCR_ENGINE: LazyLock<OcrEngine> = LazyLock::new(|| new_default_ocr_engine());
 
 #[test]
 fn engine_load_should_not_panic() {

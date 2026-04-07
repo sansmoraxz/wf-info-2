@@ -1,19 +1,21 @@
 use itertools::Itertools;
 
-use image::DynamicImage;
+use image::{DynamicImage, ImageReader};
 use ocr_rs::{OcrEngine, OcrResult_};
 use std::{
     cmp::{max, min},
     collections::HashMap,
+    io::Cursor,
 };
 
 mod ocr;
 
-pub use ocr::new_default_ocr_engine;
+pub use ocr::{new_default_ocr_engine, DEFAULT_OCR_ENGINE};
 
-#[test]
-fn test_load_ocr_engine() {
-    new_default_ocr_engine();
+pub fn load_png_image(bytes: Vec<u8>) -> anyhow::Result<image::DynamicImage> {
+    let mut reader = ImageReader::new(Cursor::new(bytes));
+    reader.set_format(image::ImageFormat::Png);
+    Ok(reader.decode()?)
 }
 
 pub struct RelicRecognizer<'a> {
