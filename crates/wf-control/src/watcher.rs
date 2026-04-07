@@ -6,13 +6,16 @@ use serde_json::json;
 use std::collections::HashSet;
 use std::fs::{File, metadata};
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
+use wf_ocr::{RelicRecognizer, load_png_image};
 
 use std::path::PathBuf;
+use std::sync::LazyLock;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::{interval, sleep};
 use wf_core::logs::pattern::LogProcessingEngine;
 
+use crate::screenshot::capture_screen;
 use crate::{
     AccountLoginEvent, AccountLogoutEvent, DaemonEvent, DmTabOpenedEvent, ProfileUpdatedEvent,
 };
@@ -35,6 +38,8 @@ struct WatchState {
     self_initiated_dms: HashSet<String>,
     /// Pending trade stored from recent confirmations
     trades: Option<logs::TradeInfo>,
+    // Relic selection open
+    relic_countdown: bool,
 }
 
 impl WatchState {
@@ -49,6 +54,7 @@ impl WatchState {
             read_file,
             self_initiated_dms: HashSet::new(),
             trades: None,
+            relic_countdown: false,
         })
     }
 
@@ -56,8 +62,10 @@ impl WatchState {
         self.last_size = 0;
         self.last_position = 0;
         self.current_account_id = None;
-        self.self_initiated_dms.clear();
         self.read_file = File::open(log_path)?;
+        self.self_initiated_dms.clear();
+        self.trades = None;
+        self.relic_countdown = false;
         Ok(())
     }
 }
@@ -195,11 +203,21 @@ fn event_emitter_fn(
                 log::info!("Got trade request confirmation: {:?}", info);
                 state.trades = Some(info);
             }
+            LogEvent::RelicOpen => {
+                log::info!("Relic selection window opened");
+                state.relic_countdown = true;
+                tokio::spawn(handle_relic_selection_popup());
+            }
+            LogEvent::RelicClose => {
+                state.relic_countdown = false;
+                log::info!("Relic selection window closed");
+            }
         }
     }
     state
 }
 
+#[allow(unused)]
 async fn handle_login_event(
     acc_id: String,
     user_name: String,
@@ -276,6 +294,31 @@ async fn handle_login_event(
         }
     } else {
         log::info!("Warframe not running - skipping inventory fetch");
+    }
+}
+
+static RELIC_RECOG_ENGINE: LazyLock<wf_ocr::RelicRecognizer> =
+    LazyLock::new(|| RelicRecognizer::new(&wf_ocr::DEFAULT_OCR_ENGINE));
+
+async fn handle_relic_selection_popup() {
+    // wait for potential lag in ui
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    let res = capture_screen().await;
+    match res {
+        Ok((png_bytes, _)) => match load_png_image(png_bytes) {
+            Ok(img) => match RELIC_RECOG_ENGINE.recognize_and_list(&img) {
+                Ok(mut v) => {
+                    log::info!("Got relic items: {:?}", v);
+                    let filtered: Vec<String> = v.drain(..).map(|e| e.text).collect();
+                    let popup = crate::events::RelicSelectionPopup { items: filtered };
+                    crate::emit(DaemonEvent::RelicSelectionOpen(popup));
+                }
+                Err(e) => log::error!("OCR failed on screenshot image {}", e),
+            },
+            Err(e) => log::error!("Failed to parse screenshot image {}", e),
+        },
+        Err(e) => log::error!("Failed to capture screenshot for relic ocr {}", e),
     }
 }
 

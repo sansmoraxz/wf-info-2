@@ -16,11 +16,11 @@ use super::broadcaster;
 use super::events::{DaemonEvent, ScreenshotTriggeredEvent};
 use super::utils::parse_params;
 
-/// Capture the screen and return the screenshot content as a base64-encoded string
+/// Capture the screen and return the screenshot content as png
 /// Note: this will do a fullscreen capture
 /// Please ensure that the game window is in focus
 #[cfg(unix)]
-async fn capture_screen() -> Result<(String, String)> {
+pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
     use ashpd::desktop::screenshot::Screenshot;
 
     let response = Screenshot::request()
@@ -38,14 +38,13 @@ async fn capture_screen() -> Result<(String, String)> {
         .map_err(|_| anyhow::anyhow!("Invalid screenshot URI"))?;
     let png_bytes = fs::read(&path).context("Failed to read screenshot file")?;
 
-    let base64_content = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
-    Ok((base64_content, "image/png".to_string()))
+    Ok((png_bytes, "image/png".to_string()))
 }
 
-/// Capture the screen and return the screenshot content as a base64-encoded string
+/// Capture the screen and return the screenshot content as png
 /// TODO: need to test on windows
 #[cfg(windows)]
-async fn capture_screen() -> Result<(String, String)> {
+pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
     use image::{ImageBuffer, Rgb};
     use win_screenshot::prelude::*;
 
@@ -61,8 +60,7 @@ async fn capture_screen() -> Result<(String, String)> {
         image::ImageFormat::Png,
     )?;
 
-    let base64_content = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
-    Ok((base64_content, "image/png".to_string()))
+    Ok((png_bytes, "image/png".to_string()))
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -83,9 +81,10 @@ pub(crate) async fn handle_screenshot_trigger(params: Option<Value>) -> Result<V
     let params: ScreenshotParams = parse_params(params)?;
 
     // Capture screenshot first
-    let (content, content_type) = capture_screen().await?;
+    let (bytes, content_type) = capture_screen().await?;
+    let base64_content = base64::engine::general_purpose::STANDARD.encode(&bytes);
 
-    let event = record_screenshot_event(params.metadata, content, content_type)?;
+    let event = record_screenshot_event(params.metadata, base64_content, content_type)?;
 
     // Emit screenshot triggered event
     broadcaster::emit(DaemonEvent::ScreenshotTriggered(ScreenshotTriggeredEvent {

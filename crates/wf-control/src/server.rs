@@ -260,6 +260,19 @@ where
     Ok(())
 }
 
+async fn event_writer<W>(event: crate::DaemonEvent, writer: &mut W) -> Result<()>
+where
+    W: AsyncWrite + Unpin,
+{
+    let msg = EventMessage::from_event(event);
+    let payload =
+        serde_json::to_string(&msg).context(format!("Failed to serialize event {:?}", &msg))?;
+    writer.write_all(payload.as_bytes()).await?;
+    writer.write_all(b"\n").await?;
+
+    Ok(())
+}
+
 async fn handle_subscription_mode<R, W>(
     lines: &mut tokio::io::Lines<BufReader<R>>,
     writer: &mut W,
@@ -278,11 +291,9 @@ where
                 match event_result {
                     Ok(event) => {
                         if filter.matches(&event) {
-                            let msg = EventMessage::from_event(event);
-                            let payload = serde_json::to_string(&msg)
-                                .context("Failed to serialize event")?;
-                            writer.write_all(payload.as_bytes()).await?;
-                            writer.write_all(b"\n").await?;
+                            if let Err(e) = event_writer(event, writer).await  {
+                                log::error!("Error publishing event {:?}", e);
+                            }
                         }
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {

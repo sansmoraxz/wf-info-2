@@ -1,0 +1,21 @@
+[package]
+name = "wf-ocr"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+serde.workspace = true
+rust-embed.workspace = true
+ocr-rs = "2.2.2"
+image = "0.25"
+imageproc = "0.25"
+itertools.workspace = true
+
+[features]
+default = ["vulkan"]
+vulkan = ["ocr-rs/vulkan"] # Vulkan API - cross platform (recomended)
+cuda = ["ocr-rs/cuda"] # NVIDIA GPU only
+opencl = ["ocr-rs/vulkan"] # Cross platform - recomended for very old gpu without vulkan
+opengl = ["ocr-rs/opengl"] # Linux only

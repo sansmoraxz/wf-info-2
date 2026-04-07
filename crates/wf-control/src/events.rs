@@ -16,6 +16,8 @@ pub enum DaemonEvent {
     DmTabOpened(DmTabOpenedEvent),
     TradeSuccess(TradeSuccessEvent),
     TradeFailed(TradeFailedEvent),
+    RelicSelectionOpen(RelicSelectionPopup),
+    RelicSelectionClosed,
 }
 
 impl DaemonEvent {
@@ -30,6 +32,8 @@ impl DaemonEvent {
             DaemonEvent::DmTabOpened(_) => "dm_tab_opened",
             DaemonEvent::TradeSuccess(_) => "trade_success",
             DaemonEvent::TradeFailed(_) => "trade_failed",
+            DaemonEvent::RelicSelectionOpen(_) => "relic_opened",
+            DaemonEvent::RelicSelectionClosed => "relic_closed",
         }
     }
 }
@@ -89,6 +93,11 @@ pub struct TradeConfirmPopupEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TradeSuccessEvent(pub TradeConfirmPopupEvent);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelicSelectionPopup {
+    pub items: Vec<String>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TradeFailedEvent(pub TradeConfirmPopupEvent, pub String);

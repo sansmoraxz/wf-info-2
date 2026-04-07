@@ -56,7 +56,9 @@ impl LogProcessingEngine {
         let t4 = Box::new(LoginEntry);
         let t5 = Box::new(LogoutEntry);
         let t6 = Box::new(DMTabEntry);
-        let v: Vec<Box<dyn LogEntryTransformer>> = vec![t0, t1, t2, t3, t4, t5, t6];
+        let t7 = Box::new(RelicRewardOpen);
+        let t8 = Box::new(RelicRewardClose);
+        let v: Vec<Box<dyn LogEntryTransformer>> = vec![t0, t1, t2, t3, t4, t5, t6, t7, t8];
         let rv: Vec<&str> = v.iter().map(|p| p.pattern().as_str()).collect();
         let reset: RegexSet = RegexSet::new(rv)?;
         Ok(Self {
@@ -242,5 +244,31 @@ impl LogEntryTransformer for WhoQueryEntry {
     fn transform(&self, c: &Captures) -> Option<LogEvent> {
         let username = c.get(1)?.as_str().to_string();
         Some(LogEvent::WhoQuery(username))
+    }
+}
+
+lgreg!(
+    RelicRewardOpen,
+    RELIC_OPEN_REGEX,
+    r"(?Rm)\d+\.\d+ Script \[Info\]: ProjectionRewardChoice\.lua: Got rewards$"
+);
+
+impl LogEntryTransformer for RelicRewardOpen {
+    /// implicit
+    fn transform(&self, _: &Captures) -> Option<LogEvent> {
+        Some(LogEvent::RelicOpen)
+    }
+}
+
+lgreg!(
+    RelicRewardClose,
+    RELIC_CLOSE_REGEX,
+    r"(?Rm)\d+\.\d+ Script \[Info\]: ProjectionRewardChoice\.lua: Relic timer closed$"
+);
+
+impl LogEntryTransformer for RelicRewardClose {
+    /// implicit
+    fn transform(&self, _: &Captures) -> Option<LogEvent> {
+        Some(LogEvent::RelicClose)
     }
 }
