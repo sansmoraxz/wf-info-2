@@ -24,6 +24,7 @@ uuid.workspace = true
 wf-core = { path = "../wf-core" }
 wf-inventory = { path = "../wf-inventory" }
 wf-itemdata = { path = "../wf-itemdata" }
+wf-ocr = { path = "../wf-ocr" }
 
 [features]
 default = []

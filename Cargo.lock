@@ -4278,6 +4278,7 @@ dependencies = [
  "wf-core",
  "wf-inventory",
  "wf-itemdata",
+ "wf-ocr",
  "win-screenshot",
 ]
 

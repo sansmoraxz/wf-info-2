@@ -23,7 +23,7 @@ pub enum LogEvent {
     /// There's no other known way to extract rewards directly yet
     RelicOpen,
     // Relic crack countdown end
-    RelicClose
+    RelicClose,
 }
 
 #[derive(Debug)]
