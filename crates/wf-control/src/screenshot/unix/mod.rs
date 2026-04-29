@@ -1,4 +1,5 @@
 mod common;
+mod gnome;
 mod hyprland;
 mod kde;
 mod niri;
@@ -19,6 +20,7 @@ static BACKEND_CACHE: LazyLock<Mutex<Option<BackendCacheEntry>>> =
 enum CaptureBackend {
     X11Window { window_id: String },
     KdeSpectacle,
+    GnomeScreenCastPortal,
     NiriScreenshot,
     Grim { locator: WindowLocator },
     Unsupported { reason: &'static str },
@@ -51,10 +53,10 @@ pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
         resolution
     });
 
-    capture_with_backend(warframe_pid, &resolution)
+    capture_with_backend(warframe_pid, &resolution).await
 }
 
-fn capture_with_backend(
+async fn capture_with_backend(
     warframe_pid: u32,
     resolution: &BackendResolution,
 ) -> Result<(Vec<u8>, String)> {
@@ -71,6 +73,16 @@ fn capture_with_backend(
             );
             let bytes = kde::capture_active_window(warframe_pid).inspect_err(|err| {
                 log::error!("KDE Wayland capture failed: {}", err);
+            })?;
+            Ok((bytes, "image/png".to_string()))
+        }
+        CaptureBackend::GnomeScreenCastPortal => {
+            log::info!(
+                "Capturing Warframe on Unix backend: environment={:?}, capture=GnomeScreenCastPortal",
+                resolution.environment
+            );
+            let bytes = gnome::capture_window().await.inspect_err(|err| {
+                log::error!("GNOME ScreenCast portal capture failed: {}", err);
             })?;
             Ok((bytes, "image/png".to_string()))
         }
@@ -122,9 +134,7 @@ fn resolve_backend(warframe_pid: u32) -> BackendResolution {
         EnvironmentKind::X11 => CaptureBackend::Unsupported {
             reason: "X11 was detected but no Warframe X11/XWayland window was found",
         },
-        EnvironmentKind::GnomeWayland => CaptureBackend::Unsupported {
-            reason: "GNOME Wayland window-only capture is not available with the installed tools; run Warframe under XWayland/X11 or use a supported compositor backend",
-        },
+        EnvironmentKind::GnomeWayland => CaptureBackend::GnomeScreenCastPortal,
         EnvironmentKind::OtherWayland => CaptureBackend::Unsupported {
             reason: "Wayland window-only capture is unsupported for this desktop with the installed tools; run Warframe under XWayland/X11 or use a supported compositor backend",
         },
