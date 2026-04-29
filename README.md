@@ -200,7 +200,7 @@ The `wf-info-cli` binary provides a convenient interface to the daemon.
 ./target/release/wf-info-cli wfm-signout
 ```
 
-_**Note:** The screenshot will only do fullscreen capture, to avoid unintended consequences, ensure that the game window is active when capturing._
+_**Note:** Screenshot capture targets the Warframe window when possible. X11/XWayland uses X11 window capture, KDE Wayland uses KWin's provided apis and spectacle cli, and Hyprland uses a compositor geometry capture path. Niri uses it's native screenshot interface. Other Wayland desktops may fail with an explicit unsupported error instead of falling back to fullscreen capture._
 
 ## Events
 

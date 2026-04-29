@@ -16,52 +16,15 @@ use super::broadcaster;
 use super::events::{DaemonEvent, ScreenshotTriggeredEvent};
 use super::utils::parse_params;
 
-/// Capture the screen and return the screenshot content as png
-/// Note: this will do a fullscreen capture
-/// Please ensure that the game window is in focus
 #[cfg(unix)]
-pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
-    use ashpd::desktop::screenshot::Screenshot;
-
-    let response = Screenshot::request()
-        .interactive(false)
-        .modal(false)
-        .send()
-        .await
-        .context("Failed to request screenshot")?
-        .response()
-        .context("Screenshot request failed")?;
-
-    let path = response
-        .uri()
-        .to_file_path()
-        .map_err(|_| anyhow::anyhow!("Invalid screenshot URI"))?;
-    let png_bytes = fs::read(&path).context("Failed to read screenshot file")?;
-
-    Ok((png_bytes, "image/png".to_string()))
-}
-
-/// Capture the screen and return the screenshot content as png
-/// TODO: need to test on windows
+mod unix;
 #[cfg(windows)]
-pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
-    use image::{ImageBuffer, Rgb};
-    use win_screenshot::prelude::*;
+mod windows;
 
-    let buf = capture_display().map_err(|e| anyhow!("Failed to capture display: {:?}", e))?;
-
-    let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
-        ImageBuffer::from_raw(buf.width as u32, buf.height as u32, buf.pixels)
-            .context("Failed to create image buffer")?;
-
-    let mut png_bytes = Vec::new();
-    img.write_to(
-        &mut std::io::Cursor::new(&mut png_bytes),
-        image::ImageFormat::Png,
-    )?;
-
-    Ok((png_bytes, "image/png".to_string()))
-}
+#[cfg(unix)]
+pub(crate) use unix::capture_screen;
+#[cfg(windows)]
+pub(crate) use windows::capture_screen;
 
 #[derive(Debug, Deserialize, Default)]
 pub(crate) struct ScreenshotParams {
@@ -80,13 +43,11 @@ pub(crate) struct ScreenshotEvent {
 pub(crate) async fn handle_screenshot_trigger(params: Option<Value>) -> Result<Value> {
     let params: ScreenshotParams = parse_params(params)?;
 
-    // Capture screenshot first
     let (bytes, content_type) = capture_screen().await?;
     let base64_content = base64::engine::general_purpose::STANDARD.encode(&bytes);
 
     let event = record_screenshot_event(params.metadata, base64_content, content_type)?;
 
-    // Emit screenshot triggered event
     broadcaster::emit(DaemonEvent::ScreenshotTriggered(ScreenshotTriggeredEvent {
         timestamp: event.timestamp,
         event_id: event.id.clone(),
