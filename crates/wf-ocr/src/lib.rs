@@ -12,10 +12,10 @@ mod ocr;
 
 pub use ocr::{DEFAULT_OCR_ENGINE, new_default_ocr_engine};
 
-pub fn load_png_image(bytes: Vec<u8>) -> anyhow::Result<image::DynamicImage> {
-    let mut reader = ImageReader::new(Cursor::new(bytes));
-    reader.set_format(image::ImageFormat::Png);
-    Ok(reader.decode()?)
+pub fn load_image(bytes: Vec<u8>) -> anyhow::Result<image::DynamicImage> {
+    Ok(ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()?
+        .decode()?)
 }
 
 pub struct RelicRecognizer<'a> {

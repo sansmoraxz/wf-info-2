@@ -84,13 +84,16 @@ The daemon exposes a line-delimited JSON protocol over TCP, Unix sockets, or Win
 
 ### Configuration
 
-Set endpoint via CLI flags or environment variables:
+Set endpoint and daemon behavior via CLI flags or environment variables:
 
 | Flag | Environment Variable | Example |
 |------|---------------------|---------|
 | `--tcp` | `WF_INFO_API_TCP` | `127.0.0.1:47410` |
 | `--unix` | `WF_INFO_API_UNIX` | `${XDG_RUNTIME_DIR}/wf-info-2/control.sock` |
 | `--npipe` | `WF_INFO_API_NPIPE` | `wf-info-2-control` |
+| `--native-wayland-screenshot` | `WF_INFO_SCREENSHOT_NATIVE_WAYLAND` | `true` |
+
+`--native-wayland-screenshot` only works when the daemon is built with the `native-wayland-screenshot` Cargo feature.
 
 **Defaults (when no options are set):**
 - Linux/macOS: Unix socket at `${XDG_RUNTIME_DIR}/wf-info-2/control.sock`
@@ -200,7 +203,13 @@ The `wf-info-cli` binary provides a convenient interface to the daemon.
 ./target/release/wf-info-cli wfm-signout
 ```
 
-_**Note:** The screenshot will only do fullscreen capture, to avoid unintended consequences, ensure that the game window is active when capturing._
+> **Note:** Screenshot capture targets the Warframe window when possible and returns `image/bmp`. X11 and XWayland use the X11 screenshot API, while native Wayland uses the PipeWire screencast protocol.
+>
+> In a Wayland session, XWayland/X11 capture is preferred when Warframe is visible through XWayland. Start the daemon with `--native-wayland-screenshot` or set `WF_INFO_SCREENSHOT_NATIVE_WAYLAND=true` to force native Wayland/PipeWire capture instead.
+>
+> The first screenshot capture after launch may be slow as it has to setup the necessary infrastructure (e.g. PipeWire screencast stream), lookup the Warframe window, and so on. Subsequent captures should be much faster.
+>
+> Native Wayland capture must be built with the `native-wayland-screenshot` Cargo feature and requires a working `xdg-desktop-portal` ScreenCast backend, PipeWire, and the GStreamer PipeWire plugin (`pipewiresrc`). It will ask for screencapture permission on the first screenshot request, so make sure to allow it.
 
 ## Events
 
@@ -221,6 +230,7 @@ The daemon emits events that clients can subscribe to via the `subscribe` operat
 | `WF_INFO_API_TCP` | TCP endpoint for control API |
 | `WF_INFO_API_UNIX` | Unix socket endpoint (Unix only) |
 | `WF_INFO_API_NPIPE` | Named pipe endpoint (Windows only) |
+| `WF_INFO_SCREENSHOT_NATIVE_WAYLAND` | Force native Wayland/PipeWire screenshot capture in Wayland sessions instead of preferring XWayland/X11 |
 | `WF_SKIP_AUTO_CALLBACK` | Skip callback events viz. market status set and auto inventory state updates |
 | `WF_ITEM_DATA_BASE_URL` | Override the upstream base URL used to refresh cached item-data JSON files |
 | `WARFRAME_APP_CONFIG` | Custom path to Warframe config directory |

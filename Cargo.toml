@@ -46,11 +46,6 @@ uuid = { version = "1", features = ["v4"] }
 itertools = "0.14.0"
 rust-embed = "8.11.0"
 
-[workspace.dependencies.ashpd]
-version = "0.12"
-default-features = false
-features = ["tokio"]
-
 [workspace.dependencies.win-screenshot]
 version = "4.0"
 
