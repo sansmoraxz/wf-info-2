@@ -93,6 +93,8 @@ Set endpoint and daemon behavior via CLI flags or environment variables:
 | `--npipe` | `WF_INFO_API_NPIPE` | `wf-info-2-control` |
 | `--native-wayland-screenshot` | `WF_INFO_SCREENSHOT_NATIVE_WAYLAND` | `true` |
 
+`--native-wayland-screenshot` only works when the daemon is built with the `native-wayland-screenshot` Cargo feature.
+
 **Defaults (when no options are set):**
 - Linux/macOS: Unix socket at `${XDG_RUNTIME_DIR}/wf-info-2/control.sock`
 - Windows: Named pipe `\\.\pipe\wf-info-2-control`
@@ -207,7 +209,7 @@ The `wf-info-cli` binary provides a convenient interface to the daemon.
 >
 > The first screenshot capture after launch may be slow as it has to setup the necessary infrastructure (e.g. PipeWire screencast stream), lookup the Warframe window, and so on. Subsequent captures should be much faster.
 >
-> Native Wayland capture requires a working `xdg-desktop-portal` ScreenCast backend, PipeWire, and the GStreamer PipeWire plugin (`pipewiresrc`). It will ask for screencapture permission on the first screenshot request, so make sure to allow it.
+> Native Wayland capture must be built with the `native-wayland-screenshot` Cargo feature and requires a working `xdg-desktop-portal` ScreenCast backend, PipeWire, and the GStreamer PipeWire plugin (`pipewiresrc`). It will ask for screencapture permission on the first screenshot request, so make sure to allow it.
 
 ## Events
 

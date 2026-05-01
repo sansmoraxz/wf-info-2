@@ -15,3 +15,4 @@ wf-itemdata = { path = "../../crates/wf-itemdata" }
 [features]
 default = []
 memory = ["wf-control/memory", "wf-core/memory"]
+native-wayland-screenshot = ["wf-control/native-wayland-screenshot"]

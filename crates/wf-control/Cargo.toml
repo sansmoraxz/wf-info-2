@@ -29,15 +29,21 @@ wf-ocr = { path = "../wf-ocr" }
 [features]
 default = []
 memory = ["wf-core/memory"]
+native-wayland-screenshot = [
+    "dep:ashpd",
+    "dep:gstreamer",
+    "dep:gstreamer-app",
+    "dep:gstreamer-video",
+]
 
 [dev-dependencies]
 scopeguard.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-ashpd.workspace = true
-gstreamer = "0.25"
-gstreamer-app = "0.25"
-gstreamer-video = "0.25"
+ashpd = { version = "0.13", features = ["tokio"], optional = true }
+gstreamer = { version = "0.25", optional = true }
+gstreamer-app = { version = "0.25", optional = true }
+gstreamer-video = { version = "0.25", optional = true }
 x11rb.workspace = true
 
 [target.'cfg(windows)'.dependencies]

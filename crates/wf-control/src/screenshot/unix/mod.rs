@@ -1,4 +1,5 @@
 mod common;
+#[cfg(feature = "native-wayland-screenshot")]
 mod portal;
 mod x11;
 
@@ -18,9 +19,14 @@ static WARFRAME_PID_CACHE: LazyLock<Mutex<Option<u32>>> = LazyLock::new(|| Mutex
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum CaptureBackend {
-    X11Window { window_id: String },
+    X11Window {
+        window_id: String,
+    },
+    #[cfg(feature = "native-wayland-screenshot")]
     WaylandScreenCastPortal,
-    Unsupported { reason: &'static str },
+    Unsupported {
+        reason: &'static str,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,6 +119,7 @@ async fn capture_with_backend(
             );
             Ok((bytes, "image/bmp".to_string()))
         }
+        #[cfg(feature = "native-wayland-screenshot")]
         CaptureBackend::WaylandScreenCastPortal => {
             log::info!(
                 "Capturing Warframe on Unix backend: environment={:?}, capture=WaylandScreenCastPortal",
@@ -199,7 +206,18 @@ fn resolve_backend_from_probe(
         EnvironmentKind::XWayland => CaptureBackend::Unsupported {
             reason: "XWayland was detected but no Warframe X11/XWayland window was found",
         },
-        EnvironmentKind::Wayland => CaptureBackend::WaylandScreenCastPortal,
+        EnvironmentKind::Wayland => {
+            #[cfg(feature = "native-wayland-screenshot")]
+            {
+                CaptureBackend::WaylandScreenCastPortal
+            }
+            #[cfg(not(feature = "native-wayland-screenshot"))]
+            {
+                CaptureBackend::Unsupported {
+                    reason: "Native Wayland screenshot capture requires building with the 'native-wayland-screenshot' feature, or run Warframe under XWayland/X11",
+                }
+            }
+        }
         EnvironmentKind::Unknown => CaptureBackend::Unsupported {
             reason: "Unsupported Unix display environment; run Warframe under XWayland/X11 or use a Wayland session with xdg-desktop-portal ScreenCast window capture",
         },
@@ -289,6 +307,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "native-wayland-screenshot")]
     #[test]
     fn wayland_without_x11_window_uses_portal_capture() {
         let resolution = resolve_backend_from_probe(EnvironmentKind::Wayland, None);
@@ -298,6 +317,18 @@ mod tests {
             resolution.capture_backend,
             CaptureBackend::WaylandScreenCastPortal
         );
+    }
+
+    #[cfg(not(feature = "native-wayland-screenshot"))]
+    #[test]
+    fn wayland_without_x11_window_is_unsupported_without_native_wayland_feature() {
+        let resolution = resolve_backend_from_probe(EnvironmentKind::Wayland, None);
+
+        assert_eq!(resolution.environment, EnvironmentKind::Wayland);
+        assert!(matches!(
+            resolution.capture_backend,
+            CaptureBackend::Unsupported { .. }
+        ));
     }
 
     #[test]
