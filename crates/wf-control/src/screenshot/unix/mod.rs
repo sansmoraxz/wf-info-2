@@ -1,8 +1,5 @@
 mod common;
-mod gnome;
-mod hyprland;
-mod kde;
-mod niri;
+mod portal;
 mod x11;
 
 use std::sync::{LazyLock, Mutex};
@@ -11,7 +8,7 @@ use anyhow::{Result, anyhow, bail};
 
 use wf_core::process;
 
-use self::common::{EnvironmentKind, detect_wayland_environment};
+use self::common::{EnvironmentKind, detect_unix_environment};
 
 static BACKEND_CACHE: LazyLock<Mutex<Option<BackendCacheEntry>>> =
     LazyLock::new(|| Mutex::new(None));
@@ -19,16 +16,8 @@ static BACKEND_CACHE: LazyLock<Mutex<Option<BackendCacheEntry>>> =
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum CaptureBackend {
     X11Window { window_id: String },
-    KdeSpectacle,
-    GnomeScreenCastPortal,
-    NiriScreenshot,
-    Grim { locator: WindowLocator },
+    WaylandScreenCastPortal,
     Unsupported { reason: &'static str },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum WindowLocator {
-    Hyprland,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,7 +46,7 @@ pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
 }
 
 async fn capture_with_backend(
-    warframe_pid: u32,
+    _warframe_pid: u32,
     resolution: &BackendResolution,
 ) -> Result<(Vec<u8>, String)> {
     match &resolution.capture_backend {
@@ -66,47 +55,13 @@ async fn capture_with_backend(
             let bytes = x11::capture_window(window_id)?;
             Ok((bytes, "image/png".to_string()))
         }
-        CaptureBackend::KdeSpectacle => {
+        CaptureBackend::WaylandScreenCastPortal => {
             log::info!(
-                "Capturing Warframe on Unix backend: environment={:?}, capture=KdeSpectacle",
+                "Capturing Warframe on Unix backend: environment={:?}, capture=WaylandScreenCastPortal",
                 resolution.environment
             );
-            let bytes = kde::capture_active_window(warframe_pid).inspect_err(|err| {
-                log::error!("KDE Wayland capture failed: {}", err);
-            })?;
-            Ok((bytes, "image/png".to_string()))
-        }
-        CaptureBackend::GnomeScreenCastPortal => {
-            log::info!(
-                "Capturing Warframe on Unix backend: environment={:?}, capture=GnomeScreenCastPortal",
-                resolution.environment
-            );
-            let bytes = gnome::capture_window().await.inspect_err(|err| {
-                log::error!("GNOME ScreenCast portal capture failed: {}", err);
-            })?;
-            Ok((bytes, "image/png".to_string()))
-        }
-        CaptureBackend::NiriScreenshot => {
-            log::info!(
-                "Capturing Warframe on Unix backend: environment={:?}, capture=NiriScreenshot",
-                resolution.environment
-            );
-            let bytes = niri::capture_window(warframe_pid).inspect_err(|err| {
-                log::error!("niri capture failed: {}", err);
-            })?;
-            Ok((bytes, "image/png".to_string()))
-        }
-        CaptureBackend::Grim { locator } => {
-            log::info!(
-                "Capturing Warframe on Unix backend: environment={:?}, capture=Grim({:?})",
-                resolution.environment,
-                locator
-            );
-            let bytes = match locator {
-                WindowLocator::Hyprland => hyprland::capture_window(warframe_pid),
-            }
-            .inspect_err(|err| {
-                log::error!("grim capture failed: {}", err);
+            let bytes = portal::capture_window().await.inspect_err(|err| {
+                log::error!("Wayland ScreenCast portal capture failed: {}", err);
             })?;
             Ok((bytes, "image/png".to_string()))
         }
@@ -123,23 +78,16 @@ fn resolve_backend(warframe_pid: u32) -> BackendResolution {
         };
     }
 
-    // try wayland environments and supported capture tools if no x11 game window was found
-    let environment = detect_wayland_environment();
+    // Use the generic ScreenCast portal for native Wayland. Do not fall back to
+    // monitor capture; the portal must provide a window PipeWire stream.
+    let environment = detect_unix_environment();
     let capture_backend = match environment {
-        EnvironmentKind::KdeWayland => CaptureBackend::KdeSpectacle,
-        EnvironmentKind::Hyprland => CaptureBackend::Grim {
-            locator: WindowLocator::Hyprland,
-        },
-        EnvironmentKind::Niri => CaptureBackend::NiriScreenshot,
         EnvironmentKind::X11 => CaptureBackend::Unsupported {
             reason: "X11 was detected but no Warframe X11/XWayland window was found",
         },
-        EnvironmentKind::GnomeWayland => CaptureBackend::GnomeScreenCastPortal,
-        EnvironmentKind::OtherWayland => CaptureBackend::Unsupported {
-            reason: "Wayland window-only capture is unsupported for this desktop with the installed tools; run Warframe under XWayland/X11 or use a supported compositor backend",
-        },
+        EnvironmentKind::Wayland => CaptureBackend::WaylandScreenCastPortal,
         EnvironmentKind::Unknown => CaptureBackend::Unsupported {
-            reason: "Unsupported compositor environment; run Warframe under XWayland/X11 or use a supported compositor backend",
+            reason: "Unsupported Unix display environment; run Warframe under XWayland/X11 or use a Wayland session with xdg-desktop-portal ScreenCast window capture",
         },
     };
 

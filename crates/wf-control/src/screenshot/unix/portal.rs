@@ -18,7 +18,7 @@ use wf_core::storage;
 
 use super::common::ensure_png_bytes;
 
-const RESTORE_TOKEN_FILE: &str = "gnome_screencast_token.json";
+const RESTORE_TOKEN_FILE: &str = "unix_screencast_token.json";
 const FRAME_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -37,7 +37,7 @@ pub(super) async fn capture_window() -> Result<Vec<u8>> {
         Ok(stream) => capture_portal_stream(stream).await,
         Err(err) if stored_token.is_some() => {
             log::warn!(
-                "GNOME ScreenCast portal restore token failed; retrying without token: {}",
+                "Wayland ScreenCast portal restore token failed; retrying without token: {}",
                 err
             );
             delete_restore_token();
@@ -55,7 +55,7 @@ async fn open_portal_stream(restore_token: Option<&str>) -> Result<PortalStream>
     let session = proxy
         .create_session()
         .await
-        .context("Failed to create GNOME ScreenCast portal session")?;
+        .context("Failed to create Wayland ScreenCast portal session")?;
 
     proxy
         .select_sources(
@@ -67,14 +67,14 @@ async fn open_portal_stream(restore_token: Option<&str>) -> Result<PortalStream>
             PersistMode::ExplicitlyRevoked,
         )
         .await
-        .context("Failed to select GNOME ScreenCast portal window source")?;
+        .context("Failed to select Wayland ScreenCast portal window source; ensure your xdg-desktop-portal backend supports WINDOW capture")?;
 
     let response = proxy
         .start(&session, None)
         .await
-        .context("Failed to start GNOME ScreenCast portal session")?
+        .context("Failed to start Wayland ScreenCast portal session")?
         .response()
-        .context("GNOME ScreenCast portal did not grant capture access")?;
+        .context("Wayland ScreenCast portal did not grant window capture access")?;
 
     if let Some(token) = response.restore_token() {
         write_restore_token(token);
@@ -84,11 +84,11 @@ async fn open_portal_stream(restore_token: Option<&str>) -> Result<PortalStream>
         .streams()
         .first()
         .cloned()
-        .ok_or_else(|| anyhow!("GNOME ScreenCast portal returned no PipeWire stream"))?;
+        .ok_or_else(|| anyhow!("Wayland ScreenCast portal returned no PipeWire stream; your portal backend may not support window capture"))?;
     let fd = proxy
         .open_pipe_wire_remote(&session)
         .await
-        .context("Failed to open GNOME ScreenCast PipeWire remote")?;
+        .context("Failed to open Wayland ScreenCast PipeWire remote")?;
 
     Ok(PortalStream { stream, fd })
 }
@@ -96,7 +96,7 @@ async fn open_portal_stream(restore_token: Option<&str>) -> Result<PortalStream>
 async fn capture_portal_stream(portal_stream: PortalStream) -> Result<Vec<u8>> {
     tokio::task::spawn_blocking(move || capture_pipewire_frame(portal_stream))
         .await
-        .context("GNOME ScreenCast frame capture task failed")?
+        .context("Wayland ScreenCast frame capture task failed")?
 }
 
 fn capture_pipewire_frame(portal_stream: PortalStream) -> Result<Vec<u8>> {
@@ -130,23 +130,23 @@ fn capture_pipewire_frame(portal_stream: PortalStream) -> Result<Vec<u8>> {
             &convert,
             appsink.upcast_ref::<gst::Element>(),
         ])
-        .context("Failed to build GNOME ScreenCast GStreamer pipeline")?;
+        .context("Failed to build Wayland ScreenCast GStreamer pipeline")?;
     gst::Element::link_many([
         &pipewire_src,
         &convert,
         appsink.upcast_ref::<gst::Element>(),
     ])
-    .context("Failed to link GNOME ScreenCast GStreamer pipeline")?;
+    .context("Failed to link Wayland ScreenCast GStreamer pipeline")?;
 
     pipeline
         .set_state(gst::State::Playing)
-        .context("Failed to start GNOME ScreenCast GStreamer pipeline")?;
+        .context("Failed to start Wayland ScreenCast GStreamer pipeline")?;
 
     let sample_result = appsink
         .try_pull_sample(gst::ClockTime::from_nseconds(
             FRAME_TIMEOUT.as_nanos().min(u64::MAX as u128) as u64,
         ))
-        .ok_or_else(|| anyhow!("Timed out waiting for a GNOME ScreenCast frame"))
+        .ok_or_else(|| anyhow!("Timed out waiting for a Wayland ScreenCast frame"))
         .and_then(sample_to_png);
 
     let _ = pipeline.set_state(gst::State::Null);
@@ -156,48 +156,48 @@ fn capture_pipewire_frame(portal_stream: PortalStream) -> Result<Vec<u8>> {
 fn sample_to_png(sample: gst::Sample) -> Result<Vec<u8>> {
     let caps = sample
         .caps()
-        .ok_or_else(|| anyhow!("GNOME ScreenCast frame missing caps"))?;
+        .ok_or_else(|| anyhow!("Wayland ScreenCast frame missing caps"))?;
     let info = gstreamer_video::VideoInfo::from_caps(caps)
-        .context("Failed to read GNOME ScreenCast frame video info")?;
+        .context("Failed to read Wayland ScreenCast frame video info")?;
     let buffer = sample
         .buffer()
-        .ok_or_else(|| anyhow!("GNOME ScreenCast sample missing buffer"))?;
+        .ok_or_else(|| anyhow!("Wayland ScreenCast sample missing buffer"))?;
     let map = buffer
         .map_readable()
-        .context("Failed to map GNOME ScreenCast frame buffer")?;
+        .context("Failed to map Wayland ScreenCast frame buffer")?;
 
     let width = info.width();
     let height = info.height();
     if width == 0 || height == 0 {
-        bail!("GNOME ScreenCast returned an invalid frame size: {width}x{height}");
+        bail!("Wayland ScreenCast returned an invalid frame size: {width}x{height}");
     }
 
     let expected_stride = width as usize * 4;
     let stride = info.stride()[0] as usize;
     let frame_len = expected_stride
         .checked_mul(height as usize)
-        .ok_or_else(|| anyhow!("GNOME ScreenCast frame dimensions overflow"))?;
+        .ok_or_else(|| anyhow!("Wayland ScreenCast frame dimensions overflow"))?;
     let mut rgba = Vec::with_capacity(frame_len);
 
     for row in 0..height as usize {
         let start = row
             .checked_mul(stride)
-            .ok_or_else(|| anyhow!("GNOME ScreenCast frame stride overflow"))?;
+            .ok_or_else(|| anyhow!("Wayland ScreenCast frame stride overflow"))?;
         let end = start
             .checked_add(expected_stride)
-            .ok_or_else(|| anyhow!("GNOME ScreenCast frame row overflow"))?;
+            .ok_or_else(|| anyhow!("Wayland ScreenCast frame row overflow"))?;
         let row_bytes = map
             .as_slice()
             .get(start..end)
-            .ok_or_else(|| anyhow!("GNOME ScreenCast frame buffer is smaller than expected"))?;
+            .ok_or_else(|| anyhow!("Wayland ScreenCast frame buffer is smaller than expected"))?;
         rgba.extend_from_slice(row_bytes);
     }
 
     let mut png = Vec::new();
     PngEncoder::new(Cursor::new(&mut png))
         .write_image(&rgba, width, height, ColorType::Rgba8.into())
-        .context("Failed to encode GNOME ScreenCast frame as PNG")?;
-    ensure_png_bytes(&png, "GNOME ScreenCast portal capture")?;
+        .context("Failed to encode Wayland ScreenCast frame as PNG")?;
+    ensure_png_bytes(&png, "Wayland ScreenCast portal capture")?;
 
     Ok(png)
 }
@@ -207,8 +207,11 @@ fn restore_token_path() -> Result<std::path::PathBuf> {
 }
 
 fn read_restore_token() -> Option<String> {
-    let path = restore_token_path().ok()?;
-    let raw = fs::read_to_string(&path).ok()?;
+    read_restore_token_from_path(restore_token_path().ok()?)
+}
+
+fn read_restore_token_from_path(path: std::path::PathBuf) -> Option<String> {
+    let raw = fs::read_to_string(path).ok()?;
     let stored: StoredPortalToken = serde_json::from_str(&raw).ok()?;
     if stored.restore_token.is_empty() {
         None
@@ -225,7 +228,7 @@ fn write_restore_token(token: &str) {
         })?;
         fs::write(&path, raw).with_context(|| {
             format!(
-                "Failed to write GNOME ScreenCast restore token to {}",
+                "Failed to write Wayland ScreenCast restore token to {}",
                 path.display()
             )
         })?;
@@ -233,7 +236,10 @@ fn write_restore_token(token: &str) {
     })();
 
     if let Err(err) = result {
-        log::warn!("Failed to persist GNOME ScreenCast restore token: {}", err);
+        log::warn!(
+            "Failed to persist Wayland ScreenCast restore token: {}",
+            err
+        );
     }
 }
 
