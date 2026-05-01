@@ -1,108 +1,299 @@
-use std::collections::BTreeSet;
-use std::env;
-use std::process::{Command, Stdio};
-
-use anyhow::{Context, Result, bail};
-
-use crate::screenshot::unix::common::process_output_to_string;
-
-use super::common::{
-    WARFRAME_CLASS_HINTS, WARFRAME_TITLE_HINTS, ensure_command_available, ensure_png_bytes,
-    ensure_success, run_command,
+use anyhow::{Context, Result, anyhow, bail};
+use image::{ImageBuffer, ImageFormat, Rgba};
+use x11rb::connection::Connection;
+use x11rb::properties::WmClass;
+use x11rb::protocol::xproto::{
+    Atom, AtomEnum, ConnectionExt, GetImageReply, ImageFormat as XImageFormat, ImageOrder,
+    VisualClass, Visualtype, Window,
 };
+use x11rb::rust_connection::RustConnection;
+
+use super::common::{WARFRAME_CLASS_HINTS, WARFRAME_TITLE_HINTS, ensure_png_bytes};
+
+struct X11Context {
+    conn: RustConnection,
+    screen_num: usize,
+    atoms: Atoms,
+}
+
+struct Atoms {
+    net_wm_name: Atom,
+    net_wm_pid: Atom,
+    utf8_string: Atom,
+}
 
 pub(super) fn find_window(pid: u32) -> Result<String> {
-    if env::var_os("DISPLAY").is_none() {
-        bail!("DISPLAY is not set");
-    }
-    ensure_command_available("xdotool")?;
-    ensure_command_available("xwd")?;
-    ensure_command_available("magick")?;
+    let context = X11Context::connect()?;
 
-    let pid_matches = search_window_ids(["search", "--pid", &pid.to_string()])?;
-    if let Some(window_id) = pid_matches.into_iter().next() {
-        return Ok(window_id);
+    let mut heuristic_match = None;
+    for window in context.windows()? {
+        if context.window_pid(window).ok().flatten() == Some(pid) {
+            return Ok(window.to_string());
+        }
+
+        if heuristic_match.is_none() && context.matches_warframe_hints(window) {
+            heuristic_match = Some(window);
+        }
     }
 
-    let mut heuristic_matches = BTreeSet::new();
-    for title_hint in WARFRAME_TITLE_HINTS {
-        for window_id in search_window_ids(["search", "--name", title_hint])? {
-            heuristic_matches.insert(window_id);
-        }
-    }
-    for class_hint in WARFRAME_CLASS_HINTS {
-        for window_id in search_window_ids(["search", "--classname", class_hint])? {
-            heuristic_matches.insert(window_id);
-        }
-        for window_id in search_window_ids(["search", "--class", class_hint])? {
-            heuristic_matches.insert(window_id);
-        }
-    }
-    if let Some(window_id) = heuristic_matches.into_iter().next() {
-        return Ok(window_id);
+    if let Some(window) = heuristic_match {
+        return Ok(window.to_string());
     }
 
     bail!("No X11/XWayland window found for Warframe; PID and title/class lookup both failed");
 }
 
-fn search_window_ids<const N: usize>(args: [&str; N]) -> Result<Vec<String>> {
-    let mut window_ids = BTreeSet::new();
+pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
+    let window = window_id
+        .parse::<Window>()
+        .with_context(|| format!("Invalid X11 window id '{}'", window_id))?;
+    let context = X11Context::connect()?;
+    let geometry = context
+        .conn
+        .get_geometry(window)
+        .with_context(|| format!("Failed to request X11 geometry for window {}", window_id))?
+        .reply()
+        .with_context(|| format!("Failed to read X11 geometry for window {}", window_id))?;
 
-    if let Ok(output) = run_command("xdotool", args) {
-        let stdout = process_output_to_string(output, "xdotool search")?;
-        for line in stdout
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-        {
-            window_ids.insert(line.to_string());
+    if geometry.width == 0 || geometry.height == 0 {
+        bail!("X11 window {} has empty geometry", window_id);
+    }
+
+    let image = context
+        .conn
+        .get_image(
+            XImageFormat::Z_PIXMAP,
+            window,
+            0,
+            0,
+            geometry.width,
+            geometry.height,
+            u32::MAX,
+        )
+        .with_context(|| format!("Failed to request X11 image for window {}", window_id))?
+        .reply()
+        .with_context(|| format!("Failed to read X11 image for window {}", window_id))?;
+
+    let visual = context.visual_for_window(window)?;
+    let bytes = encode_x11_image_png(
+        &context.conn,
+        &image,
+        &visual,
+        geometry.width,
+        geometry.height,
+    )
+    .with_context(|| format!("Failed to encode X11 window {} capture as PNG", window_id))?;
+    ensure_png_bytes(&bytes, "X11 window capture")?;
+    Ok(bytes)
+}
+
+impl X11Context {
+    fn connect() -> Result<Self> {
+        let (conn, screen_num) =
+            x11rb::connect(None).context("Failed to connect to the X11/XWayland server")?;
+        let atoms = Atoms::intern(&conn)?;
+        Ok(Self {
+            conn,
+            screen_num,
+            atoms,
+        })
+    }
+
+    fn windows(&self) -> Result<Vec<Window>> {
+        let root = self.conn.setup().roots[self.screen_num].root;
+        let mut windows = Vec::new();
+        self.collect_windows(root, &mut windows)?;
+        Ok(windows)
+    }
+
+    fn collect_windows(&self, window: Window, windows: &mut Vec<Window>) -> Result<()> {
+        let tree = match self.conn.query_tree(window)?.reply() {
+            Ok(tree) => tree,
+            Err(_) => return Ok(()),
+        };
+
+        for child in tree.children {
+            windows.push(child);
+            self.collect_windows(child, windows)?;
+        }
+
+        Ok(())
+    }
+
+    fn window_pid(&self, window: Window) -> Result<Option<u32>> {
+        let reply = self
+            .conn
+            .get_property(
+                false,
+                window,
+                self.atoms.net_wm_pid,
+                AtomEnum::CARDINAL,
+                0,
+                1,
+            )?
+            .reply()?;
+
+        Ok(reply.value32().and_then(|mut values| values.next()))
+    }
+
+    fn matches_warframe_hints(&self, window: Window) -> bool {
+        self.window_title(window)
+            .map(|title| WARFRAME_TITLE_HINTS.iter().any(|hint| title.contains(hint)))
+            .unwrap_or(false)
+            || self
+                .window_class(window)
+                .map(|classes| {
+                    classes.iter().any(|class| {
+                        WARFRAME_CLASS_HINTS
+                            .iter()
+                            .any(|hint| class.eq_ignore_ascii_case(hint))
+                    })
+                })
+                .unwrap_or(false)
+    }
+
+    fn window_title(&self, window: Window) -> Result<String> {
+        self.property_string(window, self.atoms.net_wm_name, self.atoms.utf8_string)
+            .or_else(|_| self.property_string(window, AtomEnum::WM_NAME.into(), AtomEnum::STRING))
+    }
+
+    fn property_string<T>(&self, window: Window, property: Atom, type_: T) -> Result<String>
+    where
+        T: Into<Atom>,
+    {
+        let reply = self
+            .conn
+            .get_property(false, window, property, type_, 0, 1024)?
+            .reply()?;
+        String::from_utf8(reply.value).context("X11 property returned invalid UTF-8")
+    }
+
+    fn window_class(&self, window: Window) -> Result<Vec<String>> {
+        let Some(wm_class) = WmClass::get(&self.conn, window)?.reply()? else {
+            return Ok(Vec::new());
+        };
+
+        Ok([wm_class.instance(), wm_class.class()]
+            .into_iter()
+            .filter_map(|value| std::str::from_utf8(value).ok())
+            .map(str::to_string)
+            .collect())
+    }
+
+    fn visual_for_window(&self, window: Window) -> Result<Visualtype> {
+        let attributes = self.conn.get_window_attributes(window)?.reply()?;
+        self.conn.setup().roots[self.screen_num]
+            .allowed_depths
+            .iter()
+            .flat_map(|depth| depth.visuals.iter())
+            .find(|visual| visual.visual_id == attributes.visual)
+            .cloned()
+            .ok_or_else(|| anyhow!("Could not find X11 visual {}", attributes.visual))
+    }
+}
+
+impl Atoms {
+    fn intern(conn: &RustConnection) -> Result<Self> {
+        Ok(Self {
+            net_wm_name: intern_atom(conn, "_NET_WM_NAME")?,
+            net_wm_pid: intern_atom(conn, "_NET_WM_PID")?,
+            utf8_string: intern_atom(conn, "UTF8_STRING")?,
+        })
+    }
+}
+
+fn intern_atom(conn: &RustConnection, name: &str) -> Result<Atom> {
+    Ok(conn.intern_atom(false, name.as_bytes())?.reply()?.atom)
+}
+
+fn encode_x11_image_png(
+    conn: &RustConnection,
+    image: &GetImageReply,
+    visual: &Visualtype,
+    width: u16,
+    height: u16,
+) -> Result<Vec<u8>> {
+    if visual.class != VisualClass::TRUE_COLOR && visual.class != VisualClass::DIRECT_COLOR {
+        bail!("Unsupported X11 visual class {:?}", visual.class);
+    }
+
+    let format = conn
+        .setup()
+        .pixmap_formats
+        .iter()
+        .find(|format| format.depth == image.depth)
+        .ok_or_else(|| anyhow!("No X11 pixmap format for depth {}", image.depth))?;
+    let bytes_per_pixel = usize::from(format.bits_per_pixel / 8);
+    if bytes_per_pixel == 0 {
+        bail!("Unsupported X11 bits-per-pixel {}", format.bits_per_pixel);
+    }
+
+    let width = u32::from(width);
+    let height = u32::from(height);
+    let stride = image.data.len() / usize::try_from(height).context("Invalid X11 image height")?;
+    let mut rgba = ImageBuffer::<Rgba<u8>, Vec<u8>>::new(width, height);
+
+    for y in 0..height {
+        for x in 0..width {
+            let offset = usize::try_from(y).unwrap() * stride
+                + usize::try_from(x).unwrap() * bytes_per_pixel;
+            let pixel = read_pixel(
+                &image.data,
+                offset,
+                bytes_per_pixel,
+                conn.setup().image_byte_order,
+            )?;
+            rgba.put_pixel(
+                x,
+                y,
+                Rgba([
+                    component(pixel, visual.red_mask),
+                    component(pixel, visual.green_mask),
+                    component(pixel, visual.blue_mask),
+                    255,
+                ]),
+            );
         }
     }
 
-    Ok(window_ids.into_iter().collect())
+    let mut cursor = std::io::Cursor::new(Vec::new());
+    rgba.write_to(&mut cursor, ImageFormat::Png)?;
+    Ok(cursor.into_inner())
 }
 
-pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
-    let mut xwd = Command::new("xwd")
-        .args(["-silent", "-id", window_id])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .with_context(|| format!("Failed to run xwd for X11 window {}", window_id))?;
-
-    let xwd_stdout = xwd
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow::anyhow!("Failed to capture xwd stdout"))?;
-    let magick = Command::new("magick")
-        .args(["xwd:-", "png:-"])
-        .stdin(Stdio::from(xwd_stdout))
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .context("Failed to run magick to convert X11 xwd capture to PNG")?;
-
-    let xwd_output = xwd
-        .wait_with_output()
-        .with_context(|| format!("Failed to wait for xwd on X11 window {}", window_id))?;
-
-    let xwd_stderr = String::from_utf8_lossy(&xwd_output.stderr)
-        .trim()
-        .to_string();
-    if !xwd_stderr.is_empty() {
-        log::warn!("X11 xwd stderr: {}", xwd_stderr);
+fn read_pixel(
+    data: &[u8],
+    offset: usize,
+    bytes_per_pixel: usize,
+    image_byte_order: ImageOrder,
+) -> Result<u32> {
+    let bytes = data
+        .get(offset..offset + bytes_per_pixel)
+        .ok_or_else(|| anyhow!("X11 image data ended unexpectedly"))?;
+    let mut pixel = 0u32;
+    match image_byte_order {
+        ImageOrder::LSB_FIRST => {
+            for (shift, byte) in bytes.iter().enumerate() {
+                pixel |= u32::from(*byte) << (shift * 8);
+            }
+        }
+        ImageOrder::MSB_FIRST => {
+            for byte in bytes {
+                pixel = (pixel << 8) | u32::from(*byte);
+            }
+        }
+        _ => bail!("Unsupported X11 image byte order {:?}", image_byte_order),
     }
-    let magick_stderr = String::from_utf8_lossy(&magick.stderr).trim().to_string();
-    if !magick_stderr.is_empty() {
-        log::warn!("X11 magick stderr: {}", magick_stderr);
+    Ok(pixel)
+}
+
+fn component(pixel: u32, mask: u32) -> u8 {
+    if mask == 0 {
+        return 0;
     }
 
-    ensure_success(&xwd_output, "xwd X11 window capture")?;
-    ensure_success(&magick, "magick X11 window capture conversion")?;
-
-    if magick.stdout.is_empty() {
-        bail!("X11 window capture returned no image data");
-    }
-    ensure_png_bytes(&magick.stdout, "X11 window capture")?;
-    Ok(magick.stdout)
+    let shift = mask.trailing_zeros();
+    let max = mask >> shift;
+    let value = (pixel & mask) >> shift;
+    ((value * 255 + max / 2) / max) as u8
 }

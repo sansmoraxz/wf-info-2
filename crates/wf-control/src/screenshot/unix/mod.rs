@@ -36,13 +36,30 @@ pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
     let warframe_pid = process::get_warframe_pid()
         .ok_or_else(|| anyhow!("Warframe process not detected; relaunch the game and try again"))?;
 
-    let resolution = cached_resolution(warframe_pid).unwrap_or_else(|| {
+    let cached = cached_resolution(warframe_pid);
+    let resolution = cached.clone().unwrap_or_else(|| {
         let resolution = resolve_backend(warframe_pid);
         store_resolution(warframe_pid, &resolution);
         resolution
     });
 
-    capture_with_backend(warframe_pid, &resolution).await
+    match capture_with_backend(warframe_pid, &resolution).await {
+        Err(err) if cached.is_some() && resolution.is_x11_window() => {
+            log::warn!(
+                "Cached X11/XWayland capture backend failed; resolving screenshot backend again: {}",
+                err
+            );
+            clear_cached_resolution();
+            let refreshed = resolve_backend(warframe_pid);
+            store_resolution(warframe_pid, &refreshed);
+            if refreshed == resolution {
+                Err(err)
+            } else {
+                capture_with_backend(warframe_pid, &refreshed).await
+            }
+        }
+        result => result,
+    }
 }
 
 async fn capture_with_backend(
@@ -70,20 +87,51 @@ async fn capture_with_backend(
 }
 
 fn resolve_backend(warframe_pid: u32) -> BackendResolution {
-    // first try with x11 since that's most likely what's most users play on
-    if let Ok(window_id) = x11::find_window(warframe_pid) {
+    let environment = detect_unix_environment();
+    let x11_window_id = match x11::find_window(warframe_pid) {
+        Ok(window_id) => {
+            log::info!(
+                "Detected Warframe X11/XWayland window {} for PID {}",
+                window_id,
+                warframe_pid
+            );
+            Some(window_id)
+        }
+        Err(err) => {
+            log::debug!(
+                "Warframe X11/XWayland window probe failed for PID {}: {}",
+                warframe_pid,
+                err
+            );
+            None
+        }
+    };
+    resolve_backend_from_probe(environment, x11_window_id)
+}
+
+fn resolve_backend_from_probe(
+    detected_environment: EnvironmentKind,
+    x11_window_id: Option<String>,
+) -> BackendResolution {
+    if let Some(window_id) = x11_window_id {
+        let environment = match detected_environment {
+            EnvironmentKind::Wayland => EnvironmentKind::XWayland,
+            environment => environment,
+        };
         return BackendResolution {
-            environment: EnvironmentKind::X11,
+            environment,
             capture_backend: CaptureBackend::X11Window { window_id },
         };
     }
 
     // Use the generic ScreenCast portal for native Wayland. Do not fall back to
     // monitor capture; the portal must provide a window PipeWire stream.
-    let environment = detect_unix_environment();
-    let capture_backend = match environment {
+    let capture_backend = match detected_environment {
         EnvironmentKind::X11 => CaptureBackend::Unsupported {
             reason: "X11 was detected but no Warframe X11/XWayland window was found",
+        },
+        EnvironmentKind::XWayland => CaptureBackend::Unsupported {
+            reason: "XWayland was detected but no Warframe X11/XWayland window was found",
         },
         EnvironmentKind::Wayland => CaptureBackend::WaylandScreenCastPortal,
         EnvironmentKind::Unknown => CaptureBackend::Unsupported {
@@ -92,8 +140,14 @@ fn resolve_backend(warframe_pid: u32) -> BackendResolution {
     };
 
     BackendResolution {
-        environment,
+        environment: detected_environment,
         capture_backend,
+    }
+}
+
+impl BackendResolution {
+    fn is_x11_window(&self) -> bool {
+        matches!(self.capture_backend, CaptureBackend::X11Window { .. })
     }
 }
 
@@ -112,5 +166,76 @@ fn store_resolution(warframe_pid: u32, resolution: &BackendResolution) {
             warframe_pid,
             resolution: resolution.clone(),
         });
+    }
+}
+
+fn clear_cached_resolution() {
+    if let Ok(mut cache) = BACKEND_CACHE.lock() {
+        *cache = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wayland_with_x11_window_uses_xwayland_x11_capture() {
+        let resolution =
+            resolve_backend_from_probe(EnvironmentKind::Wayland, Some("123".to_string()));
+
+        assert_eq!(resolution.environment, EnvironmentKind::XWayland);
+        assert_eq!(
+            resolution.capture_backend,
+            CaptureBackend::X11Window {
+                window_id: "123".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn wayland_without_x11_window_uses_portal_capture() {
+        let resolution = resolve_backend_from_probe(EnvironmentKind::Wayland, None);
+
+        assert_eq!(resolution.environment, EnvironmentKind::Wayland);
+        assert_eq!(
+            resolution.capture_backend,
+            CaptureBackend::WaylandScreenCastPortal
+        );
+    }
+
+    #[test]
+    fn x11_with_x11_window_uses_x11_capture() {
+        let resolution = resolve_backend_from_probe(EnvironmentKind::X11, Some("456".to_string()));
+
+        assert_eq!(resolution.environment, EnvironmentKind::X11);
+        assert_eq!(
+            resolution.capture_backend,
+            CaptureBackend::X11Window {
+                window_id: "456".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn x11_without_x11_window_is_unsupported() {
+        let resolution = resolve_backend_from_probe(EnvironmentKind::X11, None);
+
+        assert_eq!(resolution.environment, EnvironmentKind::X11);
+        assert!(matches!(
+            resolution.capture_backend,
+            CaptureBackend::Unsupported { .. }
+        ));
+    }
+
+    #[test]
+    fn unknown_without_x11_window_is_unsupported() {
+        let resolution = resolve_backend_from_probe(EnvironmentKind::Unknown, None);
+
+        assert_eq!(resolution.environment, EnvironmentKind::Unknown);
+        assert!(matches!(
+            resolution.capture_backend,
+            CaptureBackend::Unsupported { .. }
+        ));
     }
 }
