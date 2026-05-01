@@ -44,7 +44,7 @@ ashpd = { version = "0.13", features = ["tokio"], optional = true }
 gstreamer = { version = "0.25", optional = true }
 gstreamer-app = { version = "0.25", optional = true }
 gstreamer-video = { version = "0.25", optional = true }
-x11rb.workspace = true
+x11rb = "0.13.2"
 
 [target.'cfg(windows)'.dependencies]
 win-screenshot.workspace = true

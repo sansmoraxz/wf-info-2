@@ -45,7 +45,6 @@ tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
 uuid = { version = "1", features = ["v4"] }
 itertools = "0.14.0"
 rust-embed = "8.11.0"
-x11rb = "0.13.2"
 
 [workspace.dependencies.win-screenshot]
 version = "4.0"
