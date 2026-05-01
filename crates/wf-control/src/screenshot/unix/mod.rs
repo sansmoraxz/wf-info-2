@@ -13,6 +13,7 @@ use self::common::{EnvironmentKind, detect_unix_environment};
 
 static BACKEND_CACHE: LazyLock<Mutex<Option<BackendCacheEntry>>> =
     LazyLock::new(|| Mutex::new(None));
+static WARFRAME_PID_CACHE: LazyLock<Mutex<Option<u32>>> = LazyLock::new(|| Mutex::new(None));
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum CaptureBackend {
@@ -36,10 +37,11 @@ struct BackendCacheEntry {
 pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
     let total_start = Instant::now();
     let pid_start = Instant::now();
-    let warframe_pid = process::get_warframe_pid()
+    let (warframe_pid, pid_cache_status) = cached_warframe_pid()
         .ok_or_else(|| anyhow!("Warframe process not detected; relaunch the game and try again"))?;
     log::trace!(
-        "Screenshot Warframe PID lookup found {} in {:?}",
+        "Screenshot Warframe PID lookup ({}) found {} in {:?}",
+        pid_cache_status,
         warframe_pid,
         pid_start.elapsed()
     );
@@ -66,6 +68,7 @@ pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
                 err
             );
             clear_cached_resolution();
+            clear_cached_warframe_pid();
             let refreshed = resolve_backend(warframe_pid);
             store_resolution(warframe_pid, &refreshed);
             if refreshed == resolution {
@@ -223,6 +226,28 @@ fn store_resolution(warframe_pid: u32, resolution: &BackendResolution) {
 
 fn clear_cached_resolution() {
     if let Ok(mut cache) = BACKEND_CACHE.lock() {
+        *cache = None;
+    }
+}
+
+fn cached_warframe_pid() -> Option<(u32, &'static str)> {
+    if let Some(pid) = WARFRAME_PID_CACHE.lock().ok().and_then(|cache| *cache) {
+        if !process::is_warframe_pid(pid) {
+            clear_cached_warframe_pid();
+        } else {
+            return Some((pid, "cached"));
+        }
+    }
+
+    let pid = process::get_warframe_pid()?;
+    if let Ok(mut cache) = WARFRAME_PID_CACHE.lock() {
+        *cache = Some(pid);
+    }
+    Some((pid, "fresh"))
+}
+
+fn clear_cached_warframe_pid() {
+    if let Ok(mut cache) = WARFRAME_PID_CACHE.lock() {
         *cache = None;
     }
 }

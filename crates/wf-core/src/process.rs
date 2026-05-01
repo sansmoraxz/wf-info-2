@@ -36,24 +36,38 @@ fn is_warframe_game_process(process: &sysinfo::Process) -> bool {
     }
 }
 
+fn process_refresh_kind() -> ProcessRefreshKind {
+    ProcessRefreshKind::nothing().with_cmd(UpdateKind::OnlyIfNotSet)
+}
+
+fn refresh_all_process_commands(system: &mut System) {
+    system.refresh_processes_specifics(ProcessesToUpdate::All, true, process_refresh_kind());
+}
+
+fn refresh_process_command(system: &mut System, pid: sysinfo::Pid) {
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[pid]),
+        true,
+        process_refresh_kind(),
+    );
+}
+
+fn find_warframe_pid(system: &System) -> Option<u32> {
+    system
+        .processes()
+        .values()
+        .find(|p| is_warframe_game_process(p))
+        .map(|p| p.pid().as_u32())
+}
+
 pub async fn wait_for_warframe_start() -> u32 {
     log::info!("Waiting for Warframe to start...");
     let mut system = System::new();
 
     loop {
-        system.refresh_processes_specifics(
-            ProcessesToUpdate::All,
-            true,
-            ProcessRefreshKind::nothing().with_cmd(UpdateKind::OnlyIfNotSet),
-        );
+        refresh_all_process_commands(&mut system);
 
-        let pid = system
-            .processes()
-            .values()
-            .find(|p| is_warframe_game_process(p))
-            .map(|p| p.pid().as_u32());
-
-        if let Some(pid) = pid {
+        if let Some(pid) = find_warframe_pid(&system) {
             log::info!("Warframe process detected (PID: {}).", pid);
             return pid;
         }
@@ -65,17 +79,21 @@ pub async fn wait_for_warframe_start() -> u32 {
 /// Finds the Warframe game process PID if running
 pub fn get_warframe_pid() -> Option<u32> {
     let mut system = System::new();
-    system.refresh_processes_specifics(
-        ProcessesToUpdate::All,
-        true,
-        ProcessRefreshKind::nothing().with_cmd(UpdateKind::OnlyIfNotSet),
-    );
+    refresh_all_process_commands(&mut system);
+
+    find_warframe_pid(&system)
+}
+
+/// Checks whether a PID still belongs to the Warframe game process.
+pub fn is_warframe_pid(pid: u32) -> bool {
+    let pid = sysinfo::Pid::from_u32(pid);
+    let mut system = System::new();
+    refresh_process_command(&mut system, pid);
 
     system
-        .processes()
-        .values()
-        .find(|p| is_warframe_game_process(p))
-        .map(|p| p.pid().as_u32())
+        .process(pid)
+        .map(is_warframe_game_process)
+        .unwrap_or(false)
 }
 
 /// Authorization query string containing accountId and nonce
