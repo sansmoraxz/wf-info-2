@@ -70,7 +70,7 @@ async fn capture_with_backend(
         CaptureBackend::X11Window { window_id } => {
             log::info!("Capturing Warframe via X11/XWayland window {}", window_id);
             let bytes = x11::capture_window(window_id)?;
-            Ok((bytes, "image/png".to_string()))
+            Ok((bytes, "image/bmp".to_string()))
         }
         CaptureBackend::WaylandScreenCastPortal => {
             log::info!(
@@ -80,7 +80,7 @@ async fn capture_with_backend(
             let bytes = portal::capture_window().await.inspect_err(|err| {
                 log::error!("Wayland ScreenCast portal capture failed: {}", err);
             })?;
-            Ok((bytes, "image/png".to_string()))
+            Ok((bytes, "image/bmp".to_string()))
         }
         CaptureBackend::Unsupported { reason } => bail!("{}", reason),
     }

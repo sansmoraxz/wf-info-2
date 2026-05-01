@@ -23,9 +23,9 @@ pub(super) fn detect_unix_environment() -> EnvironmentKind {
     }
 }
 
-pub(super) fn ensure_png_bytes(bytes: &[u8], context: &str) -> Result<()> {
-    const PNG_MAGIC: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
-    if bytes.starts_with(PNG_MAGIC) {
+pub(super) fn ensure_bmp_bytes(bytes: &[u8], context: &str) -> Result<()> {
+    const BMP_MAGIC: &[u8; 2] = b"BM";
+    if bytes.starts_with(BMP_MAGIC) {
         Ok(())
     } else {
         let preview = bytes
@@ -34,6 +34,6 @@ pub(super) fn ensure_png_bytes(bytes: &[u8], context: &str) -> Result<()> {
             .map(|byte| format!("{byte:02x}"))
             .collect::<Vec<_>>()
             .join(" ");
-        bail!("{context} did not return a valid PNG image; first bytes: [{preview}]")
+        bail!("{context} did not return a valid BMP image; first bytes: [{preview}]")
     }
 }

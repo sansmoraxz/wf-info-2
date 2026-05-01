@@ -1,8 +1,10 @@
 use anyhow::{Context, Result, anyhow};
 
-/// Capture the entire screen and return the screenshot content as png.
+/// Capture the entire screen and return the screenshot content as BMP.
 /// TODO: swap to window capture and test on windows
 pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
+    use image::ExtendedColorType;
+    use image::codecs::bmp::BmpEncoder;
     use image::{ImageBuffer, Rgb};
     use win_screenshot::prelude::*;
 
@@ -12,11 +14,13 @@ pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
         ImageBuffer::from_raw(buf.width as u32, buf.height as u32, buf.pixels)
             .context("Failed to create image buffer")?;
 
-    let mut png_bytes = Vec::new();
-    img.write_to(
-        &mut std::io::Cursor::new(&mut png_bytes),
-        image::ImageFormat::Png,
+    let mut bmp_bytes = Vec::new();
+    BmpEncoder::new(&mut bmp_bytes).encode(
+        img.as_raw(),
+        buf.width as u32,
+        buf.height as u32,
+        ExtendedColorType::Rgb8,
     )?;
 
-    Ok((png_bytes, "image/png".to_string()))
+    Ok((bmp_bytes, "image/bmp".to_string()))
 }

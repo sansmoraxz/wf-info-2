@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, anyhow, bail};
-use image::{ImageBuffer, ImageFormat, Rgba};
+use image::ExtendedColorType;
+use image::codecs::bmp::BmpEncoder;
 use x11rb::connection::Connection;
 use x11rb::properties::WmClass;
 use x11rb::protocol::xproto::{
@@ -8,7 +9,7 @@ use x11rb::protocol::xproto::{
 };
 use x11rb::rust_connection::RustConnection;
 
-use super::common::{WARFRAME_CLASS_HINTS, WARFRAME_TITLE_HINTS, ensure_png_bytes};
+use super::common::{WARFRAME_CLASS_HINTS, WARFRAME_TITLE_HINTS, ensure_bmp_bytes};
 
 struct X11Context {
     conn: RustConnection,
@@ -75,15 +76,15 @@ pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
         .with_context(|| format!("Failed to read X11 image for window {}", window_id))?;
 
     let visual = context.visual_for_window(window)?;
-    let bytes = encode_x11_image_png(
+    let bytes = encode_x11_image_bmp(
         &context.conn,
         &image,
         &visual,
         geometry.width,
         geometry.height,
     )
-    .with_context(|| format!("Failed to encode X11 window {} capture as PNG", window_id))?;
-    ensure_png_bytes(&bytes, "X11 window capture")?;
+    .with_context(|| format!("Failed to encode X11 window {} capture as BMP", window_id))?;
+    ensure_bmp_bytes(&bytes, "X11 window capture")?;
     Ok(bytes)
 }
 
@@ -206,7 +207,7 @@ fn intern_atom(conn: &RustConnection, name: &str) -> Result<Atom> {
     Ok(conn.intern_atom(false, name.as_bytes())?.reply()?.atom)
 }
 
-fn encode_x11_image_png(
+fn encode_x11_image_bmp(
     conn: &RustConnection,
     image: &GetImageReply,
     visual: &Visualtype,
@@ -228,37 +229,39 @@ fn encode_x11_image_png(
         bail!("Unsupported X11 bits-per-pixel {}", format.bits_per_pixel);
     }
 
-    let width = u32::from(width);
-    let height = u32::from(height);
-    let stride = image.data.len() / usize::try_from(height).context("Invalid X11 image height")?;
-    let mut rgba = ImageBuffer::<Rgba<u8>, Vec<u8>>::new(width, height);
+    let width_usize = usize::from(width);
+    let height_usize = usize::from(height);
+    let stride = image
+        .data
+        .len()
+        .checked_div(height_usize)
+        .ok_or_else(|| anyhow!("Invalid X11 image height"))?;
+    let mut rgb = vec![0; width_usize * height_usize * 3];
 
-    for y in 0..height {
-        for x in 0..width {
-            let offset = usize::try_from(y).unwrap() * stride
-                + usize::try_from(x).unwrap() * bytes_per_pixel;
+    for y in 0..height_usize {
+        for x in 0..width_usize {
+            let offset = y * stride + x * bytes_per_pixel;
             let pixel = read_pixel(
                 &image.data,
                 offset,
                 bytes_per_pixel,
                 conn.setup().image_byte_order,
             )?;
-            rgba.put_pixel(
-                x,
-                y,
-                Rgba([
-                    component(pixel, visual.red_mask),
-                    component(pixel, visual.green_mask),
-                    component(pixel, visual.blue_mask),
-                    255,
-                ]),
-            );
+            let rgb_offset = (y * width_usize + x) * 3;
+            rgb[rgb_offset] = component(pixel, visual.red_mask);
+            rgb[rgb_offset + 1] = component(pixel, visual.green_mask);
+            rgb[rgb_offset + 2] = component(pixel, visual.blue_mask);
         }
     }
 
-    let mut cursor = std::io::Cursor::new(Vec::new());
-    rgba.write_to(&mut cursor, ImageFormat::Png)?;
-    Ok(cursor.into_inner())
+    let mut bytes = Vec::new();
+    BmpEncoder::new(&mut bytes).encode(
+        &rgb,
+        u32::from(width),
+        u32::from(height),
+        ExtendedColorType::Rgb8,
+    )?;
+    Ok(bytes)
 }
 
 fn read_pixel(

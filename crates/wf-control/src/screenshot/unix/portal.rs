@@ -1,5 +1,4 @@
 use std::fs;
-use std::io::Cursor;
 use std::os::fd::{AsRawFd, OwnedFd};
 use std::time::Duration;
 
@@ -11,12 +10,12 @@ use ashpd::desktop::{
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
-use image::{ColorType, ImageEncoder, codecs::png::PngEncoder};
+use image::{ExtendedColorType, codecs::bmp::BmpEncoder};
 use serde::{Deserialize, Serialize};
 
 use wf_core::storage;
 
-use super::common::ensure_png_bytes;
+use super::common::ensure_bmp_bytes;
 
 const RESTORE_TOKEN_FILE: &str = "unix_screencast_token.json";
 const FRAME_TIMEOUT: Duration = Duration::from_secs(5);
@@ -147,13 +146,13 @@ fn capture_pipewire_frame(portal_stream: PortalStream) -> Result<Vec<u8>> {
             FRAME_TIMEOUT.as_nanos().min(u64::MAX as u128) as u64,
         ))
         .ok_or_else(|| anyhow!("Timed out waiting for a Wayland ScreenCast frame"))
-        .and_then(sample_to_png);
+        .and_then(sample_to_bmp);
 
     let _ = pipeline.set_state(gst::State::Null);
     sample_result
 }
 
-fn sample_to_png(sample: gst::Sample) -> Result<Vec<u8>> {
+fn sample_to_bmp(sample: gst::Sample) -> Result<Vec<u8>> {
     let caps = sample
         .caps()
         .ok_or_else(|| anyhow!("Wayland ScreenCast frame missing caps"))?;
@@ -172,34 +171,37 @@ fn sample_to_png(sample: gst::Sample) -> Result<Vec<u8>> {
         bail!("Wayland ScreenCast returned an invalid frame size: {width}x{height}");
     }
 
-    let expected_stride = width as usize * 4;
+    let source_row_len = width as usize * 4;
     let stride = info.stride()[0] as usize;
-    let frame_len = expected_stride
-        .checked_mul(height as usize)
+    let frame_len = (width as usize)
+        .checked_mul(3)
+        .and_then(|row_len| row_len.checked_mul(height as usize))
         .ok_or_else(|| anyhow!("Wayland ScreenCast frame dimensions overflow"))?;
-    let mut rgba = Vec::with_capacity(frame_len);
+    let mut rgb = Vec::with_capacity(frame_len);
 
     for row in 0..height as usize {
         let start = row
             .checked_mul(stride)
             .ok_or_else(|| anyhow!("Wayland ScreenCast frame stride overflow"))?;
         let end = start
-            .checked_add(expected_stride)
+            .checked_add(source_row_len)
             .ok_or_else(|| anyhow!("Wayland ScreenCast frame row overflow"))?;
         let row_bytes = map
             .as_slice()
             .get(start..end)
             .ok_or_else(|| anyhow!("Wayland ScreenCast frame buffer is smaller than expected"))?;
-        rgba.extend_from_slice(row_bytes);
+        for pixel in row_bytes.chunks_exact(4) {
+            rgb.extend_from_slice(&pixel[..3]);
+        }
     }
 
-    let mut png = Vec::new();
-    PngEncoder::new(Cursor::new(&mut png))
-        .write_image(&rgba, width, height, ColorType::Rgba8.into())
-        .context("Failed to encode Wayland ScreenCast frame as PNG")?;
-    ensure_png_bytes(&png, "Wayland ScreenCast portal capture")?;
+    let mut bmp = Vec::new();
+    BmpEncoder::new(&mut bmp)
+        .encode(&rgb, width, height, ExtendedColorType::Rgb8)
+        .context("Failed to encode Wayland ScreenCast frame as BMP")?;
+    ensure_bmp_bytes(&bmp, "Wayland ScreenCast portal capture")?;
 
-    Ok(png)
+    Ok(bmp)
 }
 
 fn restore_token_path() -> Result<std::path::PathBuf> {

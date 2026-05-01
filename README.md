@@ -200,7 +200,7 @@ The `wf-info-cli` binary provides a convenient interface to the daemon.
 ./target/release/wf-info-cli wfm-signout
 ```
 
-_**Note:** Screenshot capture targets the Warframe window when possible. X11 and XWayland use the X11 screenshot API, while native Wayland uses the PipeWire screencast protocol._
+_**Note:** Screenshot capture targets the Warframe window when possible and returns `image/bmp`. X11 and XWayland use the X11 screenshot API, while native Wayland uses the PipeWire screencast protocol._
 
 ## Events
 

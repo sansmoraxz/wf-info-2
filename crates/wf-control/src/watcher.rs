@@ -6,7 +6,7 @@ use serde_json::json;
 use std::collections::HashSet;
 use std::fs::{File, metadata};
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
-use wf_ocr::{RelicRecognizer, load_png_image};
+use wf_ocr::{RelicRecognizer, load_image};
 
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -306,7 +306,7 @@ async fn handle_relic_selection_popup() {
 
     let res = capture_screen().await;
     match res {
-        Ok((png_bytes, _)) => match load_png_image(png_bytes) {
+        Ok((image_bytes, _)) => match load_image(image_bytes) {
             Ok(img) => match RELIC_RECOG_ENGINE.recognize_and_list(&img) {
                 Ok(mut v) => {
                     log::info!("Got relic items: {:?}", v);
