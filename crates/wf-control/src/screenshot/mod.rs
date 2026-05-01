@@ -1,9 +1,8 @@
-use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::time::Instant;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use base64::Engine;
 use chrono::{DateTime, Utc};
 use rand::random;
@@ -50,16 +49,6 @@ struct ScreenshotEventLogEntry<'a> {
     content_len: usize,
 }
 
-#[derive(Debug, Serialize)]
-struct LastScreenshotMetadata<'a> {
-    id: &'a str,
-    timestamp: DateTime<Utc>,
-    metadata: &'a Option<Value>,
-    content_type: &'a str,
-    content_len: usize,
-    content_path: &'a str,
-}
-
 pub(crate) async fn handle_screenshot_trigger(params: Option<Value>) -> Result<Value> {
     let total_start = Instant::now();
     let params: ScreenshotParams = parse_params(params)?;
@@ -82,7 +71,7 @@ pub(crate) async fn handle_screenshot_trigger(params: Option<Value>) -> Result<V
     );
 
     let record_start = Instant::now();
-    let event = record_screenshot_event(params.metadata, base64_content, content_type, &bytes)?;
+    let event = record_screenshot_event(params.metadata, base64_content, content_type)?;
     log::trace!(
         "Screenshot event persistence completed in {:?}",
         record_start.elapsed()
@@ -108,19 +97,7 @@ fn record_screenshot_event(
     metadata: Option<Value>,
     content: String,
     content_type: String,
-    content_bytes: &[u8],
 ) -> Result<ScreenshotEvent> {
-    let cache_dir = storage::app_cache_dir()?;
-    let content_path = match content_type.as_str() {
-        "image/bmp" => cache_dir.join("last_screenshot.bmp"),
-        content_type => {
-            return Err(anyhow!(
-                "Unsupported screenshot content type for cache persistence: {}",
-                content_type
-            ));
-        }
-    };
-
     let event = ScreenshotEvent {
         id: format!("{}-{}", Utc::now().timestamp_millis(), random::<u32>()),
         timestamp: Utc::now(),
@@ -129,27 +106,7 @@ fn record_screenshot_event(
         content_type,
     };
 
-    fs::write(&content_path, content_bytes).with_context(|| {
-        format!(
-            "Failed to write last screenshot content to {}",
-            content_path.display()
-        )
-    })?;
-
-    let last_path = cache_dir.join("last_screenshot.json");
-    let content_path_string = content_path.to_string_lossy().to_string();
-    let metadata = LastScreenshotMetadata {
-        id: &event.id,
-        timestamp: event.timestamp,
-        metadata: &event.metadata,
-        content_type: &event.content_type,
-        content_len: event.content.len(),
-        content_path: &content_path_string,
-    };
-    let raw =
-        serde_json::to_string(&metadata).context("Failed to serialize screenshot metadata")?;
-    fs::write(&last_path, raw).context("Failed to write last screenshot event")?;
-
+    let cache_dir = storage::app_cache_dir()?;
     let log_path = cache_dir.join("screenshot_events.jsonl");
     let mut file = OpenOptions::new()
         .create(true)
