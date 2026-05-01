@@ -3,6 +3,7 @@ mod portal;
 mod x11;
 
 use std::sync::{LazyLock, Mutex};
+use std::time::Instant;
 
 use anyhow::{Result, anyhow, bail};
 
@@ -33,16 +34,31 @@ struct BackendCacheEntry {
 }
 
 pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
+    let total_start = Instant::now();
+    let pid_start = Instant::now();
     let warframe_pid = process::get_warframe_pid()
         .ok_or_else(|| anyhow!("Warframe process not detected; relaunch the game and try again"))?;
+    log::trace!(
+        "Screenshot Warframe PID lookup found {} in {:?}",
+        warframe_pid,
+        pid_start.elapsed()
+    );
 
+    let resolution_start = Instant::now();
     let cached = cached_resolution(warframe_pid);
     let resolution = cached.clone().unwrap_or_else(|| {
         let resolution = resolve_backend(warframe_pid);
         store_resolution(warframe_pid, &resolution);
         resolution
     });
+    log::trace!(
+        "Screenshot backend resolution ({}) selected {:?} in {:?}",
+        if cached.is_some() { "cached" } else { "fresh" },
+        resolution,
+        resolution_start.elapsed()
+    );
 
+    let capture_start = Instant::now();
     match capture_with_backend(warframe_pid, &resolution).await {
         Err(err) if cached.is_some() && resolution.is_x11_window() => {
             log::warn!(
@@ -55,10 +71,23 @@ pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
             if refreshed == resolution {
                 Err(err)
             } else {
-                capture_with_backend(warframe_pid, &refreshed).await
+                let result = capture_with_backend(warframe_pid, &refreshed).await;
+                log::trace!(
+                    "Screenshot Unix capture retry completed in {:?}; total capture_screen time {:?}",
+                    capture_start.elapsed(),
+                    total_start.elapsed()
+                );
+                result
             }
         }
-        result => result,
+        result => {
+            log::trace!(
+                "Screenshot Unix capture completed in {:?}; total capture_screen time {:?}",
+                capture_start.elapsed(),
+                total_start.elapsed()
+            );
+            result
+        }
     }
 }
 
@@ -69,7 +98,13 @@ async fn capture_with_backend(
     match &resolution.capture_backend {
         CaptureBackend::X11Window { window_id } => {
             log::info!("Capturing Warframe via X11/XWayland window {}", window_id);
+            let start = Instant::now();
             let bytes = x11::capture_window(window_id)?;
+            log::trace!(
+                "Screenshot X11/XWayland backend captured {} bytes in {:?}",
+                bytes.len(),
+                start.elapsed()
+            );
             Ok((bytes, "image/bmp".to_string()))
         }
         CaptureBackend::WaylandScreenCastPortal => {
@@ -77,9 +112,15 @@ async fn capture_with_backend(
                 "Capturing Warframe on Unix backend: environment={:?}, capture=WaylandScreenCastPortal",
                 resolution.environment
             );
+            let start = Instant::now();
             let bytes = portal::capture_window().await.inspect_err(|err| {
                 log::error!("Wayland ScreenCast portal capture failed: {}", err);
             })?;
+            log::trace!(
+                "Screenshot Wayland portal backend captured {} bytes in {:?}",
+                bytes.len(),
+                start.elapsed()
+            );
             Ok((bytes, "image/bmp".to_string()))
         }
         CaptureBackend::Unsupported { reason } => bail!("{}", reason),
@@ -87,7 +128,9 @@ async fn capture_with_backend(
 }
 
 fn resolve_backend(warframe_pid: u32) -> BackendResolution {
+    let start = Instant::now();
     let environment = detect_unix_environment();
+    let x11_probe_start = Instant::now();
     let x11_window_id = match x11::find_window(warframe_pid) {
         Ok(window_id) => {
             log::info!(
@@ -106,7 +149,16 @@ fn resolve_backend(warframe_pid: u32) -> BackendResolution {
             None
         }
     };
-    resolve_backend_from_probe(environment, x11_window_id)
+    log::trace!(
+        "Screenshot X11/XWayland window probe completed in {:?}",
+        x11_probe_start.elapsed()
+    );
+    let resolution = resolve_backend_from_probe(environment, x11_window_id);
+    log::trace!(
+        "Screenshot backend resolve completed in {:?}",
+        start.elapsed()
+    );
+    resolution
 }
 
 fn resolve_backend_from_probe(

@@ -1,6 +1,6 @@
 use std::fs;
 use std::os::fd::{AsRawFd, OwnedFd};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
 use ashpd::desktop::{
@@ -10,12 +10,11 @@ use ashpd::desktop::{
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app as gst_app;
-use image::{ExtendedColorType, codecs::bmp::BmpEncoder};
 use serde::{Deserialize, Serialize};
 
 use wf_core::storage;
 
-use super::common::ensure_bmp_bytes;
+use super::common::{ensure_bmp_bytes, new_bmp_rgb24};
 
 const RESTORE_TOKEN_FILE: &str = "unix_screencast_token.json";
 const FRAME_TIMEOUT: Duration = Duration::from_secs(5);
@@ -31,8 +30,9 @@ struct PortalStream {
 }
 
 pub(super) async fn capture_window() -> Result<Vec<u8>> {
+    let start = Instant::now();
     let stored_token = read_restore_token();
-    match open_portal_stream(stored_token.as_deref()).await {
+    let result = match open_portal_stream(stored_token.as_deref()).await {
         Ok(stream) => capture_portal_stream(stream).await,
         Err(err) if stored_token.is_some() => {
             log::warn!(
@@ -44,7 +44,12 @@ pub(super) async fn capture_window() -> Result<Vec<u8>> {
             capture_portal_stream(stream).await
         }
         Err(err) => Err(err),
-    }
+    };
+    log::trace!(
+        "Screenshot Wayland portal capture_window completed in {:?}",
+        start.elapsed()
+    );
+    result
 }
 
 async fn open_portal_stream(restore_token: Option<&str>) -> Result<PortalStream> {
@@ -99,6 +104,7 @@ async fn capture_portal_stream(portal_stream: PortalStream) -> Result<Vec<u8>> {
 }
 
 fn capture_pipewire_frame(portal_stream: PortalStream) -> Result<Vec<u8>> {
+    let total_start = Instant::now();
     gst::init().context("Failed to initialize GStreamer")?;
 
     let pipewire_src = gst::ElementFactory::make("pipewiresrc")
@@ -141,18 +147,31 @@ fn capture_pipewire_frame(portal_stream: PortalStream) -> Result<Vec<u8>> {
         .set_state(gst::State::Playing)
         .context("Failed to start Wayland ScreenCast GStreamer pipeline")?;
 
+    let sample_start = Instant::now();
     let sample_result = appsink
         .try_pull_sample(gst::ClockTime::from_nseconds(
             FRAME_TIMEOUT.as_nanos().min(u64::MAX as u128) as u64,
         ))
         .ok_or_else(|| anyhow!("Timed out waiting for a Wayland ScreenCast frame"))
+        .map(|sample| {
+            log::trace!(
+                "Screenshot Wayland portal frame sample pulled in {:?}",
+                sample_start.elapsed()
+            );
+            sample
+        })
         .and_then(sample_to_bmp);
 
     let _ = pipeline.set_state(gst::State::Null);
+    log::trace!(
+        "Screenshot Wayland portal PipeWire frame capture completed in {:?}",
+        total_start.elapsed()
+    );
     sample_result
 }
 
 fn sample_to_bmp(sample: gst::Sample) -> Result<Vec<u8>> {
+    let total_start = Instant::now();
     let caps = sample
         .caps()
         .ok_or_else(|| anyhow!("Wayland ScreenCast frame missing caps"))?;
@@ -173,12 +192,10 @@ fn sample_to_bmp(sample: gst::Sample) -> Result<Vec<u8>> {
 
     let source_row_len = width as usize * 4;
     let stride = info.stride()[0] as usize;
-    let frame_len = (width as usize)
-        .checked_mul(3)
-        .and_then(|row_len| row_len.checked_mul(height as usize))
-        .ok_or_else(|| anyhow!("Wayland ScreenCast frame dimensions overflow"))?;
-    let mut rgb = Vec::with_capacity(frame_len);
+    let (mut bmp, bmp_stride) = new_bmp_rgb24(width, height)?;
+    let pixel_offset = 54usize;
 
+    let convert_start = Instant::now();
     for row in 0..height as usize {
         let start = row
             .checked_mul(stride)
@@ -190,16 +207,23 @@ fn sample_to_bmp(sample: gst::Sample) -> Result<Vec<u8>> {
             .as_slice()
             .get(start..end)
             .ok_or_else(|| anyhow!("Wayland ScreenCast frame buffer is smaller than expected"))?;
-        for pixel in row_bytes.chunks_exact(4) {
-            rgb.extend_from_slice(&pixel[..3]);
+        for (column, pixel) in row_bytes.chunks_exact(4).enumerate() {
+            let bmp_offset = pixel_offset + row * bmp_stride + column * 3;
+            bmp[bmp_offset] = pixel[2];
+            bmp[bmp_offset + 1] = pixel[1];
+            bmp[bmp_offset + 2] = pixel[0];
         }
     }
+    log::trace!(
+        "Screenshot Wayland portal RGBA-to-BMP pixel conversion completed in {:?}",
+        convert_start.elapsed()
+    );
 
-    let mut bmp = Vec::new();
-    BmpEncoder::new(&mut bmp)
-        .encode(&rgb, width, height, ExtendedColorType::Rgb8)
-        .context("Failed to encode Wayland ScreenCast frame as BMP")?;
     ensure_bmp_bytes(&bmp, "Wayland ScreenCast portal capture")?;
+    log::trace!(
+        "Screenshot Wayland portal sample_to_bmp completed in {:?}",
+        total_start.elapsed()
+    );
 
     Ok(bmp)
 }

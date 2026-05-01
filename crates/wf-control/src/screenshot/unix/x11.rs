@@ -1,6 +1,6 @@
+use std::time::Instant;
+
 use anyhow::{Context, Result, anyhow, bail};
-use image::ExtendedColorType;
-use image::codecs::bmp::BmpEncoder;
 use x11rb::connection::Connection;
 use x11rb::properties::WmClass;
 use x11rb::protocol::xproto::{
@@ -9,7 +9,7 @@ use x11rb::protocol::xproto::{
 };
 use x11rb::rust_connection::RustConnection;
 
-use super::common::{WARFRAME_CLASS_HINTS, WARFRAME_TITLE_HINTS, ensure_bmp_bytes};
+use super::common::{WARFRAME_CLASS_HINTS, WARFRAME_TITLE_HINTS, ensure_bmp_bytes, new_bmp_rgb24};
 
 struct X11Context {
     conn: RustConnection,
@@ -45,21 +45,35 @@ pub(super) fn find_window(pid: u32) -> Result<String> {
 }
 
 pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
+    let total_start = Instant::now();
     let window = window_id
         .parse::<Window>()
         .with_context(|| format!("Invalid X11 window id '{}'", window_id))?;
+    let connect_start = Instant::now();
     let context = X11Context::connect()?;
+    log::trace!(
+        "Screenshot X11 connection initialized in {:?}",
+        connect_start.elapsed()
+    );
+    let geometry_start = Instant::now();
     let geometry = context
         .conn
         .get_geometry(window)
         .with_context(|| format!("Failed to request X11 geometry for window {}", window_id))?
         .reply()
         .with_context(|| format!("Failed to read X11 geometry for window {}", window_id))?;
+    log::trace!(
+        "Screenshot X11 geometry {}x{} fetched in {:?}",
+        geometry.width,
+        geometry.height,
+        geometry_start.elapsed()
+    );
 
     if geometry.width == 0 || geometry.height == 0 {
         bail!("X11 window {} has empty geometry", window_id);
     }
 
+    let get_image_start = Instant::now();
     let image = context
         .conn
         .get_image(
@@ -74,7 +88,13 @@ pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
         .with_context(|| format!("Failed to request X11 image for window {}", window_id))?
         .reply()
         .with_context(|| format!("Failed to read X11 image for window {}", window_id))?;
+    log::trace!(
+        "Screenshot X11 GetImage returned {} bytes in {:?}",
+        image.data.len(),
+        get_image_start.elapsed()
+    );
 
+    let encode_start = Instant::now();
     let visual = context.visual_for_window(window)?;
     let bytes = encode_x11_image_bmp(
         &context.conn,
@@ -84,7 +104,16 @@ pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
         geometry.height,
     )
     .with_context(|| format!("Failed to encode X11 window {} capture as BMP", window_id))?;
+    log::trace!(
+        "Screenshot X11 BMP encode produced {} bytes in {:?}",
+        bytes.len(),
+        encode_start.elapsed()
+    );
     ensure_bmp_bytes(&bytes, "X11 window capture")?;
+    log::trace!(
+        "Screenshot X11 capture_window completed in {:?}",
+        total_start.elapsed()
+    );
     Ok(bytes)
 }
 
@@ -236,7 +265,32 @@ fn encode_x11_image_bmp(
         .len()
         .checked_div(height_usize)
         .ok_or_else(|| anyhow!("Invalid X11 image height"))?;
-    let mut rgb = vec![0; width_usize * height_usize * 3];
+    let (mut bmp, bmp_stride) = new_bmp_rgb24(u32::from(width), u32::from(height))?;
+    let pixel_offset = 54usize;
+
+    if bytes_per_pixel == 4
+        && conn.setup().image_byte_order == ImageOrder::LSB_FIRST
+        && visual.red_mask == 0x00ff0000
+        && visual.green_mask == 0x0000ff00
+        && visual.blue_mask == 0x000000ff
+    {
+        for y in 0..height_usize {
+            let source_start = y * stride;
+            let source_end = source_start + width_usize * bytes_per_pixel;
+            let source_row = image
+                .data
+                .get(source_start..source_end)
+                .ok_or_else(|| anyhow!("X11 image data ended unexpectedly"))?;
+            let bmp_row_start = pixel_offset + y * bmp_stride;
+            for (x, pixel) in source_row.chunks_exact(4).enumerate() {
+                let bmp_offset = bmp_row_start + x * 3;
+                bmp[bmp_offset] = pixel[0];
+                bmp[bmp_offset + 1] = pixel[1];
+                bmp[bmp_offset + 2] = pixel[2];
+            }
+        }
+        return Ok(bmp);
+    }
 
     for y in 0..height_usize {
         for x in 0..width_usize {
@@ -247,21 +301,14 @@ fn encode_x11_image_bmp(
                 bytes_per_pixel,
                 conn.setup().image_byte_order,
             )?;
-            let rgb_offset = (y * width_usize + x) * 3;
-            rgb[rgb_offset] = component(pixel, visual.red_mask);
-            rgb[rgb_offset + 1] = component(pixel, visual.green_mask);
-            rgb[rgb_offset + 2] = component(pixel, visual.blue_mask);
+            let bmp_offset = pixel_offset + y * bmp_stride + x * 3;
+            bmp[bmp_offset] = component(pixel, visual.blue_mask);
+            bmp[bmp_offset + 1] = component(pixel, visual.green_mask);
+            bmp[bmp_offset + 2] = component(pixel, visual.red_mask);
         }
     }
 
-    let mut bytes = Vec::new();
-    BmpEncoder::new(&mut bytes).encode(
-        &rgb,
-        u32::from(width),
-        u32::from(height),
-        ExtendedColorType::Rgb8,
-    )?;
-    Ok(bytes)
+    Ok(bmp)
 }
 
 fn read_pixel(
