@@ -1,5 +1,6 @@
 use std::fs::OpenOptions;
 use std::io::Write;
+use std::sync::{LazyLock, Mutex};
 use std::time::Instant;
 
 use anyhow::{Context, Result};
@@ -15,6 +16,27 @@ use wf_core::storage;
 use super::broadcaster;
 use super::events::{DaemonEvent, ScreenshotTriggeredEvent};
 use super::utils::parse_params;
+
+static SCREENSHOT_CONFIG: LazyLock<Mutex<ScreenshotConfig>> =
+    LazyLock::new(|| Mutex::new(ScreenshotConfig::default()));
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ScreenshotConfig {
+    pub native_wayland_capture: bool,
+}
+
+pub fn set_screenshot_config(config: ScreenshotConfig) {
+    if let Ok(mut current) = SCREENSHOT_CONFIG.lock() {
+        *current = config;
+    }
+}
+
+pub(crate) fn screenshot_config() -> ScreenshotConfig {
+    SCREENSHOT_CONFIG
+        .lock()
+        .map(|config| *config)
+        .unwrap_or_default()
+}
 
 #[cfg(unix)]
 mod unix;

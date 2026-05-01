@@ -18,6 +18,7 @@ pub use events::{
     AccountLoginEvent, AccountLogoutEvent, DaemonEvent, DmTabOpenedEvent, EventMessage,
     InventoryFetchedEvent, InventoryStaleEvent, ProfileUpdatedEvent, ScreenshotTriggeredEvent,
 };
+pub use screenshot::{ScreenshotConfig, set_screenshot_config};
 pub use server::{
     ControlConfig, ControlEndpoint, ControlServer, start_control_server,
     start_control_server_from_env,

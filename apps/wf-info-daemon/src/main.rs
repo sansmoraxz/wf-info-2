@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use tokio::process::Command;
 use tokio::signal;
 
-use wf_control::{self, ControlConfig, ControlEndpoint};
+use wf_control::{self, ControlConfig, ControlEndpoint, ScreenshotConfig};
 use wf_core::{logs, process};
 use wf_itemdata::item_data_fetch;
 
@@ -19,6 +19,9 @@ use wf_itemdata::item_data_fetch;
 struct Cli {
     #[command(flatten)]
     server: ServerArgs,
+
+    #[command(flatten)]
+    screenshot: ScreenshotArgs,
 
     /// Warframe command and arguments to launch as child process.
     /// Use -- separator before the command.
@@ -42,6 +45,13 @@ struct ServerArgs {
     #[cfg(windows)]
     #[arg(long, env = "WF_INFO_API_NPIPE")]
     npipe: Option<String>,
+}
+
+#[derive(Args, Debug, Clone)]
+struct ScreenshotArgs {
+    /// Force native Wayland ScreenCast capture in Wayland sessions, even when Warframe is visible through XWayland.
+    #[arg(long, env = "WF_INFO_SCREENSHOT_NATIVE_WAYLAND")]
+    native_wayland_screenshot: bool,
 }
 
 impl ServerArgs {
@@ -82,6 +92,10 @@ async fn main() {
 
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     log::info!("Warframe Account Info Scanner started");
+
+    wf_control::set_screenshot_config(ScreenshotConfig {
+        native_wayland_capture: cli.screenshot.native_wayland_screenshot,
+    });
 
     // Fetch / update cached item data from upstream
     if let Err(e) = item_data_fetch::update_cache().await {

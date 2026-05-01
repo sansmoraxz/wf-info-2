@@ -10,6 +10,7 @@ use anyhow::{Result, anyhow, bail};
 use wf_core::process;
 
 use self::common::{EnvironmentKind, detect_unix_environment};
+use super::screenshot_config;
 
 static BACKEND_CACHE: LazyLock<Mutex<Option<BackendCacheEntry>>> =
     LazyLock::new(|| Mutex::new(None));
@@ -31,6 +32,7 @@ struct BackendResolution {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct BackendCacheEntry {
     warframe_pid: u32,
+    native_wayland_capture: bool,
     resolution: BackendResolution,
 }
 
@@ -47,10 +49,11 @@ pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
     );
 
     let resolution_start = Instant::now();
-    let cached = cached_resolution(warframe_pid);
+    let native_wayland_capture = screenshot_config().native_wayland_capture;
+    let cached = cached_resolution(warframe_pid, native_wayland_capture);
     let resolution = cached.clone().unwrap_or_else(|| {
-        let resolution = resolve_backend(warframe_pid);
-        store_resolution(warframe_pid, &resolution);
+        let resolution = resolve_backend(warframe_pid, native_wayland_capture);
+        store_resolution(warframe_pid, native_wayland_capture, &resolution);
         resolution
     });
     log::trace!(
@@ -69,8 +72,8 @@ pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
             );
             clear_cached_resolution();
             clear_cached_warframe_pid();
-            let refreshed = resolve_backend(warframe_pid);
-            store_resolution(warframe_pid, &refreshed);
+            let refreshed = resolve_backend(warframe_pid, native_wayland_capture);
+            store_resolution(warframe_pid, native_wayland_capture, &refreshed);
             if refreshed == resolution {
                 Err(err)
             } else {
@@ -130,32 +133,40 @@ async fn capture_with_backend(
     }
 }
 
-fn resolve_backend(warframe_pid: u32) -> BackendResolution {
+fn resolve_backend(warframe_pid: u32, force_native_wayland: bool) -> BackendResolution {
     let start = Instant::now();
     let environment = detect_unix_environment();
-    let x11_probe_start = Instant::now();
-    let x11_window_id = match x11::find_window(warframe_pid) {
-        Ok(window_id) => {
-            log::info!(
-                "Detected Warframe X11/XWayland window {} for PID {}",
-                window_id,
-                warframe_pid
-            );
-            Some(window_id)
-        }
-        Err(err) => {
-            log::debug!(
-                "Warframe X11/XWayland window probe failed for PID {}: {}",
-                warframe_pid,
-                err
-            );
-            None
-        }
+    let x11_window_id = if force_native_wayland && environment == EnvironmentKind::Wayland {
+        log::info!(
+            "Native Wayland screenshot capture is enabled; using ScreenCast portal instead of X11/XWayland capture"
+        );
+        None
+    } else {
+        let x11_probe_start = Instant::now();
+        let x11_window_id = match x11::find_window(warframe_pid) {
+            Ok(window_id) => {
+                log::info!(
+                    "Detected Warframe X11/XWayland window {} for PID {}",
+                    window_id,
+                    warframe_pid
+                );
+                Some(window_id)
+            }
+            Err(err) => {
+                log::debug!(
+                    "Warframe X11/XWayland window probe failed for PID {}: {}",
+                    warframe_pid,
+                    err
+                );
+                None
+            }
+        };
+        log::trace!(
+            "Screenshot X11/XWayland window probe completed in {:?}",
+            x11_probe_start.elapsed()
+        );
+        x11_window_id
     };
-    log::trace!(
-        "Screenshot X11/XWayland window probe completed in {:?}",
-        x11_probe_start.elapsed()
-    );
     let resolution = resolve_backend_from_probe(environment, x11_window_id);
     log::trace!(
         "Screenshot backend resolve completed in {:?}",
@@ -206,19 +217,27 @@ impl BackendResolution {
     }
 }
 
-fn cached_resolution(warframe_pid: u32) -> Option<BackendResolution> {
+fn cached_resolution(warframe_pid: u32, native_wayland_capture: bool) -> Option<BackendResolution> {
     BACKEND_CACHE
         .lock()
         .ok()
         .and_then(|cache| cache.as_ref().cloned())
-        .filter(|entry| entry.warframe_pid == warframe_pid)
+        .filter(|entry| {
+            entry.warframe_pid == warframe_pid
+                && entry.native_wayland_capture == native_wayland_capture
+        })
         .map(|entry| entry.resolution)
 }
 
-fn store_resolution(warframe_pid: u32, resolution: &BackendResolution) {
+fn store_resolution(
+    warframe_pid: u32,
+    native_wayland_capture: bool,
+    resolution: &BackendResolution,
+) {
     if let Ok(mut cache) = BACKEND_CACHE.lock() {
         *cache = Some(BackendCacheEntry {
             warframe_pid,
+            native_wayland_capture,
             resolution: resolution.clone(),
         });
     }
