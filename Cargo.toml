@@ -51,4 +51,4 @@ version = "4.0"
 
 [workspace.dependencies.winapi]
 version = "0.3"
-features = ["processthreadsapi", "memoryapi", "handleapi", "winnt"]
+features = ["processthreadsapi", "memoryapi", "handleapi", "synchapi", "winbase", "winnt"]

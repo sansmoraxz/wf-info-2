@@ -23,7 +23,7 @@ wf-inventory = { path = "../wf-inventory" }
 
 [features]
 default = []
-memory = ["dep:memchr", "dep:scopeguard", "dep:winapi"]
+memory = ["dep:memchr", "dep:scopeguard"]
 
 [dependencies.memchr]
 workspace = true
@@ -34,4 +34,4 @@ workspace = true
 optional = true
 
 [target.'cfg(windows)'.dependencies]
-winapi = { workspace = true, optional = true }
+winapi = { workspace = true }
