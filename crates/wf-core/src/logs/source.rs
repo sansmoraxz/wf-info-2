@@ -276,23 +276,22 @@ fn decode_wine_debug_payload(payload: &str) -> Option<String> {
 #[cfg(windows)]
 mod platform {
     use super::{DBWIN_BUFFER_SIZE, DbwinFrame, decode_dbwin_frame};
-    use std::ffi::c_void;
     use std::io;
     use std::ptr::null_mut;
     use std::slice;
     use std::time::Duration;
 
+    use winapi::ctypes::c_void;
     use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
-    use winapi::um::memoryapi::{
-        CreateFileMappingA, FILE_MAP_READ, MapViewOfFile, UnmapViewOfFile,
-    };
+    use winapi::um::memoryapi::{FILE_MAP_READ, MapViewOfFile, UnmapViewOfFile};
     use winapi::um::synchapi::{CreateEventA, SetEvent, WaitForSingleObject};
-    use winapi::um::winbase::{WAIT_OBJECT_0, WAIT_TIMEOUT};
+    use winapi::um::winbase::{CreateFileMappingA, WAIT_OBJECT_0};
     use winapi::um::winnt::{HANDLE, PAGE_READWRITE};
 
     const DBWIN_BUFFER_NAME: &[u8] = b"DBWIN_BUFFER\0";
     const DBWIN_BUFFER_READY_NAME: &[u8] = b"DBWIN_BUFFER_READY\0";
     const DBWIN_DATA_READY_NAME: &[u8] = b"DBWIN_DATA_READY\0";
+    const WAIT_TIMEOUT: u32 = 258;
 
     pub(super) struct DbwinMonitor {
         mapping: HANDLE,

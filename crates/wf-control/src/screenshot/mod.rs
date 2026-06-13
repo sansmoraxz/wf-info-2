@@ -31,6 +31,7 @@ pub fn set_screenshot_config(config: ScreenshotConfig) {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn screenshot_config() -> ScreenshotConfig {
     SCREENSHOT_CONFIG
         .lock()

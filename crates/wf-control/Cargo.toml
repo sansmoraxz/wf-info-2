@@ -29,6 +29,10 @@ wf-ocr = { path = "../wf-ocr" }
 [features]
 default = []
 memory = ["wf-core/memory"]
+vulkan = ["wf-ocr/vulkan"]
+cuda = ["wf-ocr/cuda"]
+opencl = ["wf-ocr/opencl"]
+opengl = ["wf-ocr/opengl"]
 native-wayland-screenshot = [
     "dep:ashpd",
     "dep:gstreamer",
@@ -48,3 +52,4 @@ x11rb = "0.13.2"
 
 [target.'cfg(windows)'.dependencies]
 win-screenshot.workspace = true
+winapi.workspace = true

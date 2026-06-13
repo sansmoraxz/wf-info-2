@@ -3,10 +3,18 @@ use clap::{Args, Parser};
 use std::ffi::OsString;
 #[cfg(unix)]
 use std::path::PathBuf;
+#[cfg(windows)]
+use std::pin::Pin;
 #[cfg(unix)]
 use std::process::Stdio;
+#[cfg(windows)]
+use std::time::Duration;
 use tokio::process::Command;
 use tokio::signal;
+#[cfg(windows)]
+use tokio::task::JoinHandle;
+#[cfg(windows)]
+use tokio::time::{Sleep, sleep};
 
 use wf_control::{self, ControlConfig, ControlEndpoint, ScreenshotConfig};
 #[cfg(windows)]
@@ -90,6 +98,7 @@ fn skip_auto_events() -> bool {
     std::env::var("WF_SKIP_AUTO_CALLBACK").map_or(false, |v| v.eq_ignore_ascii_case("TRUE"))
 }
 
+#[cfg(unix)]
 fn exit_from_child_result(
     result: Result<Result<std::process::ExitStatus, std::io::Error>, tokio::task::JoinError>,
 ) -> ! {
@@ -118,6 +127,52 @@ fn merged_winedebug_value(existing: Option<OsString>) -> OsString {
             merged
         }
         _ => OsString::from("warn+debugstr"),
+    }
+}
+
+#[cfg(windows)]
+const GAME_START_TIMEOUT: Duration = Duration::from_secs(120);
+
+#[cfg(windows)]
+async fn wait_for_new_game_pid_or_launcher_exit(
+    existing_pids: &std::collections::HashSet<u32>,
+    child_handle: &mut JoinHandle<Result<std::process::ExitStatus, std::io::Error>>,
+) -> u32 {
+    let wait_for_pid = process::wait_for_new_warframe_start(existing_pids);
+    tokio::pin!(wait_for_pid);
+
+    let mut timeout: Option<Pin<Box<Sleep>>> = None;
+
+    loop {
+        tokio::select! {
+            pid = &mut wait_for_pid => {
+                return pid;
+            }
+            result = &mut *child_handle, if timeout.is_none() => {
+                match result {
+                    Ok(Ok(status)) => {
+                        log::info!("Warframe launcher exited with status: {}", status);
+                        timeout = Some(Box::pin(sleep(GAME_START_TIMEOUT)));
+                    }
+                    Ok(Err(e)) => {
+                        log::error!("Error waiting for Warframe launcher process: {}", e);
+                        std::process::exit(1);
+                    }
+                    Err(e) => {
+                        log::error!("Warframe launcher task failed: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+            _ = async {
+                if let Some(timeout) = timeout.as_mut() {
+                    timeout.await;
+                }
+            }, if timeout.is_some() => {
+                log::error!("Timed out waiting for the Warframe game process after the launcher exited");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
@@ -159,7 +214,6 @@ async fn main() {
         std::process::exit(1);
     });
 
-    #[cfg(unix)]
     let existing_warframe_pids: std::collections::HashSet<u32> =
         process::get_all_warframe_pids().into_iter().collect();
 
@@ -188,11 +242,11 @@ async fn main() {
         std::process::exit(1);
     }));
 
-    let warframe_pid = child.id().unwrap_or_else(|| {
+    let launcher_pid = child.id().unwrap_or_else(|| {
         eprintln!("Error: Warframe launched without a PID.");
         std::process::exit(1);
     });
-    log::info!("Warframe launcher spawned with PID: {}", warframe_pid);
+    log::info!("Warframe launcher spawned with PID: {}", launcher_pid);
 
     let mut child_handle = tokio::spawn(async move { child.wait().await });
 
@@ -207,7 +261,8 @@ async fn main() {
         }
     };
     #[cfg(windows)]
-    let warframe_pid = warframe_pid;
+    let warframe_pid =
+        wait_for_new_game_pid_or_launcher_exit(&existing_warframe_pids, &mut child_handle).await;
 
     #[cfg(windows)]
     {
@@ -257,9 +312,7 @@ async fn main() {
         }
     });
 
-    #[cfg(unix)]
     let game_exit = process::wait_for_warframe_exit(warframe_pid);
-    #[cfg(unix)]
     tokio::pin!(game_exit);
 
     #[cfg(unix)]
@@ -291,7 +344,9 @@ async fn main() {
                 log::info!("Log watcher exited");
             }
         }
-        result = child_handle => exit_from_child_result(result),
+        _ = &mut game_exit => {
+            log::info!("Warframe game process exited");
+        }
     }
 }
 

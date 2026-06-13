@@ -9,3 +9,10 @@ clap.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 wf-control = { path = "../../crates/wf-control" }
+
+[features]
+default = []
+vulkan = ["wf-control/vulkan"]
+cuda = ["wf-control/cuda"]
+opencl = ["wf-control/opencl"]
+opengl = ["wf-control/opengl"]
