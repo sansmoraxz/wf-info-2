@@ -51,5 +51,5 @@ gstreamer-video = { version = "0.25", optional = true }
 x11rb = "0.13.2"
 
 [target.'cfg(windows)'.dependencies]
-win-screenshot.workspace = true
-winapi.workspace = true
+win-screenshot = { version = "4.0" }
+winapi = { workspace = true }

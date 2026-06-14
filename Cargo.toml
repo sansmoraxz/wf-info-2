@@ -46,9 +46,6 @@ uuid = { version = "1", features = ["v4"] }
 itertools = "0.14.0"
 rust-embed = "8.11.0"
 
-[workspace.dependencies.win-screenshot]
-version = "4.0"
-
 [workspace.dependencies.winapi]
 version = "0.3"
 features = ["processthreadsapi", "memoryapi", "handleapi", "synchapi", "winbase", "winnt", "winuser"]
