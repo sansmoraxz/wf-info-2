@@ -1,11 +1,27 @@
 use clap::{Args, Parser};
 #[cfg(unix)]
+use std::ffi::OsString;
+#[cfg(unix)]
 use std::path::PathBuf;
+#[cfg(windows)]
+use std::pin::Pin;
+#[cfg(unix)]
+use std::process::Stdio;
+#[cfg(windows)]
+use std::time::Duration;
 use tokio::process::Command;
 use tokio::signal;
+#[cfg(windows)]
+use tokio::task::JoinHandle;
+#[cfg(windows)]
+use tokio::time::{Sleep, sleep};
 
 use wf_control::{self, ControlConfig, ControlEndpoint, ScreenshotConfig};
-use wf_core::{logs, process};
+#[cfg(windows)]
+use wf_core::logs::DbwinLogSource;
+#[cfg(unix)]
+use wf_core::logs::WineDebugLogSource;
+use wf_core::process;
 use wf_itemdata::item_data_fetch;
 
 /// Warframe Account Info Scanner daemon
@@ -14,8 +30,7 @@ use wf_itemdata::item_data_fetch;
 #[command(about = "Warframe Account Info Scanner daemon")]
 #[command(after_help = "Examples:\n  \
     wf-info-daemon -- %command%                        Launch Warframe as child process\n  \
-    wf-info-daemon --tcp 127.0.0.1:9999 -- %command%   With custom API endpoint\n  \
-    wf-info-daemon                                     Monitor existing Warframe process")]
+    wf-info-daemon --tcp 127.0.0.1:9999 -- %command%   With custom API endpoint")]
 struct Cli {
     #[command(flatten)]
     server: ServerArgs,
@@ -25,8 +40,7 @@ struct Cli {
 
     /// Warframe command and arguments to launch as child process.
     /// Use -- separator before the command.
-    /// If not provided, scans for an existing Warframe process.
-    #[arg(last = true)]
+    #[arg(last = true, required = true)]
     warframe_cmd: Vec<String>,
 }
 
@@ -72,7 +86,6 @@ impl ServerArgs {
             endpoints.push(ControlEndpoint::Npipe(pipe));
         }
 
-        // If no CLI args or env vars provided, use defaults
         if endpoints.is_empty() {
             return ControlConfig::from_env();
         }
@@ -83,6 +96,84 @@ impl ServerArgs {
 
 fn skip_auto_events() -> bool {
     std::env::var("WF_SKIP_AUTO_CALLBACK").map_or(false, |v| v.eq_ignore_ascii_case("TRUE"))
+}
+
+#[cfg(unix)]
+fn exit_from_child_result(
+    result: Result<Result<std::process::ExitStatus, std::io::Error>, tokio::task::JoinError>,
+) -> ! {
+    match result {
+        Ok(Ok(status)) => {
+            log::info!("Warframe process exited with status: {}", status);
+            std::process::exit(status.code().unwrap_or(0));
+        }
+        Ok(Err(e)) => {
+            log::error!("Error waiting for Warframe process: {}", e);
+            std::process::exit(1);
+        }
+        Err(e) => {
+            log::error!("Child process task failed: {}", e);
+            std::process::exit(1);
+        }
+    }
+}
+
+#[cfg(unix)]
+fn merged_winedebug_value(existing: Option<OsString>) -> OsString {
+    match existing {
+        Some(current) if !current.is_empty() => {
+            let mut merged = current;
+            merged.push(",warn+debugstr");
+            merged
+        }
+        _ => OsString::from("warn+debugstr"),
+    }
+}
+
+#[cfg(windows)]
+const GAME_START_TIMEOUT: Duration = Duration::from_secs(120);
+
+#[cfg(windows)]
+async fn wait_for_new_game_pid_or_launcher_exit(
+    existing_pids: &std::collections::HashSet<u32>,
+    child_handle: &mut JoinHandle<Result<std::process::ExitStatus, std::io::Error>>,
+) -> u32 {
+    let wait_for_pid = process::wait_for_new_warframe_start(existing_pids);
+    tokio::pin!(wait_for_pid);
+
+    let mut timeout: Option<Pin<Box<Sleep>>> = None;
+
+    loop {
+        tokio::select! {
+            pid = &mut wait_for_pid => {
+                return pid;
+            }
+            result = &mut *child_handle, if timeout.is_none() => {
+                match result {
+                    Ok(Ok(status)) => {
+                        log::info!("Warframe launcher exited with status: {}", status);
+                        timeout = Some(Box::pin(sleep(GAME_START_TIMEOUT)));
+                    }
+                    Ok(Err(e)) => {
+                        log::error!("Error waiting for Warframe launcher process: {}", e);
+                        std::process::exit(1);
+                    }
+                    Err(e) => {
+                        log::error!("Warframe launcher task failed: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+            _ = async {
+                if let Some(timeout) = timeout.as_mut() {
+                    timeout.await;
+                }
+            }, if timeout.is_some() => {
+                log::error!("Timed out waiting for the Warframe game process after the launcher exited");
+                std::process::exit(1);
+            }
+        }
+    }
 }
 
 #[tokio::main]
@@ -97,12 +188,10 @@ async fn main() {
         native_wayland_capture: cli.screenshot.native_wayland_screenshot,
     });
 
-    // Fetch / update cached item data from upstream
     if let Err(e) = item_data_fetch::update_cache().await {
         log::warn!("Failed to update item data cache: {}", e);
     }
 
-    // Restore WFM session from cached token (if any)
     wf_control::wfm_auth::try_restore_session().await;
 
     let _control_server = match cli.server.into_control_config() {
@@ -119,60 +208,77 @@ async fn main() {
         }
     };
 
-    // Check if we should launch Warframe as a child process
-    let warframe_cmd = if cli.warframe_cmd.is_empty() {
-        None
-    } else {
-        Some(cli.warframe_cmd)
-    };
-
-    // Find warframe config folder
-    let wf_config = logs::find_wf_app_config().unwrap_or_else(|| {
-        eprintln!("Error: Could not find Warframe config folder.");
-        eprintln!(
-            "Please ensure Warframe is installed or set WARFRAME_APP_CONFIG environment variable."
-        );
+    #[cfg(windows)]
+    let mut log_source = DbwinLogSource::new().unwrap_or_else(|e| {
+        eprintln!("Error: Failed to start DBWIN monitor: {}", e);
         std::process::exit(1);
     });
 
-    log::info!("Warframe config folder: {:?}", wf_config);
+    let existing_warframe_pids: std::collections::HashSet<u32> =
+        process::get_all_warframe_pids().into_iter().collect();
 
-    // If command line args provided, launch Warframe as child process
-    let (child_handle, warframe_pid) = if let Some(cmd_args) = warframe_cmd {
-        log::info!("Launching Warframe as child process: {:?}", cmd_args);
+    log::info!(
+        "Launching Warframe as child process: {:?}",
+        cli.warframe_cmd
+    );
+    let mut command = Command::new(&cli.warframe_cmd[0]);
+    command.args(&cli.warframe_cmd[1..]);
+    #[cfg(unix)]
+    {
+        command.stderr(Stdio::piped());
+        command.env(
+            "WINEDEBUG",
+            merged_winedebug_value(std::env::var_os("WINEDEBUG")),
+        );
+    }
+    let mut child = command.spawn().unwrap_or_else(|e| {
+        eprintln!("Error: Failed to launch Warframe: {}", e);
+        std::process::exit(1);
+    });
 
-        let mut child = Command::new(&cmd_args[0])
-            .args(&cmd_args[1..])
-            .spawn()
-            .unwrap_or_else(|e| {
-                eprintln!("Error: Failed to launch Warframe: {}", e);
-                std::process::exit(1);
-            });
+    #[cfg(unix)]
+    let log_source = WineDebugLogSource::new(child.stderr.take().unwrap_or_else(|| {
+        eprintln!("Error: Failed to capture Wine debug stderr.");
+        std::process::exit(1);
+    }));
 
-        log::info!("Warframe launched with PID: {:?}", child.id());
+    let launcher_pid = child.id().unwrap_or_else(|| {
+        eprintln!("Error: Warframe launched without a PID.");
+        std::process::exit(1);
+    });
+    log::info!("Warframe launcher spawned with PID: {}", launcher_pid);
 
-        // Spawn task to monitor child process exit
-        let handle = tokio::spawn(async move {
-            match child.wait().await {
-                Ok(status) => {
-                    log::info!("Warframe process exited with status: {}", status);
-                    std::process::exit(status.code().unwrap_or(0));
-                }
-                Err(e) => {
-                    log::error!("Error waiting for Warframe process: {}", e);
-                    std::process::exit(1);
-                }
-            }
-        });
-        (Some(handle), None)
-    } else {
-        // No command provided, wait for Warframe to start on its own
-        log::info!("No launch command provided, waiting for existing Warframe process...");
-        let pid = process::wait_for_warframe_start().await;
-        (None, Some(pid))
+    let mut child_handle = tokio::spawn(async move { child.wait().await });
+
+    #[cfg(unix)]
+    let warframe_pid = {
+        let wait_for_pid = process::wait_for_new_warframe_start(&existing_warframe_pids);
+        tokio::pin!(wait_for_pid);
+
+        tokio::select! {
+            pid = &mut wait_for_pid => pid,
+            result = &mut child_handle => exit_from_child_result(result),
+        }
     };
+    #[cfg(windows)]
+    let warframe_pid =
+        wait_for_new_game_pid_or_launcher_exit(&existing_warframe_pids, &mut child_handle).await;
 
-    // Auto-status: set WFM status based on game activity
+    #[cfg(windows)]
+    {
+        log::info!(
+            "Using Warframe game PID for DBWIN filtering: {}",
+            warframe_pid
+        );
+        log_source.set_pid_filter(warframe_pid);
+    }
+
+    #[cfg(unix)]
+    log::info!(
+        "Using Wine debugstr stderr transport with Warframe game PID: {}",
+        warframe_pid
+    );
+
     if skip_cb {
         log::info!("Skipping auto set of warframe market status...");
     } else {
@@ -197,34 +303,87 @@ async fn main() {
         });
     }
 
-    // Start watching the log file
     let log_watcher = tokio::spawn(async move {
         if let Err(e) =
-            wf_control::watcher::observe_warframe_activity(wf_config, warframe_pid, skip_cb).await
+            wf_control::watcher::observe_warframe_activity(log_source, Some(warframe_pid), skip_cb)
+                .await
         {
-            log::error!("Error watching file: {}", e);
+            log::error!("Error reading live log source: {}", e);
         }
     });
 
-    // Wait for Ctrl+C
+    let game_exit = process::wait_for_warframe_exit(warframe_pid);
+    tokio::pin!(game_exit);
+
+    #[cfg(unix)]
     tokio::select! {
         _ = signal::ctrl_c() => {
             log::info!("Received Ctrl+C, shutting down...");
         }
-        _ = log_watcher => {
-            log::info!("Log watcher exited");
-        }
-        result = async {
-            if let Some(handle) = child_handle {
-                handle.await
+        watcher = log_watcher => {
+            if let Err(e) = watcher {
+                log::error!("Log watcher task failed: {}", e);
             } else {
-                // Never completes if no child
-                std::future::pending::<Result<(), tokio::task::JoinError>>().await
-            }
-        } => {
-            if let Ok(())  = result {
-                log::info!("Child process task completed");
+                log::info!("Log watcher exited");
             }
         }
+        _ = &mut game_exit => {
+            log::info!("Warframe game process exited");
+        }
+    }
+
+    #[cfg(windows)]
+    tokio::select! {
+        _ = signal::ctrl_c() => {
+            log::info!("Received Ctrl+C, shutting down...");
+        }
+        watcher = log_watcher => {
+            if let Err(e) = watcher {
+                log::error!("Log watcher task failed: {}", e);
+            } else {
+                log::info!("Log watcher exited");
+            }
+        }
+        _ = &mut game_exit => {
+            log::info!("Warframe game process exited");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn launch_command_is_required() {
+        assert!(Cli::try_parse_from(["wf-info-daemon"]).is_err());
+    }
+
+    #[test]
+    fn launch_command_is_captured_after_separator() {
+        let cli = Cli::try_parse_from([
+            "wf-info-daemon",
+            "--tcp",
+            "127.0.0.1:9999",
+            "--",
+            "wine",
+            "Warframe.x64.exe",
+        ])
+        .unwrap();
+
+        assert_eq!(cli.warframe_cmd, vec!["wine", "Warframe.x64.exe"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn merged_winedebug_value_adds_debugstr_channel() {
+        assert_eq!(
+            merged_winedebug_value(None),
+            OsString::from("warn+debugstr")
+        );
+        assert_eq!(
+            merged_winedebug_value(Some(OsString::from("fixme-all"))),
+            OsString::from("fixme-all,warn+debugstr")
+        );
     }
 }

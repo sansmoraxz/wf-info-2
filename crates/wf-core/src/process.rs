@@ -1,5 +1,6 @@
 #[cfg(all(feature = "memory", target_os = "linux"))]
 use anyhow::Context;
+use std::collections::HashSet;
 use std::time::Duration;
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 use tokio::time::sleep;
@@ -60,6 +61,15 @@ fn find_warframe_pid(system: &System) -> Option<u32> {
         .map(|p| p.pid().as_u32())
 }
 
+fn find_all_warframe_pids(system: &System) -> Vec<u32> {
+    system
+        .processes()
+        .values()
+        .filter(|p| is_warframe_game_process(p))
+        .map(|p| p.pid().as_u32())
+        .collect()
+}
+
 pub async fn wait_for_warframe_start() -> u32 {
     log::info!("Waiting for Warframe to start...");
     let mut system = System::new();
@@ -76,12 +86,47 @@ pub async fn wait_for_warframe_start() -> u32 {
     }
 }
 
+pub async fn wait_for_new_warframe_start(existing_pids: &HashSet<u32>) -> u32 {
+    log::info!(
+        "Waiting for launched Warframe game process; excluding existing PIDs: {:?}",
+        existing_pids
+    );
+    let mut system = System::new();
+
+    loop {
+        refresh_all_process_commands(&mut system);
+
+        if let Some(pid) = find_all_warframe_pids(&system)
+            .into_iter()
+            .find(|pid| !existing_pids.contains(pid))
+        {
+            log::info!("Launched Warframe game process detected (PID: {}).", pid);
+            return pid;
+        }
+
+        sleep(Duration::from_secs(1)).await;
+    }
+}
+
+pub async fn wait_for_warframe_exit(pid: u32) {
+    while is_warframe_pid(pid) {
+        sleep(Duration::from_secs(1)).await;
+    }
+}
+
 /// Finds the Warframe game process PID if running
 pub fn get_warframe_pid() -> Option<u32> {
     let mut system = System::new();
     refresh_all_process_commands(&mut system);
 
     find_warframe_pid(&system)
+}
+
+pub fn get_all_warframe_pids() -> Vec<u32> {
+    let mut system = System::new();
+    refresh_all_process_commands(&mut system);
+
+    find_all_warframe_pids(&system)
 }
 
 /// Checks whether a PID still belongs to the Warframe game process.
@@ -93,6 +138,17 @@ pub fn is_warframe_pid(pid: u32) -> bool {
     system
         .process(pid)
         .map(is_warframe_game_process)
+        .unwrap_or(false)
+}
+
+pub fn terminate_process(pid: u32) -> bool {
+    let pid = sysinfo::Pid::from_u32(pid);
+    let mut system = System::new();
+    refresh_process_command(&mut system, pid);
+
+    system
+        .process(pid)
+        .map(|process| process.kill())
         .unwrap_or(false)
 }
 

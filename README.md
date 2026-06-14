@@ -36,9 +36,7 @@ WF_PROFILE_KEY=change-me cargo build --release -p wf-info-daemon --features memo
 
 ## Daemon Usage (Linux)
 
-### Option 1: Wrapper Mode (No sudo required with default kernel settings)
-
-Run as a parent process that launches Warframe as a child. This allows the daemon to automatically monitor the Warframe process without needing elevated permissions.
+Run the daemon as the parent process that launches Warframe as a child.
 
 ```bash
 ./target/release/wf-info-daemon -- /path/to/Warframe.x64.exe [warframe args]
@@ -51,32 +49,43 @@ Run as a parent process that launches Warframe as a child. This allows the daemo
 
 The daemon will automatically exit when Warframe closes.
 
-### Option 2: Standalone Mode
+### Linux Log Transport
 
-Run independently and monitor an already-running Warframe instance:
+On Linux/Wine/Proton, the daemon captures live Warframe log lines from Wine's `OutputDebugString` debug channel (`warn+debugstr`). This avoids the multi-second `EE.log` flush delay and gives near-live event detection without requiring a separate helper process.
+
+The daemon sets `WINEDEBUG=warn+debugstr` for the launched process automatically. So no need to set this value externally.
+
+### Linux Memory Feature Notes
+
+Most Linux distros prevent reading memory from unrelated processes unless they are child processes or the reader has additional permissions. The supported launch/wrapper mode above makes Warframe a child process of the daemon, which is the intended setup for the `memory` feature.
+
+In unusual setups, such as mixed privilege levels or distro-specific ptrace restrictions, you may still need to set extra permissions:
 
 ```bash
-./target/release/wf-info-daemon
+sudo setcap cap_sys_ptrace=eip ./target/release/wf-info-daemon
 ```
 
-Please note that most linux distros prevent reading memory from another process unless it's a child process. So for the memory feature you have options:-
+Or relax ptrace restrictions (security risk, not recommended):
 
 ```bash
-# With capabilities (recommended):
-sudo setcap cap_sys_ptrace=eip ./target/release/wf-info-daemon
-./target/release/wf-info-daemon
-
-# Or with sudo:
-sudo ./target/release/wf-info-daemon
-
-# Or relax ptrace restrictions (security risk, not recommended):
 sudo sysctl kernel.yama.ptrace_scope=0
-./target/release/wf-info-daemon
+```
+
+Or run the daemon with elevated permissions (also not recommended):
+
+```bash
+sudo ./target/release/wf-info-daemon -- /path/to/Warframe.x64.exe
 ```
 
 ## Daemon Usage (Windows)
 
-As above. There's no special restrictions that prevent reading the game data unless it's running with elevated privileges.
+Run the daemon as the parent process that launches Warframe:
+
+```powershell
+.\target\release\wf-info-daemon.exe -- "C:\Path\To\Warframe.x64.exe"
+```
+
+On native Windows, the daemon captures live log lines through the standard DBWIN / `OutputDebugString` monitor protocol. There are no special restrictions unless the game is launched elevated while the daemon is not.
 
 ## Control API
 

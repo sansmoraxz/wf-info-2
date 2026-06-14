@@ -15,4 +15,8 @@ wf-itemdata = { path = "../../crates/wf-itemdata" }
 [features]
 default = []
 memory = ["wf-control/memory", "wf-core/memory"]
+vulkan = ["wf-control/vulkan"]
+cuda = ["wf-control/cuda"]
+opencl = ["wf-control/opencl"]
+opengl = ["wf-control/opengl"]
 native-wayland-screenshot = ["wf-control/native-wayland-screenshot"]

@@ -4689,6 +4689,7 @@ dependencies = [
  "wf-itemdata",
  "wf-ocr",
  "win-screenshot",
+ "winapi",
  "x11rb",
 ]
 

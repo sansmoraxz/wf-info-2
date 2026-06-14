@@ -14,8 +14,8 @@ imageproc = "0.25"
 itertools.workspace = true
 
 [features]
-default = ["vulkan"]
+default = []
 vulkan = ["ocr-rs/vulkan"] # Vulkan API - cross platform (recomended)
 cuda = ["ocr-rs/cuda"] # NVIDIA GPU only
-opencl = ["ocr-rs/vulkan"] # Cross platform - recomended for very old gpu without vulkan
+opencl = ["ocr-rs/opencl"] # Cross platform - recomended for very old gpu without vulkan
 opengl = ["ocr-rs/opengl"] # Linux only
