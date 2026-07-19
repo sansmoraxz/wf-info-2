@@ -55,10 +55,11 @@ impl LogProcessingEngine {
         let t3 = Box::new(TradeFailEntry);
         let t4 = Box::new(LoginEntry);
         let t5 = Box::new(LogoutEntry);
-        let t6 = Box::new(DMTabEntry);
-        let t7 = Box::new(RelicRewardOpen);
-        let t8 = Box::new(RelicRewardClose);
-        let v: Vec<Box<dyn LogEntryTransformer>> = vec![t0, t1, t2, t3, t4, t5, t6, t7, t8];
+        let t6 = Box::new(QuitRequestedEntry);
+        let t7 = Box::new(DMTabEntry);
+        let t8 = Box::new(RelicRewardOpen);
+        let t9 = Box::new(RelicRewardClose);
+        let v: Vec<Box<dyn LogEntryTransformer>> = vec![t0, t1, t2, t3, t4, t5, t6, t7, t8, t9];
         let rv: Vec<&str> = v.iter().map(|p| p.pattern().as_str()).collect();
         let reset: RegexSet = RegexSet::new(rv)?;
         Ok(Self {
@@ -182,22 +183,21 @@ impl LogEntryTransformer for TradeFailEntry {
 lgreg!(
     LoginEntry,
     LOGIN_DETAILS_REGEX,
-    r"(?Rum)^\d+\.\d+ Sys \[Info\]: Player name changed to ([\w\.\-]+)??(.) Clan: ([\w -]+)#(\d+) AccountId: (\w+)$"
+    r"(?Rum)^\d+\.\d+ Sys \[Info\]: Player name changed to ([\w\.\-]+)(.) Clan: ([\w -]+)#(\d+)(?: AccountId: \w+)?$"
 );
 
 impl LogEntryTransformer for LoginEntry {
-    /// G1: name, G2: platform, G3: clan, G4: clan hash, G5: account_id
+    /// G1: name, G2: platform, G3: clan, G4: clan hash.
+    /// A legacy `AccountId:` suffix may be present, but is deliberately ignored.
     fn transform(&self, c: &Captures) -> Option<LogEvent> {
         let name = c.get(1)?.as_str().to_string();
         let platform = c.get(2)?.as_str().into();
         let clan_name = c.get(3)?.as_str().to_string();
-        let clan_id = c.get(3)?.as_str().to_string();
-        let account_id = c.get(5)?.as_str().to_string();
+        let clan_id = c.get(4)?.as_str().to_string();
         let clan = [clan_name, "#".to_string(), clan_id].concat();
         let account_info = AccountInfo {
             username: name,
             platform: platform,
-            account_id: account_id,
             clan: clan,
         };
         Some(LogEvent::Login(account_info))
@@ -207,13 +207,25 @@ impl LogEntryTransformer for LoginEntry {
 lgreg!(
     LogoutEntry,
     LOGOUT_DETAILS_REGEX,
-    r"(?Rm)^\d+\.\d+ Net \[Info\]: IRC out: QUIT :Logged out of game$"
+    r"(?Rm)^\d+\.\d+ Sys \[Info\]: Logout confirmed$"
 );
 
 impl LogEntryTransformer for LogoutEntry {
     /// implicit
     fn transform(&self, _: &Captures) -> Option<LogEvent> {
         Some(LogEvent::Logout)
+    }
+}
+
+lgreg!(
+    QuitRequestedEntry,
+    QUIT_REQUESTED_REGEX,
+    r"(?Rm)^\d+\.\d+ Sys \[Info\]: Executing command: /EE/Editor/ToolMenus/Commands/CmdQuit$"
+);
+
+impl LogEntryTransformer for QuitRequestedEntry {
+    fn transform(&self, _: &Captures) -> Option<LogEvent> {
+        Some(LogEvent::QuitRequested)
     }
 }
 

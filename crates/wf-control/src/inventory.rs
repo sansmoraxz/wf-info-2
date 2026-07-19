@@ -22,10 +22,7 @@ use super::utils::parse_params;
 use wf_itemdata::item_data::lookup_item_info;
 
 #[cfg(feature = "memory")]
-use {
-    super::state::current_account,
-    wf_core::{inventory_refresh, process},
-};
+use wf_core::{inventory_refresh, process};
 
 #[derive(Debug, Deserialize, Default)]
 pub(crate) struct LoadInventoryParams {
@@ -303,20 +300,16 @@ pub(crate) struct RefreshParams {
 #[cfg(feature = "memory")]
 pub(crate) async fn handle_inventory_refresh(params: Option<Value>) -> Result<Value> {
     let params: RefreshParams = parse_params(params)?;
-    let account_id = current_account()
-        .ok_or_else(|| anyhow!("No active account detected. Log in to Warframe first."))?;
-
     let pid = process::get_warframe_pid()
         .ok_or_else(|| anyhow!("Warframe process not detected; launch the game and try again"))?;
 
     let scan_retries = params.scan_retries.unwrap_or(5);
     let scan_delay = Duration::from_millis(params.scan_delay_ms.unwrap_or(1500));
 
-    let inventory =
-        inventory_refresh::fetch_inventory_from_process(&account_id, pid, scan_retries, scan_delay)
-            .await?
-            .ok_or_else(|| anyhow!("Could not locate auth data in Warframe memory"))?
-            .inventory;
+    let inventory = inventory_refresh::fetch_inventory_from_process(pid, scan_retries, scan_delay)
+        .await?
+        .ok_or_else(|| anyhow!("Could not locate auth data in Warframe memory"))?
+        .inventory;
 
     let save = params.save.unwrap_or(true);
     let source = params

@@ -2,26 +2,47 @@ use chrono::Utc;
 #[cfg(feature = "memory")]
 use serde_json::json;
 use std::collections::HashSet;
-use std::sync::LazyLock;
+use std::sync::{
+    Arc, LazyLock,
+    atomic::{AtomicBool, Ordering},
+};
 use std::time::Duration;
 use wf_ocr::{RelicRecognizer, load_image};
 
 use crate::screenshot::capture_screen;
 use crate::{
-    AccountLoginEvent, AccountLogoutEvent, DaemonEvent, DmTabOpenedEvent, ProfileUpdatedEvent,
+    AccountLoginEvent, AccountLogoutEvent, DaemonEvent, DmTabOpenedEvent, SystemQuitReason,
 };
 use wf_core::account::AccountInfo;
 use wf_core::logs::pattern::LogProcessingEngine;
 use wf_core::logs::{self, LineAssembler, LogEvent, LogSource};
-use wf_core::{api, storage};
 
 #[cfg(feature = "memory")]
-use crate::InventoryFetchedEvent;
+use crate::{InventoryFetchedEvent, ProfileUpdatedEvent};
 #[cfg(feature = "memory")]
-use wf_core::{inventory_refresh, process};
+use wf_core::{api, inventory_refresh, process, storage};
+
+#[derive(Debug, Clone, Default)]
+pub struct GameLifecycleTracker {
+    quit_requested: Arc<AtomicBool>,
+}
+
+impl GameLifecycleTracker {
+    fn mark_quit_requested(&self) {
+        self.quit_requested.store(true, Ordering::SeqCst);
+    }
+
+    pub fn exit_reason(&self) -> SystemQuitReason {
+        if self.quit_requested.load(Ordering::SeqCst) {
+            SystemQuitReason::Requested
+        } else {
+            SystemQuitReason::Unexpected
+        }
+    }
+}
 
 struct WatchState {
-    current_account_id: Option<String>,
+    current_username: Option<String>,
     /// Usernames for which we issued `IRC out: WHO` (self-initiated DMs).
     /// Used to suppress DmTabOpened events for tabs we opened ourselves.
     self_initiated_dms: HashSet<String>,
@@ -34,57 +55,58 @@ struct WatchState {
 impl WatchState {
     fn new() -> Self {
         Self {
-            current_account_id: None,
+            current_username: None,
             self_initiated_dms: HashSet::new(),
             trades: None,
             relic_countdown: false,
         }
+    }
+
+    fn accept_login(&mut self, username: &str) -> bool {
+        if self.current_username.as_deref() == Some(username) {
+            return false;
+        }
+        self.current_username = Some(username.to_string());
+        true
+    }
+
+    fn reset_login(&mut self) {
+        self.current_username = None;
     }
 }
 
 fn event_emitter_fn(
     mut state: WatchState,
     entries: Vec<LogEvent>,
-    warframe_pid: Option<u32>,
-    skip_cb: bool,
+    _warframe_pid: Option<u32>,
+    _skip_cb: bool,
+    lifecycle: &GameLifecycleTracker,
 ) -> WatchState {
     for entry in entries {
         match entry {
-            LogEvent::Login(AccountInfo {
-                username,
-                account_id,
-                ..
-            }) => {
-                if state.current_account_id.as_deref() == Some(&account_id) {
-                    log::debug!("Duplicate login event for account_id={}", account_id);
+            LogEvent::Login(AccountInfo { username, .. }) => {
+                if !state.accept_login(&username) {
+                    log::debug!("Duplicate login event for username={}", username);
                     continue;
                 }
-                state.current_account_id = Some(account_id.clone());
-                crate::set_current_account(Some(account_id.clone()));
-                log::info!(
-                    "User logged in: username={}, account_id={}",
-                    username,
-                    account_id
-                );
+                log::info!("User logged in: username={}", username);
                 crate::emit(DaemonEvent::AccountLogin(AccountLoginEvent {
                     timestamp: Utc::now(),
-                    account_id: account_id.clone(),
                     username: username.clone(),
                 }));
-                tokio::spawn(handle_login_event(
-                    account_id,
-                    username,
-                    warframe_pid,
-                    skip_cb,
-                ));
+                #[cfg(feature = "memory")]
+                tokio::spawn(handle_login_event(username, _warframe_pid, _skip_cb));
             }
             LogEvent::Logout => {
-                state.current_account_id = None;
-                crate::set_current_account(None);
+                state.reset_login();
                 log::info!("User logged out");
                 crate::emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
                     timestamp: Utc::now(),
                 }));
+            }
+            LogEvent::QuitRequested => {
+                log::info!("Warframe quit command observed");
+                lifecycle.mark_quit_requested();
             }
             LogEvent::WhoQuery(username) => {
                 log::debug!("Self-initiated DM WHO query for {}", username);
@@ -156,14 +178,34 @@ fn event_emitter_fn(
     state
 }
 
-#[allow(unused)]
-async fn handle_login_event(
-    acc_id: String,
-    user_name: String,
-    known_pid: Option<u32>,
-    skip_cb: bool,
-) {
-    match api::fetch_player_profile(&acc_id).await {
+#[cfg(feature = "memory")]
+async fn handle_login_event(user_name: String, known_pid: Option<u32>, skip_cb: bool) {
+    let Some(pid) = known_pid.or_else(process::get_warframe_pid) else {
+        log::info!("Warframe not running - skipping profile and inventory fetch");
+        return;
+    };
+
+    log::info!(
+        "Warframe running (PID: {}), attempting to resolve account authorization...",
+        pid
+    );
+    let auth = match process::scan_memory_for_auth_with_retry(pid, 5, Duration::from_secs(3)).await
+    {
+        Ok(Some(auth)) => auth,
+        Ok(None) => {
+            log::warn!("Could not resolve account authorization from process memory");
+            log::info!("Tip: Make sure you're logged into Warframe");
+            return;
+        }
+        Err(e) => {
+            log::error!("Memory scan error: {}", e);
+            log::info!("Tip: Grant necessary permissions or try running with sudo");
+            return;
+        }
+    };
+
+    log::info!("Resolved account authorization from process memory");
+    match api::fetch_player_profile(&auth.account_id).await {
         Ok(profile) => {
             log::info!("Fetched profile for {}: {:?}", user_name, profile);
             if let Err(e) = storage::save_encrypted_profile(&profile) {
@@ -171,7 +213,7 @@ async fn handle_login_event(
             } else {
                 crate::emit(DaemonEvent::ProfileUpdated(ProfileUpdatedEvent {
                     timestamp: Utc::now(),
-                    account_id: acc_id.clone(),
+                    account_id: auth.account_id.clone(),
                 }));
             }
         }
@@ -180,57 +222,47 @@ async fn handle_login_event(
         }
     }
 
-    #[cfg(feature = "memory")]
     if skip_cb {
         log::info!("Skipping auto fetch inventory. Fetch manually if required.");
-    } else if let Some(pid) = known_pid.or_else(process::get_warframe_pid) {
-        log::info!(
-            "Warframe running (PID: {}), attempting to extract inventory auth...",
-            pid
-        );
-        match inventory_refresh::fetch_inventory_from_process(
-            &acc_id,
-            pid,
-            5,
-            Duration::from_secs(3),
-        )
-        .await
-        {
-            Ok(Some(result)) => {
-                log::info!(
-                    "Successfully extracted auth: {}",
-                    result.auth.to_query_string()
-                );
-                if let Err(e) = storage::save_inventory(&result.inventory) {
-                    log::error!("Failed to save inventory: {}", e);
-                } else {
-                    if let Err(e) = storage::touch_inventory_updated(Some("auto")) {
-                        log::warn!("Failed to update inventory metadata: {}", e);
-                    }
-                    let summary = json!({
-                        "suits": result.inventory.suits.len(),
-                        "long_guns": result.inventory.long_guns.len(),
-                        "pistols": result.inventory.pistols.len(),
-                        "melee": result.inventory.melee.len(),
-                    });
-                    crate::emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
-                        timestamp: Utc::now(),
-                        source: "auto".to_string(),
-                        summary,
-                    }));
+        return;
+    }
+
+    match inventory_refresh::fetch_inventory_with_auth_from_process(
+        pid,
+        auth,
+        5,
+        Duration::from_secs(3),
+    )
+    .await
+    {
+        Ok(Some(result)) => {
+            log::info!("Successfully fetched live inventory");
+            if let Err(e) = storage::save_inventory(&result.inventory) {
+                log::error!("Failed to save inventory: {}", e);
+            } else {
+                if let Err(e) = storage::touch_inventory_updated(Some("auto")) {
+                    log::warn!("Failed to update inventory metadata: {}", e);
                 }
-            }
-            Ok(None) => {
-                log::warn!("Could not extract auth data from process memory");
-                log::info!("Tip: Make sure you're logged into Warframe");
-            }
-            Err(e) => {
-                log::error!("Memory scan error: {}", e);
-                log::info!("Tip: Grant necessary permissions or try running with sudo");
+                let summary = json!({
+                    "suits": result.inventory.suits.len(),
+                    "long_guns": result.inventory.long_guns.len(),
+                    "pistols": result.inventory.pistols.len(),
+                    "melee": result.inventory.melee.len(),
+                });
+                crate::emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
+                    timestamp: Utc::now(),
+                    source: "auto".to_string(),
+                    summary,
+                }));
             }
         }
-    } else {
-        log::info!("Warframe not running - skipping inventory fetch");
+        Ok(None) => {
+            log::warn!("Could not extract auth data from process memory");
+            log::info!("Tip: Make sure you're logged into Warframe");
+        }
+        Err(e) => {
+            log::error!("Live inventory fetch failed: {}", e);
+        }
     }
 }
 
@@ -259,9 +291,24 @@ async fn handle_relic_selection_popup() {
 }
 
 pub async fn observe_warframe_activity<S: LogSource>(
+    source: S,
+    warframe_pid: Option<u32>,
+    skip_cb: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    observe_warframe_activity_with_lifecycle(
+        source,
+        warframe_pid,
+        skip_cb,
+        GameLifecycleTracker::default(),
+    )
+    .await
+}
+
+pub async fn observe_warframe_activity_with_lifecycle<S: LogSource>(
     mut source: S,
     warframe_pid: Option<u32>,
     skip_cb: bool,
+    lifecycle: GameLifecycleTracker,
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Watching for Warframe activity...");
     let log_processor = LogProcessingEngine::new()?;
@@ -277,7 +324,7 @@ pub async fn observe_warframe_activity<S: LogSource>(
                 }
                 let entries = log_processor.extract_events(&lines);
                 log::debug!("Observed entries: {:?}", entries);
-                state = event_emitter_fn(state, entries, warframe_pid, skip_cb);
+                state = event_emitter_fn(state, entries, warframe_pid, skip_cb, &lifecycle);
             }
             None => {
                 log::info!("Log source closed");
@@ -293,7 +340,6 @@ mod tests {
     use std::collections::{HashSet, VecDeque};
     use std::io;
 
-    const ACCOUNT_ID: &str = "AREDN0T1CE672";
     const USERNAME: &str = "Jasper123";
 
     struct ChunkHarness {
@@ -362,7 +408,7 @@ mod tests {
 
         let events = harness.feed(
             "84.333 Sys [Info]: Player name changed to Jasper123\u{E000} \
-             Clan: TestC#963 AccountId: AREDN0T1CE672\r\n",
+             Clan: TestC#963\r\n",
         );
         assert_eq!(
             events.len(),
@@ -371,22 +417,92 @@ mod tests {
         );
         match &events[0] {
             LogEvent::Login(info) => {
-                assert_eq!(info.account_id, ACCOUNT_ID);
                 assert_eq!(info.username, USERNAME);
+                assert_eq!(info.platform, wf_core::account::Platform::PC);
+                assert_eq!(info.clan, "TestC#963");
             }
             _ => panic!("expected Login from name-change"),
         }
 
-        let events = harness.feed(
-            "167.073 Sys [Info]: Discord Service has begun shut down.\r\n\
-             167.073 Sys [Info]: ===[ Exiting main loop ]===\r\n\
-             167.073 Net [Info]: IRC out: QUIT :Logged out of game\r\n",
-        );
+        let events = harness.feed("167.073 Sys [Info]: Logout confirmed\r\n");
         assert_eq!(events.len(), 1, "expected exactly one logout event");
         assert!(
             matches!(events[0], LogEvent::Logout),
             "expected Logout event"
         );
+    }
+
+    #[test]
+    fn test_three_login_two_logout_cycles_then_requested_quit() {
+        let mut harness = ChunkHarness::new();
+        let events = harness.feed(
+            "19.467 Sys [Info]: Player name changed to SamplePlayer\u{E000} Clan: Test Clan#903\r\n\
+             20.000 Sys [Info]: Logout confirmed\r\n\
+             100.059 Sys [Info]: Player name changed to SamplePlayer\u{E000} Clan: Test Clan#903\r\n\
+             150.567 Sys [Info]: Logout confirmed\r\n\
+             180.000 Sys [Info]: Player name changed to SamplePlayer\u{E000} Clan: Test Clan#903\r\n\
+             300.123 Sys [Info]: Executing command: /EE/Editor/ToolMenus/Commands/CmdQuit\r\n\
+             300.300 Sys [Info]: ===[ Exiting main loop ]===\r\n\
+             301.201 Sys [Info]: Main Shutdown Initiated.\r\n\
+             301.500 Sys [Info]: Main Shutdown Complete.\r\n\
+             301.600 Net [Info]: IRC out: QUIT :Logged out of game\r\n",
+        );
+
+        assert_eq!(events.len(), 6);
+        assert!(matches!(events[0], LogEvent::Login(_)));
+        assert!(matches!(events[1], LogEvent::Logout));
+        assert!(matches!(events[2], LogEvent::Login(_)));
+        assert!(matches!(events[3], LogEvent::Logout));
+        assert!(matches!(events[4], LogEvent::Login(_)));
+        assert!(matches!(events[5], LogEvent::QuitRequested));
+    }
+
+    #[test]
+    fn test_legacy_login_suffix_is_accepted_and_ignored() {
+        let mut harness = ChunkHarness::new();
+        let events = harness.feed(
+            "84.333 Sys [Info]: Player name changed to Jasper123\u{E002} \
+             Clan: Test Clan#963 AccountId: 2baaaaaaaaaaaaaaaaaaaaaa\r\n",
+        );
+
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            LogEvent::Login(info) => {
+                assert_eq!(info.username, USERNAME);
+                assert_eq!(info.platform, wf_core::account::Platform::PLAYSTATION);
+                assert_eq!(info.clan, "Test Clan#963");
+            }
+            _ => panic!("expected Login from legacy name-change line"),
+        }
+    }
+
+    #[test]
+    fn test_duplicate_login_suppression_resets_on_logout() {
+        let mut state = WatchState::new();
+
+        assert!(state.accept_login(USERNAME));
+        assert!(!state.accept_login(USERNAME));
+        assert!(state.accept_login("AnotherPlayer"));
+        assert!(!state.accept_login("AnotherPlayer"));
+
+        state.reset_login();
+        assert!(state.accept_login("AnotherPlayer"));
+    }
+
+    #[test]
+    fn test_quit_request_changes_process_exit_reason() {
+        let lifecycle = GameLifecycleTracker::default();
+        assert_eq!(lifecycle.exit_reason(), SystemQuitReason::Unexpected);
+
+        event_emitter_fn(
+            WatchState::new(),
+            vec![LogEvent::QuitRequested],
+            None,
+            true,
+            &lifecycle,
+        );
+
+        assert_eq!(lifecycle.exit_reason(), SystemQuitReason::Requested);
     }
 
     #[test]
@@ -614,13 +730,13 @@ mod tests {
         assert!(first.is_empty(), "partial line must be buffered");
 
         let second = harness.feed(
-            "123\u{E000} Clan: TestC#963 AccountId: AREDN0T1CE672\r\n\
-             167.073 Net [Info]: IRC out: QUIT :Logged out of ga",
+            "123\u{E000} Clan: TestC#963\r\n\
+             167.073 Sys [Info]: Logout conf",
         );
         assert_eq!(second.len(), 1);
         assert!(matches!(second[0], LogEvent::Login(_)));
 
-        let third = harness.feed("me\r\n");
+        let third = harness.feed("irmed\r\n");
         assert_eq!(third.len(), 1);
         assert!(matches!(third[0], LogEvent::Logout));
     }

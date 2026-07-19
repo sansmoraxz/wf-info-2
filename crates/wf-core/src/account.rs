@@ -29,6 +29,5 @@ impl From<&str> for Platform {
 pub struct AccountInfo {
     pub username: String,
     pub platform: Platform,
-    pub account_id: String,
     pub clan: String,
 }

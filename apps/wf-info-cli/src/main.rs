@@ -107,7 +107,8 @@ enum Commands {
 #[derive(Args, Debug, Clone)]
 struct WatchArgs {
     /// Comma-separated list of events to subscribe to
-    /// (account_login, account_logout, inventory_fetched, inventory_stale, profile_updated, screenshot_triggered)
+    /// (game_start, account_login, account_logout, system_quit, inventory_fetched,
+    /// inventory_stale, profile_updated, screenshot_triggered)
     #[arg(long, value_delimiter = ',')]
     events: Option<Vec<String>>,
 }
