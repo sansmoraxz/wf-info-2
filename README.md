@@ -4,13 +4,13 @@ Alternative Warframe companion app.
 
 Yes it also works with both linux and windows.
 
-This app is designed to run as a background daemon that monitors the Warframe process and provides an API for fetching inventory data, account information, and other game-related details. It can be used in conjunction with a CLI client or integrated into other applications.
+This app is designed to run as a background daemon that monitors Warframe and provides an API for inventory data, account activity, and other game-related details. It can be used in conjunction with a CLI client or integrated into other applications.
 
 > _WARNING_: DE has not officially granted permission to access Warframe's process, so use the `memory` feature with caution. It is used to load live inventory data using your account from DE's API but could potentially lead to risk of loosing access to your account. Use proper judgement and ensure you understand the implications of enabling this feature.
 > 
 > _NOTE_: The above warning does not apply if you don't build with the `memory` feature enabled.
 
-It's not necessary to have the `memory` feature to use this tool, all it provides is just some additional APIs (mentioned below). If you feel like you don't want to risk your account, but still use this tool you may skip it (only your actual inventory tracking via this tool will be unavailable not trade watch, nor warframe market usage, nor screenshots or fissure runs). In fact you may use other apps like [Overwolf's Allecaframe](https://www.overwolf.com/app/alejandro_cabrerizo-alecaframe), and load their exported inventory data. (Please note that the above warning still apply for Overwolf or any other third party tool that touches inventory)
+The `memory` feature is optional. Without it, login/logout detection, trade watching, warframe.market usage, screenshots, fissure runs, and loading an exported inventory all continue to work. Live inventory refresh, account-ID resolution, and automatic profile refresh require `memory`, because current Warframe logs no longer expose the account ID. You may use another app such as [Overwolf's Allecaframe](https://www.overwolf.com/app/alejandro_cabrerizo-alecaframe) and load its exported inventory data instead. (The warning above still applies to Overwolf or any other third-party tool that touches inventory.)
 
 ## Building
 
@@ -28,7 +28,7 @@ To build only the binaries:
 WF_PROFILE_KEY=change-me cargo build --release -p wf-info-daemon -p wf-info-cli
 ```
 
-Or with memory features enabled (needed for live inventory)
+Or with memory features enabled (needed for live inventory and profile refresh)
 
 ```bash
 WF_PROFILE_KEY=change-me cargo build --release -p wf-info-daemon --features memory
@@ -224,11 +224,13 @@ The `wf-info-cli` binary provides a convenient interface to the daemon.
 
 The daemon emits events that clients can subscribe to via the `subscribe` operation or `watch` command:
 
+- `game_start` - Warframe game process detected
 - `account_login` - Player account login detected
 - `account_logout` - Player account logout detected
-- `inventory_fetched` - Inventory loaded successfully
-- `inventory_stale` - Inventory marked as stale
-- `profile_updated` - Profile data updated
+- `system_quit` - Warframe game process exited (`reason` is `requested` or `unexpected`)
+- `inventory_fetched` - Inventory loaded successfully (requires a `memory` build)
+- `inventory_stale` - Inventory marked as stale (requires a `memory` build)
+- `profile_updated` - Profile data updated (requires a `memory` build)
 - `screenshot_triggered` - Screenshot captured
 - `dm_tab_opened` - New DM chat tab opened
 

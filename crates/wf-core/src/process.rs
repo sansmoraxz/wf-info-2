@@ -153,10 +153,115 @@ pub fn terminate_process(pid: u32) -> bool {
 }
 
 /// Authorization query string containing accountId and nonce
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AuthQuery {
     pub account_id: String,
     pub nonce: String,
+}
+
+#[cfg(feature = "memory")]
+const AUTH_PREFIX: &[u8] = b"?accountId=";
+#[cfg(feature = "memory")]
+const NONCE_PREFIX: &[u8] = b"&nonce=";
+#[cfg(feature = "memory")]
+const ACCOUNT_ID_LEN: usize = 24;
+#[cfg(feature = "memory")]
+const REQUIRED_AUTH_ALLOCATIONS: u32 = 3;
+#[cfg(feature = "memory")]
+const CHUNK_OVERLAP: usize = 256;
+
+/// Extracts valid authorization values from one readable allocation.
+///
+/// Warframe account IDs are 24-character hexadecimal object IDs. A nonce must
+/// immediately follow the ID and contain at least one ASCII digit.
+#[cfg(feature = "memory")]
+fn auth_candidates_in_allocation(allocation: &[u8]) -> HashSet<AuthQuery> {
+    auth_candidates_in_bytes(allocation, true)
+}
+
+#[cfg(feature = "memory")]
+fn auth_candidates_in_bytes(allocation: &[u8], allow_nonce_at_end: bool) -> HashSet<AuthQuery> {
+    let mut candidates = HashSet::new();
+    let finder = memmem::Finder::new(AUTH_PREFIX);
+    let mut search_from = 0;
+
+    while let Some(relative_pos) = finder.find(&allocation[search_from..]) {
+        let prefix_pos = search_from + relative_pos;
+        let account_start = prefix_pos + AUTH_PREFIX.len();
+        let account_end = account_start + ACCOUNT_ID_LEN;
+        let nonce_prefix_end = account_end + NONCE_PREFIX.len();
+
+        if nonce_prefix_end <= allocation.len() {
+            let account_id = &allocation[account_start..account_end];
+            let nonce_prefix = &allocation[account_end..nonce_prefix_end];
+
+            if account_id.iter().all(u8::is_ascii_hexdigit) && nonce_prefix == NONCE_PREFIX {
+                let nonce_start = nonce_prefix_end;
+                let nonce_end = allocation[nonce_start..]
+                    .iter()
+                    .position(|byte| !byte.is_ascii_digit())
+                    .map_or(allocation.len(), |offset| nonce_start + offset);
+
+                let nonce_is_terminated = nonce_end < allocation.len() || allow_nonce_at_end;
+                if nonce_end > nonce_start && nonce_is_terminated {
+                    // Both slices have been validated as ASCII above.
+                    let account_id = String::from_utf8_lossy(account_id).into_owned();
+                    let nonce =
+                        String::from_utf8_lossy(&allocation[nonce_start..nonce_end]).into_owned();
+                    candidates.insert(AuthQuery { account_id, nonce });
+                }
+            }
+        }
+
+        search_from = prefix_pos + AUTH_PREFIX.len();
+    }
+
+    candidates
+}
+
+#[cfg(feature = "memory")]
+#[derive(Default)]
+struct AuthCandidateTracker {
+    allocation_counts: HashMap<AuthQuery, u32>,
+}
+
+#[cfg(feature = "memory")]
+impl AuthCandidateTracker {
+    fn observe_allocation(
+        &mut self,
+        allocation_candidates: HashSet<AuthQuery>,
+    ) -> Option<AuthQuery> {
+        for candidate in allocation_candidates {
+            let count = self.allocation_counts.entry(candidate.clone()).or_insert(0);
+            *count += 1;
+            log::debug!(
+                "Found authorization candidate in {} readable allocation(s)",
+                count
+            );
+            if *count >= REQUIRED_AUTH_ALLOCATIONS {
+                return Some(candidate);
+            }
+        }
+        None
+    }
+}
+
+#[cfg(feature = "memory")]
+fn add_chunk_candidates(
+    allocation_candidates: &mut HashSet<AuthQuery>,
+    previous_tail: &mut Vec<u8>,
+    chunk: &[u8],
+) {
+    let mut searchable = Vec::with_capacity(previous_tail.len() + chunk.len());
+    searchable.extend_from_slice(previous_tail);
+    searchable.extend_from_slice(chunk);
+    // A digit at the end of a read chunk may be only part of the nonce. It is
+    // retained in `previous_tail` and accepted after a terminator is observed.
+    allocation_candidates.extend(auth_candidates_in_bytes(&searchable, false));
+
+    let tail_start = searchable.len().saturating_sub(CHUNK_OVERLAP);
+    previous_tail.clear();
+    previous_tail.extend_from_slice(&searchable[tail_start..]);
 }
 
 impl AuthQuery {
@@ -170,17 +275,8 @@ impl AuthQuery {
 /// This reads /proc/{pid}/maps and /proc/{pid}/mem on Linux.
 /// Requires appropriate permissions
 #[cfg(all(feature = "memory", target_os = "linux"))]
-pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQuery>> {
-    log::info!(
-        "Scanning memory for auth data (PID: {}, accountId: {})",
-        pid,
-        account_id
-    );
-
-    // Needle: ?accountId=<id>&nonce= — followed by ASCII digits
-    let needle = format!("?accountId={}&nonce=", account_id);
-    let needle_bytes = needle.as_bytes();
-    let finder = memmem::Finder::new(needle_bytes);
+pub fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>> {
+    log::info!("Scanning memory for account authorization (PID: {})", pid);
 
     // Read memory mappings
     let maps_path = format!("/proc/{}/maps", pid);
@@ -194,8 +290,7 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
         File::open(&mem_path).context("Failed to open /proc/mem (try running with sudo)")?;
 
     // Track candidates and their occurrence count (like the C++ version)
-    let mut candidates: HashMap<String, u32> = HashMap::new();
-    const REQUIRED_MATCHES: u32 = 3;
+    let mut tracker = AuthCandidateTracker::default();
 
     // 4MB buffer for reading memory regions
     let mut buffer = vec![0u8; 4 * 1024 * 1024];
@@ -231,6 +326,8 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
 
         // Read region in chunks
         let mut offset = 0usize;
+        let mut allocation_candidates = HashSet::new();
+        let mut previous_tail = Vec::new();
         while offset < region_size {
             let chunk_size = std::cmp::min(buffer.len(), region_size - offset);
             let read_addr = start + offset as u64;
@@ -242,50 +339,31 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
             match mem_file.read(&mut buffer[..chunk_size]) {
                 Ok(bytes_read) if bytes_read > 0 => {
                     let chunk = &buffer[..bytes_read];
-                    let mut search_from = 0;
-                    while let Some(pos) = finder.find(&chunk[search_from..]) {
-                        let nonce_start = search_from + pos + needle_bytes.len();
-                        let nonce_end = chunk[nonce_start..]
-                            .iter()
-                            .position(|b| !b.is_ascii_digit())
-                            .map_or(bytes_read, |i| nonce_start + i);
-
-                        if nonce_end > nonce_start {
-                            let nonce =
-                                String::from_utf8_lossy(&chunk[nonce_start..nonce_end]).to_string();
-                            let auth_str = format!("{}:{}", account_id, nonce);
-
-                            let count = candidates.entry(auth_str.clone()).or_insert(0);
-                            *count += 1;
-
-                            log::debug!("Found candidate auth (count={}): {}", count, auth_str);
-
-                            if *count >= REQUIRED_MATCHES {
-                                log::info!("Confirmed auth data after {} matches", count);
-                                log::debug!("Auth data: accountId={}, nonce={}", account_id, nonce);
-                                return Ok(Some(AuthQuery {
-                                    account_id: account_id.to_string(),
-                                    nonce,
-                                }));
-                            }
-                        }
-                        search_from += pos + needle_bytes.len();
-                    }
+                    add_chunk_candidates(&mut allocation_candidates, &mut previous_tail, chunk);
                 }
                 _ => break,
             }
 
             offset += chunk_size;
         }
+        allocation_candidates.extend(auth_candidates_in_allocation(&previous_tail));
+
+        if let Some(auth) = tracker.observe_allocation(allocation_candidates) {
+            log::info!(
+                "Confirmed account authorization in {} readable allocations",
+                REQUIRED_AUTH_ALLOCATIONS
+            );
+            return Ok(Some(auth));
+        }
     }
 
-    if candidates.is_empty() {
+    if tracker.allocation_counts.is_empty() {
         log::warn!("No auth data found in process memory");
     } else {
         log::warn!(
             "Found {} candidate(s) but none confirmed (need {} matches)",
-            candidates.len(),
-            REQUIRED_MATCHES
+            tracker.allocation_counts.len(),
+            REQUIRED_AUTH_ALLOCATIONS
         );
     }
 
@@ -296,7 +374,7 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
 /// Uses Windows API to enumerate and read process memory regions.
 /// Requires appropriate process access rights (PROCESS_VM_READ | PROCESS_QUERY_INFORMATION)
 #[cfg(all(feature = "memory", target_os = "windows"))]
-pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQuery>> {
+pub fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>> {
     use winapi::shared::minwindef::{FALSE, LPVOID};
     use winapi::um::handleapi::CloseHandle;
     use winapi::um::memoryapi::ReadProcessMemory;
@@ -308,15 +386,9 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
     };
 
     log::info!(
-        "Scanning Windows memory for auth data (PID: {}, accountId: {})",
-        pid,
-        account_id
+        "Scanning Windows memory for account authorization (PID: {})",
+        pid
     );
-
-    // Needle: ?accountId=<id>&nonce= — followed by ASCII digits
-    let needle = format!("?accountId={}&nonce=", account_id);
-    let needle_bytes = needle.as_bytes();
-    let finder = memmem::Finder::new(needle_bytes);
 
     // Open process with read permissions
     let process_handle =
@@ -332,8 +404,7 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
     });
 
     // Track candidates and their occurrence count
-    let mut candidates: HashMap<String, u32> = HashMap::new();
-    const REQUIRED_MATCHES: u32 = 3;
+    let mut tracker = AuthCandidateTracker::default();
 
     // 4MB buffer for reading memory regions
     let mut buffer = vec![0u8; 4 * 1024 * 1024];
@@ -370,6 +441,8 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
             if region_size > 0 && region_size <= 500 * 1024 * 1024 {
                 // Read region in chunks
                 let mut offset = 0usize;
+                let mut allocation_candidates = HashSet::new();
+                let mut previous_tail = Vec::new();
                 while offset < region_size {
                     let chunk_size = std::cmp::min(buffer.len(), region_size - offset);
                     let read_addr = (region_base + offset) as LPVOID;
@@ -387,44 +460,21 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
 
                     if success != FALSE && bytes_read > 0 {
                         let chunk = &buffer[..bytes_read];
-                        let mut search_from = 0;
-                        while let Some(pos) = finder.find(&chunk[search_from..]) {
-                            let nonce_start = search_from + pos + needle_bytes.len();
-                            let nonce_end = chunk[nonce_start..]
-                                .iter()
-                                .position(|b| !b.is_ascii_digit())
-                                .map_or(bytes_read, |i| nonce_start + i);
-
-                            if nonce_end > nonce_start {
-                                let nonce = String::from_utf8_lossy(&chunk[nonce_start..nonce_end])
-                                    .to_string();
-                                let auth_str = format!("{}:{}", account_id, nonce);
-
-                                let count = candidates.entry(auth_str.clone()).or_insert(0);
-                                *count += 1;
-
-                                log::debug!("Found candidate auth (count={}): {}", count, auth_str);
-
-                                if *count >= REQUIRED_MATCHES {
-                                    log::info!("Confirmed auth data after {} matches", count);
-                                    log::debug!(
-                                        "Auth data: accountId={}, nonce={}",
-                                        account_id,
-                                        nonce
-                                    );
-                                    return Ok(Some(AuthQuery {
-                                        account_id: account_id.to_string(),
-                                        nonce,
-                                    }));
-                                }
-                            }
-                            search_from += pos + needle_bytes.len();
-                        }
+                        add_chunk_candidates(&mut allocation_candidates, &mut previous_tail, chunk);
                     } else {
                         break; // Failed to read, move to next region
                     }
 
                     offset += chunk_size;
+                }
+                allocation_candidates.extend(auth_candidates_in_allocation(&previous_tail));
+
+                if let Some(auth) = tracker.observe_allocation(allocation_candidates) {
+                    log::info!(
+                        "Confirmed account authorization in {} readable allocations",
+                        REQUIRED_AUTH_ALLOCATIONS
+                    );
+                    return Ok(Some(auth));
                 }
             }
         }
@@ -433,13 +483,13 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
         address = (mbi.BaseAddress as usize) + mbi.RegionSize;
     }
 
-    if candidates.is_empty() {
+    if tracker.allocation_counts.is_empty() {
         log::warn!("No auth data found in process memory");
     } else {
         log::warn!(
             "Found {} candidate(s) but none confirmed (need {} matches)",
-            candidates.len(),
-            REQUIRED_MATCHES
+            tracker.allocation_counts.len(),
+            REQUIRED_AUTH_ALLOCATIONS
         );
     }
 
@@ -451,7 +501,7 @@ pub fn scan_memory_for_auth(pid: u32, account_id: &str) -> Result<Option<AuthQue
     feature = "memory",
     not(any(target_os = "linux", target_os = "windows"))
 ))]
-pub fn scan_memory_for_auth(_pid: u32, _account_id: &str) -> Result<Option<AuthQuery>> {
+pub fn scan_memory_for_auth(_pid: u32) -> Result<Option<AuthQuery>> {
     anyhow::bail!("Memory scanning is not supported on this platform")
 }
 
@@ -459,14 +509,13 @@ pub fn scan_memory_for_auth(_pid: u32, _account_id: &str) -> Result<Option<AuthQ
 #[cfg(feature = "memory")]
 pub async fn scan_memory_for_auth_with_retry(
     pid: u32,
-    account_id: &str,
     max_retries: u32,
     retry_delay: Duration,
 ) -> Result<Option<AuthQuery>> {
     for attempt in 1..=max_retries {
         log::info!("Memory scan attempt {}/{}", attempt, max_retries);
 
-        match scan_memory_for_auth(pid, account_id) {
+        match scan_memory_for_auth(pid) {
             Ok(Some(auth)) => return Ok(Some(auth)),
             Ok(None) => {
                 if attempt < max_retries {
@@ -482,4 +531,115 @@ pub async fn scan_memory_for_auth_with_retry(
     }
 
     Ok(None)
+}
+
+#[cfg(all(test, feature = "memory"))]
+mod memory_tests {
+    use super::*;
+
+    const ACCOUNT_A: &str = "2baaaaaaaaaaaaaaaaaaaaaa";
+    const ACCOUNT_B: &str = "3cbbbbbbbbbbbbbbbbbbbbbb";
+
+    fn query(account_id: &str, nonce: &str) -> String {
+        format!("prefix?accountId={account_id}&nonce={nonce}\0suffix")
+    }
+
+    fn only_candidate(allocation: &[u8]) -> AuthQuery {
+        auth_candidates_in_allocation(allocation)
+            .into_iter()
+            .next()
+            .expect("expected an authorization candidate")
+    }
+
+    #[test]
+    fn extracts_a_valid_authorization_candidate() {
+        let candidate = only_candidate(query(ACCOUNT_A, "1234567890").as_bytes());
+        assert_eq!(candidate.account_id, ACCOUNT_A);
+        assert_eq!(candidate.nonce, "1234567890");
+    }
+
+    #[test]
+    fn rejects_malformed_authorization_candidates() {
+        let cases = [
+            "?accountId=2gaaaaaaaaaaaaaaaaaaaaaa&nonce=123",
+            "?accountId=2baaaaaaaaaaaaaaaaaaaaa&nonce=123",
+            "?accountId=2baaaaaaaaaaaaaaaaaaaaaa&other=123",
+            "?accountId=2baaaaaaaaaaaaaaaaaaaaaa&nonce=",
+            "?accountId=2baaaaaaaaaaaaaaaaaaaaaa&nonce=abc",
+        ];
+
+        for allocation in cases {
+            assert!(
+                auth_candidates_in_allocation(allocation.as_bytes()).is_empty(),
+                "unexpected candidate from {allocation}"
+            );
+        }
+    }
+
+    #[test]
+    fn requires_three_distinct_readable_allocations() {
+        let allocation = query(ACCOUNT_A, "123");
+        let candidates = auth_candidates_in_allocation(allocation.as_bytes());
+        let mut tracker = AuthCandidateTracker::default();
+
+        assert!(tracker.observe_allocation(candidates.clone()).is_none());
+        assert!(tracker.observe_allocation(candidates.clone()).is_none());
+        let confirmed = tracker.observe_allocation(candidates).unwrap();
+        assert_eq!(confirmed.account_id, ACCOUNT_A);
+        assert_eq!(confirmed.nonce, "123");
+    }
+
+    #[test]
+    fn repeated_values_in_one_allocation_count_only_once() {
+        let allocation = format!(
+            "{}{}{}",
+            query(ACCOUNT_A, "123"),
+            query(ACCOUNT_A, "123"),
+            query(ACCOUNT_A, "123")
+        );
+        let candidates = auth_candidates_in_allocation(allocation.as_bytes());
+        assert_eq!(candidates.len(), 1);
+
+        let mut tracker = AuthCandidateTracker::default();
+        assert!(tracker.observe_allocation(candidates).is_none());
+    }
+
+    #[test]
+    fn conflicting_candidates_are_counted_independently() {
+        let candidate_a = auth_candidates_in_allocation(query(ACCOUNT_A, "123").as_bytes());
+        let candidate_b = auth_candidates_in_allocation(query(ACCOUNT_B, "456").as_bytes());
+        let mut tracker = AuthCandidateTracker::default();
+
+        assert!(tracker.observe_allocation(candidate_a.clone()).is_none());
+        assert!(tracker.observe_allocation(candidate_b.clone()).is_none());
+        assert!(tracker.observe_allocation(candidate_a.clone()).is_none());
+        assert!(tracker.observe_allocation(candidate_b).is_none());
+        let confirmed = tracker.observe_allocation(candidate_a).unwrap();
+        assert_eq!(confirmed.account_id, ACCOUNT_A);
+        assert_eq!(confirmed.nonce, "123");
+    }
+
+    #[test]
+    fn detects_a_candidate_split_across_read_chunks() {
+        let allocation = query(ACCOUNT_A, "123456");
+        let split_at = allocation.find("123456").unwrap() + 3;
+        let mut candidates = HashSet::new();
+        let mut tail = Vec::new();
+
+        add_chunk_candidates(
+            &mut candidates,
+            &mut tail,
+            &allocation.as_bytes()[..split_at],
+        );
+        add_chunk_candidates(
+            &mut candidates,
+            &mut tail,
+            &allocation.as_bytes()[split_at..],
+        );
+
+        assert_eq!(candidates.len(), 1);
+        let candidate = candidates.into_iter().next().unwrap();
+        assert_eq!(candidate.account_id, ACCOUNT_A);
+        assert_eq!(candidate.nonce, "123456");
+    }
 }

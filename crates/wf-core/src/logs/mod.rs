@@ -15,6 +15,9 @@ pub use source::{LineAssembler, LogSource};
 pub enum LogEvent {
     Login(AccountInfo),
     Logout,
+    /// The game received its normal quit command. The process watcher confirms
+    /// the actual exit before a public lifecycle event is emitted.
+    QuitRequested,
     DmTabOpened(DirectMessageInfo),
     /// The local client issued an `IRC out: WHO <username>` query,
     /// indicating the user initiated a DM conversation.

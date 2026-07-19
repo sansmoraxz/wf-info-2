@@ -81,3 +81,21 @@ pub fn handle_subscribe(params: Option<Value>) -> anyhow::Result<SubscribeResult
         response: json!(response),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{DaemonEvent, SystemQuitEvent, SystemQuitReason};
+    use chrono::Utc;
+
+    #[test]
+    fn lifecycle_events_can_be_selected_by_wire_name() {
+        let filter = EventFilter::new(Some(vec!["system_quit".to_string()]));
+        let event = DaemonEvent::SystemQuit(SystemQuitEvent {
+            timestamp: Utc::now(),
+            reason: SystemQuitReason::Unexpected,
+        });
+
+        assert!(filter.matches(&event));
+    }
+}
