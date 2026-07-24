@@ -10,7 +10,9 @@ This app is designed to run as a background daemon that monitors Warframe and pr
 > 
 > _NOTE_: The above warning does not apply if you don't build with the `memory` feature enabled.
 
-The `memory` feature is optional. Without it, login/logout detection, trade watching, warframe.market usage, screenshots, fissure runs, and loading an exported inventory all continue to work. Live inventory refresh, account-ID resolution, and automatic profile refresh require `memory`, because current Warframe logs no longer expose the account ID. You may use another app such as [Overwolf's Allecaframe](https://www.overwolf.com/app/alejandro_cabrerizo-alecaframe) and load its exported inventory data instead. (The warning above still applies to Overwolf or any other third-party tool that touches inventory.)
+~~The `memory` feature is optional. Without it, login/logout detection, trade watching, warframe.market usage, screenshots, fissure runs, and loading an exported inventory all continue to work. Live inventory refresh, account-ID resolution, and automatic profile refresh require `memory`, because current Warframe logs no longer expose the account ID. You may use another app such as [Overwolf's Allecaframe](https://www.overwolf.com/app/alejandro_cabrerizo-alecaframe) and load its exported inventory data instead. (The warning above still applies to Overwolf or any other third-party tool that touches inventory.)~~
+
+`memory` reading is currently broken. Please don't build with it enabled.
 
 ## Building
 
