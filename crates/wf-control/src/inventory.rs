@@ -323,16 +323,42 @@ pub(crate) async fn handle_inventory_refresh(_params: Option<Value>) -> Result<V
     anyhow::bail!("inventory.refresh requires the 'memory' feature to be enabled")
 }
 
+/// Timestamp accepted as a numeric epoch (seconds or milliseconds) or a
+/// string holding RFC3339 or a stringified epoch.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub(crate) enum TimestampParam {
+    Epoch(i64),
+    Text(String),
+}
+
+impl TimestampParam {
+    fn to_datetime(&self) -> Result<DateTime<Utc>> {
+        match self {
+            Self::Text(s) => {
+                if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
+                    return Ok(dt.with_timezone(&Utc));
+                }
+                if let Ok(num) = s.parse::<i64>() {
+                    return Ok(epoch_to_datetime(num));
+                }
+                Err(anyhow!("Unsupported timestamp string format"))
+            }
+            Self::Epoch(num) => Ok(epoch_to_datetime(*num)),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Default)]
 pub(crate) struct StaleParams {
-    pub timestamp: Option<Value>,
+    pub timestamp: Option<TimestampParam>,
     pub reason: Option<String>,
 }
 
 pub(crate) fn handle_inventory_stale_update(params: Option<Value>) -> Result<Value> {
     let params: StaleParams = parse_params(params)?;
     let timestamp = if let Some(value) = params.timestamp {
-        parse_timestamp(value)?
+        value.to_datetime()?
     } else {
         Utc::now()
     };
@@ -384,27 +410,6 @@ pub(crate) fn normalize_category(category: &str) -> Option<&'static str> {
         "recipes" | "blueprints" => Some("recipes"),
         "pending_recipes" | "pending" => Some("pending_recipes"),
         _ => Some("unknown"),
-    }
-}
-
-fn parse_timestamp(value: Value) -> Result<DateTime<Utc>> {
-    match value {
-        Value::String(s) => {
-            if let Ok(dt) = DateTime::parse_from_rfc3339(&s) {
-                return Ok(dt.with_timezone(&Utc));
-            }
-            if let Ok(num) = s.parse::<i64>() {
-                return Ok(epoch_to_datetime(num));
-            }
-            Err(anyhow!("Unsupported timestamp string format"))
-        }
-        Value::Number(num) => {
-            let Some(num) = num.as_i64() else {
-                return Err(anyhow!("Invalid timestamp number"));
-            };
-            Ok(epoch_to_datetime(num))
-        }
-        _ => Err(anyhow!("Unsupported timestamp format")),
     }
 }
 

@@ -4,7 +4,7 @@ use std::sync::{Arc, OnceLock};
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 use futures_util::{SinkExt, StreamExt};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::net::TcpStream;
 use tokio::sync::{Mutex, RwLock, oneshot};
@@ -262,8 +262,16 @@ async fn ws_command(route: &str, payload: Value) -> Result<WsMessage> {
 #[derive(Debug, Deserialize, Default)]
 struct SignstatusParams {
     status: Option<String>,
-    /// Nullable optional: absent = don't change, null = remove, number = set
-    duration: Option<Value>,
+    /// PATCH semantics: absent = don't change, null = remove, number = set
+    #[serde(default, with = "serde_with::rust::double_option")]
+    duration: Option<Option<u64>>,
+}
+
+#[derive(Debug, Serialize)]
+struct StatusSetPayload {
+    status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    duration: Option<Option<u64>>,
 }
 
 pub(crate) async fn handle_wfm_signstatus(params: Option<Value>) -> Result<Value> {
@@ -301,13 +309,12 @@ pub(crate) async fn handle_wfm_signstatus(params: Option<Value>) -> Result<Value
         }
     }
 
-    // Build payload with PATCH semantics for duration
-    let mut payload = json!({ "status": status });
-    if let Some(duration_val) = p.duration {
-        // duration present in params (could be null or a number)
-        payload["duration"] = duration_val;
-    }
-    // If duration not in params at all, we omit it (PATCH: no change)
+    // Build payload with PATCH semantics for duration:
+    // None serializes as omitted, Some(None) as null, Some(Some(n)) as n
+    let payload = serde_json::to_value(StatusSetPayload {
+        status: status.clone(),
+        duration: p.duration,
+    })?;
 
     let resp = ws_command("@wfm|cmd/status/set", payload).await?;
 
@@ -445,5 +452,54 @@ pub async fn set_status_if_connected(status: &str) {
             log::info!("WFM status set to '{}'", status);
         }
         Err(e) => log::warn!("Failed to set WFM status: {}", e),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn signstatus_duration_patch_semantics() {
+        let p: SignstatusParams = serde_json::from_str(r#"{"status":"online"}"#).unwrap();
+        assert_eq!(p.duration, None);
+
+        let p: SignstatusParams =
+            serde_json::from_str(r#"{"status":"online","duration":null}"#).unwrap();
+        assert_eq!(p.duration, Some(None));
+
+        let p: SignstatusParams =
+            serde_json::from_str(r#"{"status":"online","duration":3600}"#).unwrap();
+        assert_eq!(p.duration, Some(Some(3600)));
+    }
+
+    #[test]
+    fn status_set_payload_matches_patch_wire_shape() {
+        let omitted = serde_json::to_value(StatusSetPayload {
+            status: "online".into(),
+            duration: None,
+        })
+        .unwrap();
+        assert_eq!(omitted, serde_json::json!({ "status": "online" }));
+
+        let null = serde_json::to_value(StatusSetPayload {
+            status: "online".into(),
+            duration: Some(None),
+        })
+        .unwrap();
+        assert_eq!(
+            null,
+            serde_json::json!({ "status": "online", "duration": null })
+        );
+
+        let set = serde_json::to_value(StatusSetPayload {
+            status: "online".into(),
+            duration: Some(Some(60)),
+        })
+        .unwrap();
+        assert_eq!(
+            set,
+            serde_json::json!({ "status": "online", "duration": 60 })
+        );
     }
 }
