@@ -256,7 +256,8 @@ pub(crate) async fn handle_inventory_filter(params: Option<Value>) -> Result<Val
             if let Value::Object(map) = value {
                 if let Some(item_type) = map.get("item_type").and_then(Value::as_str) {
                     if let Some(market) = fetch_market_summary(item_type).await {
-                        map.insert("market".to_string(), market);
+                        let market_value = serde_json::to_value(&market).unwrap_or(Value::Null);
+                        map.insert("market".to_string(), market_value);
                     }
                 }
             }

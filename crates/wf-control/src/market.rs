@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use wf_core::storage;
 use wf_inventory::Inventory;
@@ -255,7 +255,33 @@ async fn fetch_orders(slug: &str) -> Result<Vec<WfmOrder>> {
     Ok(resp.data)
 }
 
-fn summarize_orders(orders: &[WfmOrder]) -> Value {
+// ── Typed order/price summaries ──
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct PriceStats {
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    pub median: Option<f64>,
+    pub count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct OrderSummary {
+    pub sell: PriceStats,
+    pub buy: PriceStats,
+    pub total_listings: usize,
+}
+
+/// Market price summary for a single item
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct MarketSummary {
+    pub slug: String,
+    pub ducats: Option<i64>,
+    pub prices: OrderSummary,
+    pub cache_age_secs: Option<i64>,
+}
+
+fn summarize_orders(orders: &[WfmOrder]) -> OrderSummary {
     let sell_prices: Vec<f64> = orders
         .iter()
         .filter(|o| {
@@ -276,16 +302,21 @@ fn summarize_orders(orders: &[WfmOrder]) -> Value {
         .map(|o| o.platinum)
         .collect();
 
-    json!({
-        "sell": price_stats(&sell_prices),
-        "buy": price_stats(&buy_prices),
-        "total_listings": orders.len(),
-    })
+    OrderSummary {
+        sell: price_stats(&sell_prices),
+        buy: price_stats(&buy_prices),
+        total_listings: orders.len(),
+    }
 }
 
-fn price_stats(prices: &[f64]) -> Value {
+fn price_stats(prices: &[f64]) -> PriceStats {
     if prices.is_empty() {
-        return json!({ "min": null, "max": null, "median": null, "count": 0 });
+        return PriceStats {
+            min: None,
+            max: None,
+            median: None,
+            count: 0,
+        };
     }
 
     let mut sorted = prices.to_vec();
@@ -300,12 +331,12 @@ fn price_stats(prices: &[f64]) -> Value {
         Some(sorted[sorted.len() / 2])
     };
 
-    json!({
-        "min": min,
-        "max": max,
-        "median": median,
-        "count": sorted.len(),
-    })
+    PriceStats {
+        min,
+        max,
+        median,
+        count: sorted.len(),
+    }
 }
 
 // ── Inventory count lookup ──
@@ -390,6 +421,49 @@ pub(crate) struct MarketPriceParams {
     pub include_parts: Option<bool>,
 }
 
+#[derive(Debug, Serialize)]
+pub(crate) struct MarketItemInfo {
+    pub name: String,
+    pub slug: String,
+    pub game_ref: Option<String>,
+    pub ducats: Option<i64>,
+    pub tags: Vec<String>,
+    pub is_set: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct OwnedCount {
+    pub owned: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct SetPartInfo {
+    pub name: String,
+    pub slug: String,
+    pub game_ref: Option<String>,
+    pub ducats: Option<i64>,
+    pub prices: OrderSummary,
+    pub inventory: OwnedCount,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct MarketPriceResponse {
+    pub item: MarketItemInfo,
+    pub prices: OrderSummary,
+    pub inventory: OwnedCount,
+    pub cache_age_secs: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<wf_itemdata::item_data::ItemDetails>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub set_parts: Option<Vec<SetPartInfo>>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct MarketRefreshResponse {
+    pub items_count: usize,
+    pub refreshed_at: String,
+}
+
 pub(crate) async fn handle_market_price(params: Option<Value>) -> Result<Value> {
     let params: MarketPriceParams = parse_params(params)?;
 
@@ -437,7 +511,7 @@ pub(crate) async fn handle_market_price(params: Option<Value>) -> Result<Value> 
         .game_ref
         .as_ref()
         .and_then(|gr| lookup_item_info(gr, None))
-        .and_then(|info| serde_json::to_value(&info.details).ok());
+        .map(|info| info.details);
 
     // Set parts: detect set items by "set" tag, then fetch detail for setParts
     let include_parts = params.include_parts.unwrap_or(true);
@@ -460,14 +534,14 @@ pub(crate) async fn handle_market_price(params: Option<Value>) -> Result<Value> 
                                 part.game_ref.as_ref().map(|gr| count_in_inventory(inv, gr))
                             });
 
-                            parts.push(json!({
-                                "name": part.name,
-                                "slug": part.slug,
-                                "game_ref": part.game_ref,
-                                "ducats": part.ducats,
-                                "prices": part_prices,
-                                "inventory": { "owned": part_owned },
-                            }));
+                            parts.push(SetPartInfo {
+                                name: part.name,
+                                slug: part.slug,
+                                game_ref: part.game_ref,
+                                ducats: part.ducats,
+                                prices: part_prices,
+                                inventory: OwnedCount { owned: part_owned },
+                            });
                         }
                     }
                     Some(parts)
@@ -481,42 +555,38 @@ pub(crate) async fn handle_market_price(params: Option<Value>) -> Result<Value> 
         None
     };
 
-    let mut result = json!({
-        "item": {
-            "name": wfm_item.name,
-            "slug": wfm_item.slug,
-            "game_ref": wfm_item.game_ref,
-            "ducats": wfm_item.ducats,
-            "tags": wfm_item.tags,
-            "is_set": is_set,
+    let response = MarketPriceResponse {
+        item: MarketItemInfo {
+            name: wfm_item.name,
+            slug: wfm_item.slug,
+            game_ref: wfm_item.game_ref,
+            ducats: wfm_item.ducats,
+            tags: wfm_item.tags,
+            is_set,
         },
-        "prices": prices,
-        "inventory": { "owned": owned },
-        "cache_age_secs": cache_age_secs(),
-    });
+        prices,
+        inventory: OwnedCount { owned },
+        cache_age_secs: cache_age_secs(),
+        details,
+        set_parts,
+    };
 
-    if let Some(d) = details {
-        result["details"] = d;
-    }
-    if let Some(sp) = set_parts {
-        result["set_parts"] = Value::Array(sp);
-    }
-
-    Ok(result)
+    Ok(serde_json::to_value(response)?)
 }
 
 pub(crate) async fn handle_market_refresh(_params: Option<Value>) -> Result<Value> {
     let (count, refreshed_at) = refresh_cache().await?;
 
-    Ok(json!({
-        "items_count": count,
-        "refreshed_at": refreshed_at.to_rfc3339(),
-    }))
+    let response = MarketRefreshResponse {
+        items_count: count,
+        refreshed_at: refreshed_at.to_rfc3339(),
+    };
+    Ok(serde_json::to_value(response)?)
 }
 
 /// Fetch market price summary for a single item by game_ref.
 /// Used by inventory-filter enrichment.
-pub(crate) async fn fetch_market_summary(game_ref: &str) -> Option<Value> {
+pub(crate) async fn fetch_market_summary(game_ref: &str) -> Option<MarketSummary> {
     if ensure_cache().await.is_err() {
         return None;
     }
@@ -525,10 +595,104 @@ pub(crate) async fn fetch_market_summary(game_ref: &str) -> Option<Value> {
     let orders = fetch_orders(&wfm_item.slug).await.ok()?;
     let prices = summarize_orders(&orders);
 
-    Some(json!({
-        "slug": wfm_item.slug,
-        "ducats": wfm_item.ducats,
-        "prices": prices,
-        "cache_age_secs": cache_age_secs(),
-    }))
+    Some(MarketSummary {
+        slug: wfm_item.slug,
+        ducats: wfm_item.ducats,
+        prices,
+        cache_age_secs: cache_age_secs(),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn price_stats_matches_legacy_shape() {
+        let empty = price_stats(&[]);
+        assert_eq!(
+            serde_json::to_value(&empty).unwrap(),
+            json!({ "min": null, "max": null, "median": null, "count": 0 })
+        );
+
+        let stats = price_stats(&[10.0, 20.0, 30.0, 40.0]);
+        assert_eq!(
+            serde_json::to_value(&stats).unwrap(),
+            json!({ "min": 10.0, "max": 40.0, "median": 25.0, "count": 4 })
+        );
+    }
+
+    #[test]
+    fn market_summary_matches_legacy_shape() {
+        let summary = MarketSummary {
+            slug: "harrow_prime_set".to_string(),
+            ducats: Some(100),
+            prices: OrderSummary {
+                sell: price_stats(&[15.0]),
+                buy: price_stats(&[]),
+                total_listings: 1,
+            },
+            cache_age_secs: Some(42),
+        };
+        assert_eq!(
+            serde_json::to_value(&summary).unwrap(),
+            json!({
+                "slug": "harrow_prime_set",
+                "ducats": 100,
+                "prices": {
+                    "sell": { "min": 15.0, "max": 15.0, "median": 15.0, "count": 1 },
+                    "buy": { "min": null, "max": null, "median": null, "count": 0 },
+                    "total_listings": 1,
+                },
+                "cache_age_secs": 42,
+            })
+        );
+    }
+
+    #[test]
+    fn market_price_response_omits_absent_optionals() {
+        let response = MarketPriceResponse {
+            item: MarketItemInfo {
+                name: "Harrow Prime Set".to_string(),
+                slug: "harrow_prime_set".to_string(),
+                game_ref: None,
+                ducats: None,
+                tags: vec!["set".to_string()],
+                is_set: true,
+            },
+            prices: OrderSummary {
+                sell: price_stats(&[]),
+                buy: price_stats(&[]),
+                total_listings: 0,
+            },
+            inventory: OwnedCount { owned: None },
+            cache_age_secs: None,
+            details: None,
+            set_parts: None,
+        };
+        let value = serde_json::to_value(&response).unwrap();
+        assert_eq!(
+            value,
+            json!({
+                "item": {
+                    "name": "Harrow Prime Set",
+                    "slug": "harrow_prime_set",
+                    "game_ref": null,
+                    "ducats": null,
+                    "tags": ["set"],
+                    "is_set": true,
+                },
+                "prices": {
+                    "sell": { "min": null, "max": null, "median": null, "count": 0 },
+                    "buy": { "min": null, "max": null, "median": null, "count": 0 },
+                    "total_listings": 0,
+                },
+                "inventory": { "owned": null },
+                "cache_age_secs": null,
+            })
+        );
+        assert!(value.get("details").is_none());
+        assert!(value.get("set_parts").is_none());
+    }
 }
