@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, TimeZone, Utc};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tantivy::Term;
 use tantivy::query::{Occur, QueryParser, TermQuery};
 use tantivy::schema::IndexRecordOption;
@@ -16,9 +16,9 @@ use super::broadcaster;
 use super::events::{DaemonEvent, InventoryFetchedEvent, InventoryStaleEvent, InventorySummary};
 use super::market::fetch_market_summary;
 use super::search::{
-    build_tantivy_index, collect_inventory_items, get_or_build_inventory_index, search_inventory,
+    InventoryItemEnvelope, build_tantivy_index, collect_inventory_items,
+    get_or_build_inventory_index, search_inventory,
 };
-use super::utils::parse_params;
 use wf_itemdata::item_data::lookup_item_info;
 
 #[cfg(feature = "memory")]
@@ -34,8 +34,26 @@ pub(crate) struct LoadInventoryParams {
     pub encrypted: Option<bool>,
 }
 
-pub(crate) async fn handle_inventory_load(params: Option<Value>) -> Result<Value> {
-    let params: LoadInventoryParams = parse_params(params)?;
+#[derive(Debug, Serialize)]
+pub(crate) struct InventoryLoadResponse {
+    pub saved: bool,
+    pub summary: InventorySummary,
+    pub meta: storage::InventoryMeta,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct InventoryFilterResponse {
+    pub total: usize,
+    pub filtered: usize,
+    pub offset: usize,
+    pub limit: usize,
+    pub items: Vec<InventoryItemEnvelope>,
+    pub meta: storage::InventoryMeta,
+}
+
+pub(crate) async fn handle_inventory_load(
+    params: LoadInventoryParams,
+) -> Result<InventoryLoadResponse> {
     let sources =
         params.path.is_some() as u8 + params.json.is_some() as u8 + params.raw.is_some() as u8;
     if sources != 1 {
@@ -81,11 +99,11 @@ pub(crate) async fn handle_inventory_load(params: Option<Value>) -> Result<Value
 
     let meta = storage::read_inventory_meta().unwrap_or_default();
 
-    Ok(json!({
-        "saved": save,
-        "summary": inventory_summary(&inventory),
-        "meta": meta,
-    }))
+    Ok(InventoryLoadResponse {
+        saved: save,
+        summary: inventory_summary(&inventory),
+        meta,
+    })
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -120,9 +138,9 @@ pub(crate) struct CountFilter {
     pub value: i64,
 }
 
-pub(crate) async fn handle_inventory_filter(params: Option<Value>) -> Result<Value> {
-    let params: FilterParams = parse_params(params)?;
-
+pub(crate) async fn handle_inventory_filter(
+    params: FilterParams,
+) -> Result<InventoryFilterResponse> {
     let encrypted = params.encrypted.unwrap_or(false);
     let (inventory, used_custom_path) = if let Some(path) = params.path.clone() {
         let inv = if encrypted {
@@ -253,19 +271,18 @@ pub(crate) async fn handle_inventory_filter(params: Option<Value>) -> Result<Val
         .take(limit)
         .collect();
 
-    Ok(json!({
-        "total": total,
-        "filtered": filtered,
-        "offset": offset,
-        "limit": limit,
-        "items": items,
-        "meta": meta,
-    }))
+    Ok(InventoryFilterResponse {
+        total,
+        filtered,
+        offset,
+        limit,
+        items,
+        meta,
+    })
 }
 
-pub(crate) fn handle_inventory_meta_get() -> Result<Value> {
-    let meta = storage::read_inventory_meta().unwrap_or_default();
-    Ok(serde_json::to_value(meta).context("Failed to serialize inventory metadata")?)
+pub(crate) fn handle_inventory_meta_get() -> Result<storage::InventoryMeta> {
+    Ok(storage::read_inventory_meta().unwrap_or_default())
 }
 
 #[cfg(feature = "memory")]
@@ -278,8 +295,9 @@ pub(crate) struct RefreshParams {
 }
 
 #[cfg(feature = "memory")]
-pub(crate) async fn handle_inventory_refresh(params: Option<Value>) -> Result<Value> {
-    let params: RefreshParams = parse_params(params)?;
+pub(crate) async fn handle_inventory_refresh(
+    params: RefreshParams,
+) -> Result<InventoryLoadResponse> {
     let pid = process::get_warframe_pid()
         .ok_or_else(|| anyhow!("Warframe process not detected; launch the game and try again"))?;
 
@@ -311,15 +329,15 @@ pub(crate) async fn handle_inventory_refresh(params: Option<Value>) -> Result<Va
 
     let meta = storage::read_inventory_meta().unwrap_or_default();
 
-    Ok(json!({
-        "saved": save,
-        "summary": inventory_summary(&inventory),
-        "meta": meta,
-    }))
+    Ok(InventoryLoadResponse {
+        saved: save,
+        summary: inventory_summary(&inventory),
+        meta,
+    })
 }
 
 #[cfg(not(feature = "memory"))]
-pub(crate) async fn handle_inventory_refresh(_params: Option<Value>) -> Result<Value> {
+pub(crate) async fn handle_inventory_refresh() -> Result<InventoryLoadResponse> {
     anyhow::bail!("inventory.refresh requires the 'memory' feature to be enabled")
 }
 
@@ -355,8 +373,7 @@ pub(crate) struct StaleParams {
     pub reason: Option<String>,
 }
 
-pub(crate) fn handle_inventory_stale_update(params: Option<Value>) -> Result<Value> {
-    let params: StaleParams = parse_params(params)?;
+pub(crate) fn handle_inventory_stale_update(params: StaleParams) -> Result<storage::InventoryMeta> {
     let timestamp = if let Some(value) = params.timestamp {
         value.to_datetime()?
     } else {
@@ -373,7 +390,7 @@ pub(crate) fn handle_inventory_stale_update(params: Option<Value>) -> Result<Val
         reason,
     }));
 
-    Ok(serde_json::to_value(meta).context("Failed to serialize inventory metadata")?)
+    Ok(meta)
 }
 
 pub(crate) fn inventory_summary(inventory: &Inventory) -> InventorySummary {
@@ -429,6 +446,7 @@ fn epoch_to_datetime(value: i64) -> DateTime<Utc> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn inventory_summary_matches_legacy_shape() {

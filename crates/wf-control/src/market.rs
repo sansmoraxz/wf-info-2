@@ -5,12 +5,11 @@ use std::time::Duration;
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use wf_core::storage;
 use wf_inventory::Inventory;
 
-use super::utils::{WFM_API_BASE, parse_params};
+use super::utils::WFM_API_BASE;
 use wf_itemdata::item_data::lookup_item_info;
 
 const CACHE_TTL: Duration = Duration::from_secs(3600); // 1 hour
@@ -464,9 +463,9 @@ pub(crate) struct MarketRefreshResponse {
     pub refreshed_at: String,
 }
 
-pub(crate) async fn handle_market_price(params: Option<Value>) -> Result<Value> {
-    let params: MarketPriceParams = parse_params(params)?;
-
+pub(crate) async fn handle_market_price(
+    params: MarketPriceParams,
+) -> Result<MarketPriceResponse> {
     if params.item_type.is_none() && params.search.is_none() {
         return Err(anyhow!(
             "wfm.price requires 'item_type' or 'search' parameter"
@@ -555,7 +554,7 @@ pub(crate) async fn handle_market_price(params: Option<Value>) -> Result<Value> 
         None
     };
 
-    let response = MarketPriceResponse {
+    Ok(MarketPriceResponse {
         item: MarketItemInfo {
             name: wfm_item.name,
             slug: wfm_item.slug,
@@ -569,19 +568,16 @@ pub(crate) async fn handle_market_price(params: Option<Value>) -> Result<Value> 
         cache_age_secs: cache_age_secs(),
         details,
         set_parts,
-    };
-
-    Ok(serde_json::to_value(response)?)
+    })
 }
 
-pub(crate) async fn handle_market_refresh(_params: Option<Value>) -> Result<Value> {
+pub(crate) async fn handle_market_refresh() -> Result<MarketRefreshResponse> {
     let (count, refreshed_at) = refresh_cache().await?;
 
-    let response = MarketRefreshResponse {
+    Ok(MarketRefreshResponse {
         items_count: count,
         refreshed_at: refreshed_at.to_rfc3339(),
-    };
-    Ok(serde_json::to_value(response)?)
+    })
 }
 
 /// Fetch market price summary for a single item by game_ref.

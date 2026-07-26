@@ -12,7 +12,7 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite};
 
-use crate::utils::{WFM_AUTH_BASE, WFM_SUB_PROTOCOL, WFM_WS_URL, parse_params};
+use crate::utils::{WFM_AUTH_BASE, WFM_SUB_PROTOCOL, WFM_WS_URL};
 use wf_core::storage::{self, AuthTokenData};
 
 // ── WS message types ──
@@ -260,7 +260,7 @@ async fn ws_command(route: &str, payload: Value) -> Result<WsMessage> {
 // ── Handlers ──
 
 #[derive(Debug, Deserialize, Default)]
-struct SignstatusParams {
+pub(crate) struct SignstatusParams {
     status: Option<String>,
     /// PATCH semantics: absent = don't change, null = remove, number = set
     #[serde(default, with = "serde_with::rust::double_option")]
@@ -274,9 +274,26 @@ struct StatusSetPayload {
     duration: Option<Option<u64>>,
 }
 
-pub(crate) async fn handle_wfm_signstatus(params: Option<Value>) -> Result<Value> {
-    let p: SignstatusParams = parse_params(params)?;
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub(crate) enum SignstatusResponse {
+    Authenticated {
+        authenticated: bool,
+        status: Option<String>,
+        expires_at: String,
+        expired: bool,
+    },
+    Unauthenticated {
+        authenticated: bool,
+        status: Option<String>,
+    },
+    Set {
+        ok: bool,
+        status: String,
+    },
+}
 
+pub(crate) async fn handle_wfm_signstatus(p: SignstatusParams) -> Result<SignstatusResponse> {
     // If no status provided, return current state
     if p.status.is_none() {
         let guard = session_lock().read().await;
@@ -284,17 +301,17 @@ pub(crate) async fn handle_wfm_signstatus(params: Option<Value>) -> Result<Value
             Some(session) => {
                 let expires_at = session.tokens.expires_at;
                 let expired = expires_at < Utc::now();
-                Ok(json!({
-                    "authenticated": true,
-                    "status": session.current_status,
-                    "expires_at": expires_at.to_rfc3339(),
-                    "expired": expired,
-                }))
+                Ok(SignstatusResponse::Authenticated {
+                    authenticated: true,
+                    status: session.current_status.clone(),
+                    expires_at: expires_at.to_rfc3339(),
+                    expired,
+                })
             }
-            None => Ok(json!({
-                "authenticated": false,
-                "status": null,
-            })),
+            None => Ok(SignstatusResponse::Unauthenticated {
+                authenticated: false,
+                status: None,
+            }),
         };
     }
 
@@ -337,16 +354,13 @@ pub(crate) async fn handle_wfm_signstatus(params: Option<Value>) -> Result<Value
         }
     }
 
-    Ok(json!({
-        "ok": true,
-        "status": status,
-    }))
+    Ok(SignstatusResponse::Set { ok: true, status })
 }
 
 // ── Sign in handler ──
 
 #[derive(Debug, Deserialize)]
-struct SigninParams {
+pub(crate) struct SigninParams {
     email: String,
     password: String,
     #[serde(default = "default_client_id")]
@@ -363,14 +377,16 @@ fn default_device_name() -> String {
     "wf-info-2".to_string()
 }
 
-pub(crate) async fn handle_wfm_signin(params: Option<Value>) -> Result<Value> {
-    let p: SigninParams = match params {
+pub(crate) fn parse_signin_params(params: Option<Value>) -> Result<SigninParams> {
+    match params {
         Some(value) => {
-            serde_json::from_value(value).map_err(|e| anyhow!("Invalid signin params: {}", e))?
+            serde_json::from_value(value).map_err(|e| anyhow!("Invalid signin params: {}", e))
         }
-        None => return Err(anyhow!("Missing signin params (email, password required)")),
-    };
+        None => Err(anyhow!("Missing signin params (email, password required)")),
+    }
+}
 
+pub(crate) async fn handle_wfm_signin(p: SigninParams) -> Result<()> {
     // Load existing device_id or generate a new stable one
     let device_id = match storage::read_auth_token() {
         Ok(existing) => existing.device_id,
@@ -393,12 +409,12 @@ pub(crate) async fn handle_wfm_signin(params: Option<Value>) -> Result<Value> {
     // Connect WebSocket and authenticate
     connect_and_auth(token_data).await?;
 
-    Ok(json!({}))
+    Ok(())
 }
 
 // ── Sign out handler ──
 
-pub(crate) async fn handle_wfm_signout(_params: Option<Value>) -> Result<Value> {
+pub(crate) async fn handle_wfm_signout() -> Result<()> {
     // Clear WS session
     {
         let mut guard = session_lock().write().await;
@@ -409,7 +425,7 @@ pub(crate) async fn handle_wfm_signout(_params: Option<Value>) -> Result<Value> 
     storage::delete_auth_token()?;
 
     log::info!("Signed out from WFM");
-    Ok(json!({}))
+    Ok(())
 }
 
 // ── Session restore (called on daemon start) ──
