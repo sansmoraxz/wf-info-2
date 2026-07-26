@@ -40,7 +40,7 @@ pub async fn fetch_player_profile(account_id: &str) -> Result<ProfileData, reqwe
 }
 
 /// Fetches the player's full inventory using the authenticated query.
-/// Returns the raw JSON response as a serde_json::Value.
+/// Returns the deserialized Inventory on success.
 pub async fn fetch_inventory(auth: &AuthQuery) -> anyhow::Result<Inventory> {
     log::info!("Fetching inventory from API...");
 
