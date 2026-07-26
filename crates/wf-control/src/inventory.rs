@@ -153,12 +153,12 @@ pub(crate) async fn handle_inventory_filter(params: Option<Value>) -> Result<Val
     let meta = storage::read_inventory_meta().unwrap_or_default();
 
     // Count items in selected category for reporting; index uses full inventory for reuse
-    let items_for_counts = collect_inventory_items(&inventory, category, false);
+    let items_for_counts = collect_inventory_items(&inventory, category);
     let total = items_for_counts.len();
 
     // Build or reuse cached index unless a custom inventory path was provided
     let search_index = if used_custom_path {
-        let all_items = collect_inventory_items(&inventory, None, false);
+        let all_items = collect_inventory_items(&inventory, None);
         build_tantivy_index(&all_items)?
     } else {
         get_or_build_inventory_index(&inventory, &meta)?
@@ -195,77 +195,59 @@ pub(crate) async fn handle_inventory_filter(params: Option<Value>) -> Result<Val
         clauses.push((Occur::Must, query));
     }
 
-    let (_total_matches, mut values) = search_inventory(&search_index, clauses)?;
+    let (_total_matches, mut envelopes) = search_inventory(&search_index, clauses)?;
     let offset = params.offset.unwrap_or(0);
     let limit = params.limit.unwrap_or(usize::MAX);
 
     // Apply non-indexable filters and optional detail expansion
-    let mut filtered_values = Vec::new();
-    for value in values.drain(..) {
-        let mut value = value;
-        let mut matches = true;
-        if let Value::Object(ref map) = value {
-            if let Some(tradable) = params.tradable {
-                let item_type = map.get("item_type").and_then(Value::as_str);
-                let category = map.get("category").and_then(Value::as_str);
-                let details = item_type.and_then(|t| lookup_item_info(t, category));
-                let detail_tradable = details.as_ref().map(|d| d.details.tradable());
-                matches = matches && detail_tradable == Some(tradable);
-            }
-
-            if let Some(filter) = params.item_count {
-                if let Some(count) = extract_item_count(map) {
-                    let ok = match filter.op {
-                        CountOp::Gt => count > filter.value,
-                        CountOp::Gte => count >= filter.value,
-                        CountOp::Lt => count < filter.value,
-                        CountOp::Lte => count <= filter.value,
-                        CountOp::Eq => count == filter.value,
-                        CountOp::Ne => count != filter.value,
-                    };
-                    matches = matches && ok;
-                } else {
-                    matches = false;
-                }
+    let mut filtered_items = Vec::new();
+    for mut envelope in envelopes.drain(..) {
+        if let Some(tradable) = params.tradable {
+            let details = lookup_item_info(envelope.item_type(), Some(envelope.category()));
+            let detail_tradable = details.as_ref().map(|d| d.details.tradable());
+            if detail_tradable != Some(tradable) {
+                continue;
             }
         }
 
-        if !matches {
-            continue;
+        if let Some(filter) = params.item_count {
+            let Some(count) = envelope.item_count() else {
+                continue;
+            };
+            let ok = match filter.op {
+                CountOp::Gt => count > filter.value,
+                CountOp::Gte => count >= filter.value,
+                CountOp::Lt => count < filter.value,
+                CountOp::Lte => count <= filter.value,
+                CountOp::Eq => count == filter.value,
+                CountOp::Ne => count != filter.value,
+            };
+            if !ok {
+                continue;
+            }
         }
 
         if include_details {
-            if let Value::Object(ref mut map) = value {
-                if let Some(item_type) = map.get("item_type").and_then(Value::as_str) {
-                    let category = map.get("category").and_then(Value::as_str);
-                    if let Some(details) = lookup_item_info(item_type, category) {
-                        let details_value =
-                            serde_json::to_value(&details.details).unwrap_or(Value::Null);
-                        map.insert("details".to_string(), details_value);
-                    }
-                }
+            if let Some(details) = lookup_item_info(envelope.item_type(), Some(envelope.category()))
+            {
+                envelope.set_details(details.details);
             }
         }
 
-        filtered_values.push(value);
+        filtered_items.push(envelope);
     }
 
     let include_market = params.include_market.unwrap_or(false);
     if include_market {
-        for value in &mut filtered_values {
-            if let Value::Object(map) = value {
-                if let Some(item_type) = map.get("item_type").and_then(Value::as_str) {
-                    if let Some(market) = fetch_market_summary(item_type).await {
-                        let market_value = serde_json::to_value(&market).unwrap_or(Value::Null);
-                        map.insert("market".to_string(), market_value);
-                    }
-                }
+        for envelope in &mut filtered_items {
+            if let Some(market) = fetch_market_summary(envelope.item_type()).await {
+                envelope.set_market(market);
             }
         }
     }
 
-    let filtered = filtered_values.len();
-    let results: Vec<Value> = filtered_values
+    let filtered = filtered_items.len();
+    let items: Vec<_> = filtered_items
         .into_iter()
         .skip(offset)
         .take(limit)
@@ -276,7 +258,7 @@ pub(crate) async fn handle_inventory_filter(params: Option<Value>) -> Result<Val
         "filtered": filtered,
         "offset": offset,
         "limit": limit,
-        "items": results,
+        "items": items,
         "meta": meta,
     }))
 }
@@ -437,12 +419,6 @@ fn epoch_to_datetime(value: i64) -> DateTime<Utc> {
     Utc.timestamp_opt(secs, nsec)
         .single()
         .unwrap_or_else(Utc::now)
-}
-
-fn extract_item_count(map: &serde_json::Map<String, Value>) -> Option<i64> {
-    map.get("ItemCount")
-        .or_else(|| map.get("item_count"))
-        .and_then(|v| v.as_i64())
 }
 
 #[cfg(test)]
