@@ -437,7 +437,7 @@ pub(crate) async fn handle_market_price(params: Option<Value>) -> Result<Value> 
         .game_ref
         .as_ref()
         .and_then(|gr| lookup_item_info(gr, None))
-        .map(|info| info.details.clone());
+        .and_then(|info| serde_json::to_value(&info.details).ok());
 
     // Set parts: detect set items by "set" tag, then fetch detail for setParts
     let include_parts = params.include_parts.unwrap_or(true);

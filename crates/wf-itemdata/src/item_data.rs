@@ -3,9 +3,70 @@ use std::fs;
 use std::sync::OnceLock;
 
 use serde::Serialize;
-use serde_json::Value;
 
-use crate::ProductCategory;
+use crate::traits::Item;
+use crate::{ProductCategory, arch_gun, arch_melee, archwing, melee, mods, primary, secondary, warframe};
+
+/// Typed detail payload for an indexed item.
+#[derive(Debug, Clone, Serialize)]
+#[serde(untagged)]
+pub enum ItemDetails {
+    Warframe(warframe::WarframeEntry),
+    Primary(primary::Primary),
+    Secondary(secondary::Secondary),
+    Melee(melee::Melee),
+    Archwing(archwing::Archwing),
+    ArchGun(arch_gun::ArchGun),
+    ArchMelee(arch_melee::ArchMelee),
+    Mod(mods::ModEntry),
+}
+
+impl ItemDetails {
+    fn as_item(&self) -> &dyn Item {
+        match self {
+            Self::Warframe(x) => x,
+            Self::Primary(x) => x,
+            Self::Secondary(x) => x,
+            Self::Melee(x) => x,
+            Self::Archwing(x) => x,
+            Self::ArchGun(x) => x,
+            Self::ArchMelee(x) => x,
+            Self::Mod(x) => x,
+        }
+    }
+
+    pub fn unique_name(&self) -> &str {
+        self.as_item().unique_name()
+    }
+
+    pub fn name(&self) -> &str {
+        self.as_item().name()
+    }
+
+    pub fn tradable(&self) -> bool {
+        self.as_item().tradable()
+    }
+
+    pub fn description(&self) -> Option<&str> {
+        match self {
+            Self::Warframe(warframe::WarframeEntry::Suits(x)) => x.detail.description.as_deref(),
+            Self::Warframe(warframe::WarframeEntry::MechSuits(x)) => {
+                x.detail.description.as_deref()
+            }
+            Self::Warframe(warframe::WarframeEntry::Helminth(x)) => x.detail.description.as_deref(),
+            Self::Primary(x) => x.detail.description.as_deref(),
+            Self::Secondary(x) => x.detail.description.as_deref(),
+            Self::Melee(x) => x.detail.description.as_deref(),
+            Self::Archwing(x) => x.detail.description.as_deref(),
+            Self::ArchGun(x) => x.detail.description.as_deref(),
+            Self::ArchMelee(x) => x.detail.description.as_deref(),
+            Self::Mod(mods::ModEntry::Riven(x)) => x.detail.description.as_deref(),
+            Self::Mod(mods::ModEntry::SetMember(x)) => x.detail.description.as_deref(),
+            Self::Mod(mods::ModEntry::SetDefinition(x)) => x.detail.description.as_deref(),
+            Self::Mod(mods::ModEntry::Regular(x)) => x.detail.description.as_deref(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ItemInfo {
@@ -13,7 +74,19 @@ pub struct ItemInfo {
     pub unique_name: String,
     pub product_category: Option<String>,
     pub description: Option<String>,
-    pub details: Value,
+    pub details: ItemDetails,
+}
+
+impl ItemInfo {
+    fn new(details: ItemDetails, product_category: Option<String>) -> Self {
+        Self {
+            name: Some(details.name().to_string()),
+            unique_name: details.unique_name().to_string(),
+            product_category,
+            description: details.description().map(|s| s.to_string()),
+            details,
+        }
+    }
 }
 
 // Maps uniqueName/item_type -> all matching ItemInfo variants (multiple productCategory variants may exist)
@@ -59,107 +132,116 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
             .and_then(|p| fs::read_to_string(p).ok())
     };
 
-    let mut push_info = |v: &Value, product_category: Option<String>| {
-        let Some(unique_name) = v.get("uniqueName").and_then(Value::as_str) else {
-            return;
-        };
-        let name = v.get("name").and_then(Value::as_str).map(|s| s.to_string());
-        let description = v
-            .get("description")
-            .or_else(|| v.get("desc"))
-            .and_then(Value::as_str)
-            .map(|s| s.to_string());
-        let details = v.clone();
-        let info = ItemInfo {
-            name,
-            unique_name: unique_name.to_string(),
-            product_category,
-            description,
-            details,
-        };
-        index.entry(unique_name.to_string()).or_default().push(info);
+    let mut push_info = |details: ItemDetails, product_category: Option<String>| {
+        let info = ItemInfo::new(details, product_category);
+        index
+            .entry(info.unique_name.clone())
+            .or_default()
+            .push(info);
     };
 
     // Warframes
     if let Some(raw) = read_cached("Warframes.json") {
-        if let Ok(arr) = serde_json::from_str::<crate::warframe::Root>(&raw) {
+        if let Ok(arr) = serde_json::from_str::<warframe::Root>(&raw) {
             for item in arr {
-                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
-                push_info(&v, Some("Suits".to_string()));
+                push_info(ItemDetails::Warframe(item), Some("Suits".to_string()));
             }
         }
     }
     // Primary
     if let Some(raw) = read_cached("Primary.json") {
-        if let Ok(arr) = serde_json::from_str::<crate::primary::Root>(&raw) {
+        if let Ok(arr) = serde_json::from_str::<primary::Root>(&raw) {
             for item in arr {
                 let pc = Some(item.product_category.as_str().to_string());
-                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
-                push_info(&v, pc);
+                push_info(ItemDetails::Primary(item), pc);
             }
         }
     }
     // Secondary
     if let Some(raw) = read_cached("Secondary.json") {
-        if let Ok(arr) = serde_json::from_str::<crate::secondary::Root>(&raw) {
+        if let Ok(arr) = serde_json::from_str::<secondary::Root>(&raw) {
             for item in arr {
                 let pc = Some(item.product_category.as_str().to_string());
-                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
-                push_info(&v, pc);
+                push_info(ItemDetails::Secondary(item), pc);
             }
         }
     }
     // Melee
     if let Some(raw) = read_cached("Melee.json") {
-        if let Ok(arr) = serde_json::from_str::<crate::melee::Root>(&raw) {
+        if let Ok(arr) = serde_json::from_str::<melee::Root>(&raw) {
             for item in arr {
                 let pc = Some(item.product_category.as_str().to_string());
-                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
-                push_info(&v, pc);
+                push_info(ItemDetails::Melee(item), pc);
             }
         }
     }
     // Archwing suits
     if let Some(raw) = read_cached("Archwing.json") {
-        if let Ok(arr) = serde_json::from_str::<crate::archwing::Root>(&raw) {
+        if let Ok(arr) = serde_json::from_str::<archwing::Root>(&raw) {
             for item in arr {
                 let pc = Some(item.product_category.as_str().to_string());
-                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
-                push_info(&v, pc);
+                push_info(ItemDetails::Archwing(item), pc);
             }
         }
     }
     // Arch-guns
     if let Some(raw) = read_cached("Arch-Gun.json") {
-        if let Ok(arr) = serde_json::from_str::<crate::arch_gun::Root>(&raw) {
+        if let Ok(arr) = serde_json::from_str::<arch_gun::Root>(&raw) {
             for item in arr {
                 let pc = Some(item.product_category.as_str().to_string());
-                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
-                push_info(&v, pc);
+                push_info(ItemDetails::ArchGun(item), pc);
             }
         }
     }
     // Arch-melee
     if let Some(raw) = read_cached("Arch-Melee.json") {
-        if let Ok(arr) = serde_json::from_str::<crate::arch_melee::Root>(&raw) {
+        if let Ok(arr) = serde_json::from_str::<arch_melee::Root>(&raw) {
             for item in arr {
                 let pc = Some(item.product_category.as_str().to_string());
-                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
-                push_info(&v, pc);
+                push_info(ItemDetails::ArchMelee(item), pc);
             }
         }
     }
     // Mods (covers Upgrades/RawUpgrades)
     if let Some(raw) = read_cached("Mods.json") {
-        if let Ok(arr) = serde_json::from_str::<crate::mods::Root>(&raw) {
+        if let Ok(arr) = serde_json::from_str::<mods::Root>(&raw) {
             for item in arr {
-                let v = serde_json::to_value(&item).unwrap_or(Value::Null);
                 for pc in item.get_product_categories() {
-                    push_info(&v, Some(pc));
+                    push_info(ItemDetails::Mod(item.clone()), Some(pc));
                 }
             }
         }
     }
 
     index
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn item_details_serializes_as_inner_item() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/warframe_test.json"
+        ));
+        let item: warframe::WarframeEntry = serde_json::from_str(json_data).unwrap();
+        let inner = serde_json::to_value(&item).unwrap();
+        let wrapped = serde_json::to_value(ItemDetails::Warframe(item)).unwrap();
+        assert_eq!(wrapped, inner);
+    }
+
+    #[test]
+    fn item_info_extracts_fields_from_details() {
+        let json_data = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/testdata/itemdata/warframe_test.json"
+        ));
+        let item: warframe::WarframeEntry = serde_json::from_str(json_data).unwrap();
+        let info = ItemInfo::new(ItemDetails::Warframe(item), Some("Suits".to_string()));
+        assert_eq!(info.unique_name, "/Lotus/Powersuits/Priest/HarrowPrime");
+        assert_eq!(info.name.as_deref(), Some("Harrow Prime"));
+        assert!(info.description.is_some());
+    }
 }

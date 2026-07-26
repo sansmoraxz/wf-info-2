@@ -209,12 +209,7 @@ pub(crate) async fn handle_inventory_filter(params: Option<Value>) -> Result<Val
                 let item_type = map.get("item_type").and_then(Value::as_str);
                 let category = map.get("category").and_then(Value::as_str);
                 let details = item_type.and_then(|t| lookup_item_info(t, category));
-                let detail_tradable = details.as_ref().and_then(|d| {
-                    d.details
-                        .get("tradable")
-                        .or_else(|| d.details.get("Tradable"))
-                        .and_then(Value::as_bool)
-                });
+                let detail_tradable = details.as_ref().map(|d| d.details.tradable());
                 matches = matches && detail_tradable == Some(tradable);
             }
 
@@ -244,7 +239,9 @@ pub(crate) async fn handle_inventory_filter(params: Option<Value>) -> Result<Val
                 if let Some(item_type) = map.get("item_type").and_then(Value::as_str) {
                     let category = map.get("category").and_then(Value::as_str);
                     if let Some(details) = lookup_item_info(item_type, category) {
-                        map.insert("details".to_string(), details.details.clone());
+                        let details_value =
+                            serde_json::to_value(&details.details).unwrap_or(Value::Null);
+                        map.insert("details".to_string(), details_value);
                     }
                 }
             }

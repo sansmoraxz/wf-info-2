@@ -79,7 +79,9 @@ pub(crate) fn collect_inventory_items(
                 details_desc = info.as_ref().and_then(|item| item.description.clone());
                 if include_details {
                     if let Some(info) = info {
-                        map.insert("details".to_string(), info.details.clone());
+                        let details_value =
+                            serde_json::to_value(&info.details).unwrap_or(Value::Null);
+                        map.insert("details".to_string(), details_value);
                     }
                 }
             }
