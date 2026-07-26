@@ -245,11 +245,11 @@ pub(crate) async fn handle_inventory_filter(
             }
         }
 
-        if include_details {
-            if let Some(details) = lookup_item_info(envelope.item_type(), Some(envelope.category()))
-            {
-                envelope.set_details(details.details);
-            }
+        if include_details
+            && let Some(details) =
+                lookup_item_info(envelope.item_type(), Some(envelope.category()))
+        {
+            envelope.set_details(details.details);
         }
 
         filtered_items.push(envelope);

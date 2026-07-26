@@ -41,16 +41,16 @@ pub(crate) struct EmptyResponse {}
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub(crate) enum ResponseData {
-    Ping(PingResponse),
-    InventoryLoad(InventoryLoadResponse),
-    InventoryFilter(InventoryFilterResponse),
-    InventoryMeta(wf_core::storage::InventoryMeta),
-    Screenshot(ScreenshotEvent),
-    MarketPrice(MarketPriceResponse),
-    MarketRefresh(MarketRefreshResponse),
-    Signstatus(SignstatusResponse),
-    Subscribe(SubscribeResponse),
-    Empty(EmptyResponse),
+    Ping(Box<PingResponse>),
+    InventoryLoad(Box<InventoryLoadResponse>),
+    InventoryFilter(Box<InventoryFilterResponse>),
+    InventoryMeta(Box<wf_core::storage::InventoryMeta>),
+    Screenshot(Box<ScreenshotEvent>),
+    MarketPrice(Box<MarketPriceResponse>),
+    MarketRefresh(Box<MarketRefreshResponse>),
+    Signstatus(Box<SignstatusResponse>),
+    Subscribe(Box<SubscribeResponse>),
+    Empty(Box<EmptyResponse>),
 }
 
 #[derive(Debug, Serialize)]
@@ -109,7 +109,7 @@ async fn handle_request(req: Request) -> HandleResult {
             .and_then(subscription::handle_subscribe);
         return match result {
             Ok(result) => HandleResult {
-                response: Response::ok(id, ResponseData::Subscribe(result.response)),
+                response: Response::ok(id, ResponseData::Subscribe(Box::new(result.response))),
                 subscription_filter: Some(result.filter),
             },
             Err(e) => HandleResult {
@@ -120,57 +120,58 @@ async fn handle_request(req: Request) -> HandleResult {
     }
 
     let result = match ControlOp::parse(&req.op) {
-        Ok(ControlOp::Ping) => Ok(ResponseData::Ping(PingResponse { pong: true })),
+        Ok(ControlOp::Ping) => Ok(ResponseData::Ping(Box::new(PingResponse { pong: true }))),
         Ok(ControlOp::InventoryLoad) => match parse::<LoadInventoryParams>(req.params) {
             Ok(params) => handle_inventory_load(params)
                 .await
-                .map(ResponseData::InventoryLoad),
+                .map(|resp| ResponseData::InventoryLoad(Box::new(resp))),
             Err(e) => Err(e),
         },
         Ok(ControlOp::InventoryFilter) => match parse::<FilterParams>(req.params) {
             Ok(params) => handle_inventory_filter(params)
                 .await
-                .map(ResponseData::InventoryFilter),
+                .map(|resp| ResponseData::InventoryFilter(Box::new(resp))),
             Err(e) => Err(e),
         },
         Ok(ControlOp::InventoryMetaGet) => {
-            handle_inventory_meta_get().map(ResponseData::InventoryMeta)
+            handle_inventory_meta_get().map(|resp| ResponseData::InventoryMeta(Box::new(resp)))
         }
         Ok(ControlOp::InventoryStaleUpdate) => match parse::<StaleParams>(req.params) {
-            Ok(params) => handle_inventory_stale_update(params).map(ResponseData::InventoryMeta),
+            Ok(params) => handle_inventory_stale_update(params)
+                .map(|resp| ResponseData::InventoryMeta(Box::new(resp))),
             Err(e) => Err(e),
         },
         Ok(ControlOp::ScreenshotTrigger) => match parse::<ScreenshotParams>(req.params) {
             Ok(params) => handle_screenshot_trigger(params)
                 .await
-                .map(ResponseData::Screenshot),
+                .map(|resp| ResponseData::Screenshot(Box::new(resp))),
             Err(e) => Err(e),
         },
         Ok(ControlOp::InventoryRefresh) => dispatch_refresh(req.params).await,
         Ok(ControlOp::WFMarketPrice) => match parse::<MarketPriceParams>(req.params) {
             Ok(params) => handle_market_price(params)
                 .await
-                .map(ResponseData::MarketPrice),
+                .map(|resp| ResponseData::MarketPrice(Box::new(resp))),
             Err(e) => Err(e),
         },
-        Ok(ControlOp::WFMarketRefresh) => {
-            handle_market_refresh().await.map(ResponseData::MarketRefresh)
-        }
+        Ok(ControlOp::WFMarketRefresh) => handle_market_refresh()
+            .await
+            .map(|resp| ResponseData::MarketRefresh(Box::new(resp))),
         Ok(ControlOp::WfmSignstatus) => match parse::<SignstatusParams>(req.params) {
             Ok(params) => handle_wfm_signstatus(params)
                 .await
-                .map(ResponseData::Signstatus),
+                .map(|resp| ResponseData::Signstatus(Box::new(resp))),
             Err(e) => Err(e),
         },
         Ok(ControlOp::WfmSignin) => match parse_signin_params(req.params) {
             Ok(params) => handle_wfm_signin(params)
                 .await
-                .map(|()| ResponseData::Empty(EmptyResponse {})),
+                .map(|()| ResponseData::Empty(Box::new(EmptyResponse {}))),
             Err(e) => Err(e),
         },
         Ok(ControlOp::WfmSignout) => handle_wfm_signout()
             .await
-            .map(|()| ResponseData::Empty(EmptyResponse {})),
+            .map(|()| ResponseData::Empty(Box::new(EmptyResponse {}))),
         Ok(ControlOp::Subscribe) => Err(anyhow::anyhow!("Unexpected subscribe operation")),
         Err(e) => Err(e),
     };
@@ -193,14 +194,14 @@ async fn dispatch_refresh(params: Option<Value>) -> anyhow::Result<ResponseData>
     let params = parse::<super::inventory::RefreshParams>(params)?;
     handle_inventory_refresh(params)
         .await
-        .map(ResponseData::InventoryLoad)
+        .map(|resp| ResponseData::InventoryLoad(Box::new(resp)))
 }
 
 #[cfg(not(feature = "memory"))]
 async fn dispatch_refresh(_params: Option<Value>) -> anyhow::Result<ResponseData> {
     handle_inventory_refresh()
         .await
-        .map(ResponseData::InventoryLoad)
+        .map(|resp| ResponseData::InventoryLoad(Box::new(resp)))
 }
 
 #[cfg(test)]
