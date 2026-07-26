@@ -15,7 +15,8 @@ pub mod wfm_auth;
 pub use broadcaster::{emit, subscribe};
 pub use events::{
     AccountLoginEvent, AccountLogoutEvent, DaemonEvent, DmTabOpenedEvent, EventMessage,
-    GameStartEvent, InventoryFetchedEvent, InventoryStaleEvent, ProfileUpdatedEvent,
+    GameStartEvent, InventoryFetchedEvent, InventoryStaleEvent, InventorySummary,
+    ProfileUpdatedEvent,
     ScreenshotTriggeredEvent, SystemQuitEvent, SystemQuitReason,
 };
 pub use screenshot::{ScreenshotConfig, set_screenshot_config};

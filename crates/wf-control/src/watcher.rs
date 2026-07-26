@@ -1,6 +1,4 @@
 use chrono::Utc;
-#[cfg(feature = "memory")]
-use serde_json::json;
 use std::collections::HashSet;
 use std::sync::{
     Arc, LazyLock,
@@ -243,16 +241,10 @@ async fn handle_login_event(user_name: String, known_pid: Option<u32>, skip_cb: 
                 if let Err(e) = storage::touch_inventory_updated(Some("auto")) {
                     log::warn!("Failed to update inventory metadata: {}", e);
                 }
-                let summary = json!({
-                    "suits": result.inventory.suits.len(),
-                    "long_guns": result.inventory.long_guns.len(),
-                    "pistols": result.inventory.pistols.len(),
-                    "melee": result.inventory.melee.len(),
-                });
                 crate::emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
                     timestamp: Utc::now(),
                     source: "auto".to_string(),
-                    summary,
+                    summary: crate::inventory::inventory_summary(&result.inventory),
                 }));
             }
         }

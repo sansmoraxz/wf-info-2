@@ -13,7 +13,7 @@ use wf_core::storage;
 use wf_inventory::Inventory;
 
 use super::broadcaster;
-use super::events::{DaemonEvent, InventoryFetchedEvent, InventoryStaleEvent};
+use super::events::{DaemonEvent, InventoryFetchedEvent, InventoryStaleEvent, InventorySummary};
 use super::market::fetch_market_summary;
 use super::search::{
     build_tantivy_index, collect_inventory_items, get_or_build_inventory_index, search_inventory,
@@ -368,22 +368,22 @@ pub(crate) fn handle_inventory_stale_update(params: Option<Value>) -> Result<Val
     Ok(serde_json::to_value(meta).context("Failed to serialize inventory metadata")?)
 }
 
-pub(crate) fn inventory_summary(inventory: &Inventory) -> Value {
-    json!({
-        "suits": inventory.suits.len(),
-        "long_guns": inventory.long_guns.len(),
-        "pistols": inventory.pistols.len(),
-        "melee": inventory.melee.len(),
-        "space_suits": inventory.space_suits.len(),
-        "space_guns": inventory.space_guns.len(),
-        "space_melee": inventory.space_melee.len(),
-        "raw_upgrades": inventory.raw_upgrades.len(),
-        "upgrades": inventory.upgrades.len(),
-        "recipes": inventory.recipes.len(),
-        "pending_recipes": inventory.pending_recipes.len(),
-        "trades_remaining": inventory.trades_remaining,
-        "supported_syndicates": inventory.supported_syndicates,
-    })
+pub(crate) fn inventory_summary(inventory: &Inventory) -> InventorySummary {
+    InventorySummary {
+        suits: inventory.suits.len(),
+        long_guns: inventory.long_guns.len(),
+        pistols: inventory.pistols.len(),
+        melee: inventory.melee.len(),
+        space_suits: inventory.space_suits.len(),
+        space_guns: inventory.space_guns.len(),
+        space_melee: inventory.space_melee.len(),
+        raw_upgrades: inventory.raw_upgrades.len(),
+        upgrades: inventory.upgrades.len(),
+        recipes: inventory.recipes.len(),
+        pending_recipes: inventory.pending_recipes.len(),
+        trades_remaining: inventory.trades_remaining,
+        supported_syndicates: inventory.supported_syndicates.clone(),
+    }
 }
 
 // TODO: this looks sus
@@ -443,4 +443,37 @@ fn extract_item_count(map: &serde_json::Map<String, Value>) -> Option<i64> {
     map.get("ItemCount")
         .or_else(|| map.get("item_count"))
         .and_then(|v| v.as_i64())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inventory_summary_matches_legacy_shape() {
+        let raw = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../wf-inventory/testdata/inventory/sample_inventory.json"
+        ));
+        let inventory: Inventory = serde_json::from_str(raw).unwrap();
+        let summary = inventory_summary(&inventory);
+        assert_eq!(
+            serde_json::to_value(&summary).unwrap(),
+            json!({
+                "suits": inventory.suits.len(),
+                "long_guns": inventory.long_guns.len(),
+                "pistols": inventory.pistols.len(),
+                "melee": inventory.melee.len(),
+                "space_suits": inventory.space_suits.len(),
+                "space_guns": inventory.space_guns.len(),
+                "space_melee": inventory.space_melee.len(),
+                "raw_upgrades": inventory.raw_upgrades.len(),
+                "upgrades": inventory.upgrades.len(),
+                "recipes": inventory.recipes.len(),
+                "pending_recipes": inventory.pending_recipes.len(),
+                "trades_remaining": inventory.trades_remaining,
+                "supported_syndicates": inventory.supported_syndicates,
+            })
+        );
+    }
 }
