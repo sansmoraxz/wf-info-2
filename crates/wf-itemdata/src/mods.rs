@@ -258,6 +258,14 @@ impl Item for ModEntry {
             ModEntry::Regular(m) => m.detail.image_name.as_deref(),
         }
     }
+    fn description(&self) -> Option<&str> {
+        match self {
+            ModEntry::Riven(m) => m.detail.description.as_deref(),
+            ModEntry::SetMember(m) => m.detail.description.as_deref(),
+            ModEntry::SetDefinition(m) => m.detail.description.as_deref(),
+            ModEntry::Regular(m) => m.detail.description.as_deref(),
+        }
+    }
     fn tradable(&self) -> bool {
         match self {
             ModEntry::Riven(m) => m.trade.tradable,

@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use wf_core::{account::Platform, logs::TradeItem};
+use wf_inventory::FractionSyndicates;
 
 /// All daemon events that can be emitted and subscribed to.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,11 +71,32 @@ pub enum SystemQuitReason {
     Unexpected,
 }
 
+/// Per-category counts and trade info summarizing a fetched inventory.
+// serde(default) so events recorded by older daemons (which emitted a 4-key
+// subset from the watcher path) still deserialize.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct InventorySummary {
+    pub suits: usize,
+    pub long_guns: usize,
+    pub pistols: usize,
+    pub melee: usize,
+    pub space_suits: usize,
+    pub space_guns: usize,
+    pub space_melee: usize,
+    pub raw_upgrades: usize,
+    pub upgrades: usize,
+    pub recipes: usize,
+    pub pending_recipes: usize,
+    pub trades_remaining: Option<i64>,
+    pub supported_syndicates: Option<FractionSyndicates>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InventoryFetchedEvent {
     pub timestamp: DateTime<Utc>,
     pub source: String,
-    pub summary: Value,
+    pub summary: InventorySummary,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

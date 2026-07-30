@@ -1,10 +1,8 @@
 use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
 
 use super::events::DaemonEvent;
-use super::utils::parse_params;
 
 /// Parameters for subscribe request.
 #[derive(Debug, Deserialize, Default)]
@@ -59,12 +57,11 @@ pub struct SubscribeFilterInfo {
 /// Result of handling a subscribe request.
 pub struct SubscribeResult {
     pub filter: EventFilter,
-    pub response: Value,
+    pub response: SubscribeResponse,
 }
 
 /// Handle a subscribe request and return the filter and response.
-pub fn handle_subscribe(params: Option<Value>) -> anyhow::Result<SubscribeResult> {
-    let params: SubscribeParams = parse_params(params)?;
+pub fn handle_subscribe(params: SubscribeParams) -> anyhow::Result<SubscribeResult> {
     let filter = EventFilter::new(params.events);
 
     let filter_info = filter.allowed_events().map(|events| SubscribeFilterInfo {
@@ -76,10 +73,7 @@ pub fn handle_subscribe(params: Option<Value>) -> anyhow::Result<SubscribeResult
         filter: filter_info,
     };
 
-    Ok(SubscribeResult {
-        filter,
-        response: json!(response),
-    })
+    Ok(SubscribeResult { filter, response })
 }
 
 #[cfg(test)]

@@ -15,7 +15,6 @@ use wf_core::storage;
 
 use super::broadcaster;
 use super::events::{DaemonEvent, ScreenshotTriggeredEvent};
-use super::utils::parse_params;
 
 static SCREENSHOT_CONFIG: LazyLock<Mutex<ScreenshotConfig>> =
     LazyLock::new(|| Mutex::new(ScreenshotConfig::default()));
@@ -72,9 +71,8 @@ struct ScreenshotEventLogEntry<'a> {
     content_len: usize,
 }
 
-pub(crate) async fn handle_screenshot_trigger(params: Option<Value>) -> Result<Value> {
+pub(crate) async fn handle_screenshot_trigger(params: ScreenshotParams) -> Result<ScreenshotEvent> {
     let total_start = Instant::now();
-    let params: ScreenshotParams = parse_params(params)?;
 
     let capture_start = Instant::now();
     let (bytes, content_type) = capture_screen().await?;
@@ -105,15 +103,9 @@ pub(crate) async fn handle_screenshot_trigger(params: Option<Value>) -> Result<V
         event_id: event.id.clone(),
     }));
 
-    let serialize_start = Instant::now();
-    let value = serde_json::to_value(event).context("Failed to serialize screenshot event")?;
-    log::trace!(
-        "Screenshot response serialization completed in {:?}; total handler time {:?}",
-        serialize_start.elapsed(),
-        total_start.elapsed()
-    );
+    log::trace!("Screenshot handler total time {:?}", total_start.elapsed());
 
-    Ok(value)
+    Ok(event)
 }
 
 fn record_screenshot_event(

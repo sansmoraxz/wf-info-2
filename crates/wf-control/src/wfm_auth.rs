@@ -4,7 +4,7 @@ use std::sync::{Arc, OnceLock};
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 use futures_util::{SinkExt, StreamExt};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::net::TcpStream;
 use tokio::sync::{Mutex, RwLock, oneshot};
@@ -12,7 +12,7 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite};
 
-use crate::utils::{WFM_AUTH_BASE, WFM_SUB_PROTOCOL, WFM_WS_URL, parse_params};
+use crate::utils::{WFM_AUTH_BASE, WFM_SUB_PROTOCOL, WFM_WS_URL};
 use wf_core::storage::{self, AuthTokenData};
 
 // ── WS message types ──
@@ -260,15 +260,40 @@ async fn ws_command(route: &str, payload: Value) -> Result<WsMessage> {
 // ── Handlers ──
 
 #[derive(Debug, Deserialize, Default)]
-struct SignstatusParams {
+pub(crate) struct SignstatusParams {
     status: Option<String>,
-    /// Nullable optional: absent = don't change, null = remove, number = set
-    duration: Option<Value>,
+    /// PATCH semantics: absent = don't change, null = remove, number = set
+    #[serde(default, with = "serde_with::rust::double_option")]
+    duration: Option<Option<u64>>,
 }
 
-pub(crate) async fn handle_wfm_signstatus(params: Option<Value>) -> Result<Value> {
-    let p: SignstatusParams = parse_params(params)?;
+#[derive(Debug, Serialize)]
+struct StatusSetPayload {
+    status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    duration: Option<Option<u64>>,
+}
 
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub(crate) enum SignstatusResponse {
+    Authenticated {
+        authenticated: bool,
+        status: Option<String>,
+        expires_at: String,
+        expired: bool,
+    },
+    Unauthenticated {
+        authenticated: bool,
+        status: Option<String>,
+    },
+    Set {
+        ok: bool,
+        status: String,
+    },
+}
+
+pub(crate) async fn handle_wfm_signstatus(p: SignstatusParams) -> Result<SignstatusResponse> {
     // If no status provided, return current state
     if p.status.is_none() {
         let guard = session_lock().read().await;
@@ -276,17 +301,17 @@ pub(crate) async fn handle_wfm_signstatus(params: Option<Value>) -> Result<Value
             Some(session) => {
                 let expires_at = session.tokens.expires_at;
                 let expired = expires_at < Utc::now();
-                Ok(json!({
-                    "authenticated": true,
-                    "status": session.current_status,
-                    "expires_at": expires_at.to_rfc3339(),
-                    "expired": expired,
-                }))
+                Ok(SignstatusResponse::Authenticated {
+                    authenticated: true,
+                    status: session.current_status.clone(),
+                    expires_at: expires_at.to_rfc3339(),
+                    expired,
+                })
             }
-            None => Ok(json!({
-                "authenticated": false,
-                "status": null,
-            })),
+            None => Ok(SignstatusResponse::Unauthenticated {
+                authenticated: false,
+                status: None,
+            }),
         };
     }
 
@@ -301,13 +326,12 @@ pub(crate) async fn handle_wfm_signstatus(params: Option<Value>) -> Result<Value
         }
     }
 
-    // Build payload with PATCH semantics for duration
-    let mut payload = json!({ "status": status });
-    if let Some(duration_val) = p.duration {
-        // duration present in params (could be null or a number)
-        payload["duration"] = duration_val;
-    }
-    // If duration not in params at all, we omit it (PATCH: no change)
+    // Build payload with PATCH semantics for duration:
+    // None serializes as omitted, Some(None) as null, Some(Some(n)) as n
+    let payload = serde_json::to_value(StatusSetPayload {
+        status: status.clone(),
+        duration: p.duration,
+    })?;
 
     let resp = ws_command("@wfm|cmd/status/set", payload).await?;
 
@@ -330,16 +354,13 @@ pub(crate) async fn handle_wfm_signstatus(params: Option<Value>) -> Result<Value
         }
     }
 
-    Ok(json!({
-        "ok": true,
-        "status": status,
-    }))
+    Ok(SignstatusResponse::Set { ok: true, status })
 }
 
 // ── Sign in handler ──
 
 #[derive(Debug, Deserialize)]
-struct SigninParams {
+pub(crate) struct SigninParams {
     email: String,
     password: String,
     #[serde(default = "default_client_id")]
@@ -356,14 +377,16 @@ fn default_device_name() -> String {
     "wf-info-2".to_string()
 }
 
-pub(crate) async fn handle_wfm_signin(params: Option<Value>) -> Result<Value> {
-    let p: SigninParams = match params {
+pub(crate) fn parse_signin_params(params: Option<Value>) -> Result<SigninParams> {
+    match params {
         Some(value) => {
-            serde_json::from_value(value).map_err(|e| anyhow!("Invalid signin params: {}", e))?
+            serde_json::from_value(value).map_err(|e| anyhow!("Invalid signin params: {}", e))
         }
-        None => return Err(anyhow!("Missing signin params (email, password required)")),
-    };
+        None => Err(anyhow!("Missing signin params (email, password required)")),
+    }
+}
 
+pub(crate) async fn handle_wfm_signin(p: SigninParams) -> Result<()> {
     // Load existing device_id or generate a new stable one
     let device_id = match storage::read_auth_token() {
         Ok(existing) => existing.device_id,
@@ -386,12 +409,12 @@ pub(crate) async fn handle_wfm_signin(params: Option<Value>) -> Result<Value> {
     // Connect WebSocket and authenticate
     connect_and_auth(token_data).await?;
 
-    Ok(json!({}))
+    Ok(())
 }
 
 // ── Sign out handler ──
 
-pub(crate) async fn handle_wfm_signout(_params: Option<Value>) -> Result<Value> {
+pub(crate) async fn handle_wfm_signout() -> Result<()> {
     // Clear WS session
     {
         let mut guard = session_lock().write().await;
@@ -402,7 +425,7 @@ pub(crate) async fn handle_wfm_signout(_params: Option<Value>) -> Result<Value> 
     storage::delete_auth_token()?;
 
     log::info!("Signed out from WFM");
-    Ok(json!({}))
+    Ok(())
 }
 
 // ── Session restore (called on daemon start) ──
@@ -445,5 +468,54 @@ pub async fn set_status_if_connected(status: &str) {
             log::info!("WFM status set to '{}'", status);
         }
         Err(e) => log::warn!("Failed to set WFM status: {}", e),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn signstatus_duration_patch_semantics() {
+        let p: SignstatusParams = serde_json::from_str(r#"{"status":"online"}"#).unwrap();
+        assert_eq!(p.duration, None);
+
+        let p: SignstatusParams =
+            serde_json::from_str(r#"{"status":"online","duration":null}"#).unwrap();
+        assert_eq!(p.duration, Some(None));
+
+        let p: SignstatusParams =
+            serde_json::from_str(r#"{"status":"online","duration":3600}"#).unwrap();
+        assert_eq!(p.duration, Some(Some(3600)));
+    }
+
+    #[test]
+    fn status_set_payload_matches_patch_wire_shape() {
+        let omitted = serde_json::to_value(StatusSetPayload {
+            status: "online".into(),
+            duration: None,
+        })
+        .unwrap();
+        assert_eq!(omitted, serde_json::json!({ "status": "online" }));
+
+        let null = serde_json::to_value(StatusSetPayload {
+            status: "online".into(),
+            duration: Some(None),
+        })
+        .unwrap();
+        assert_eq!(
+            null,
+            serde_json::json!({ "status": "online", "duration": null })
+        );
+
+        let set = serde_json::to_value(StatusSetPayload {
+            status: "online".into(),
+            duration: Some(Some(60)),
+        })
+        .unwrap();
+        assert_eq!(
+            set,
+            serde_json::json!({ "status": "online", "duration": 60 })
+        );
     }
 }

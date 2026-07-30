@@ -4703,6 +4703,7 @@ dependencies = [
  "scopeguard",
  "serde",
  "serde_json",
+ "serde_with",
  "tantivy",
  "tokio",
  "tokio-tungstenite",

@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, TimeZone, Utc};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tantivy::Term;
 use tantivy::query::{Occur, QueryParser, TermQuery};
 use tantivy::schema::IndexRecordOption;
@@ -13,12 +13,12 @@ use wf_core::storage;
 use wf_inventory::Inventory;
 
 use super::broadcaster;
-use super::events::{DaemonEvent, InventoryFetchedEvent, InventoryStaleEvent};
+use super::events::{DaemonEvent, InventoryFetchedEvent, InventoryStaleEvent, InventorySummary};
 use super::market::fetch_market_summary;
 use super::search::{
-    build_tantivy_index, collect_inventory_items, get_or_build_inventory_index, search_inventory,
+    InventoryItemEnvelope, build_tantivy_index, collect_inventory_items,
+    get_or_build_inventory_index, search_inventory,
 };
-use super::utils::parse_params;
 use wf_itemdata::item_data::lookup_item_info;
 
 #[cfg(feature = "memory")]
@@ -34,8 +34,26 @@ pub(crate) struct LoadInventoryParams {
     pub encrypted: Option<bool>,
 }
 
-pub(crate) async fn handle_inventory_load(params: Option<Value>) -> Result<Value> {
-    let params: LoadInventoryParams = parse_params(params)?;
+#[derive(Debug, Serialize)]
+pub(crate) struct InventoryLoadResponse {
+    pub saved: bool,
+    pub summary: InventorySummary,
+    pub meta: storage::InventoryMeta,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct InventoryFilterResponse {
+    pub total: usize,
+    pub filtered: usize,
+    pub offset: usize,
+    pub limit: usize,
+    pub items: Vec<InventoryItemEnvelope>,
+    pub meta: storage::InventoryMeta,
+}
+
+pub(crate) async fn handle_inventory_load(
+    params: LoadInventoryParams,
+) -> Result<InventoryLoadResponse> {
     let sources =
         params.path.is_some() as u8 + params.json.is_some() as u8 + params.raw.is_some() as u8;
     if sources != 1 {
@@ -81,11 +99,11 @@ pub(crate) async fn handle_inventory_load(params: Option<Value>) -> Result<Value
 
     let meta = storage::read_inventory_meta().unwrap_or_default();
 
-    Ok(json!({
-        "saved": save,
-        "summary": inventory_summary(&inventory),
-        "meta": meta,
-    }))
+    Ok(InventoryLoadResponse {
+        saved: save,
+        summary: inventory_summary(&inventory),
+        meta,
+    })
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -120,9 +138,9 @@ pub(crate) struct CountFilter {
     pub value: i64,
 }
 
-pub(crate) async fn handle_inventory_filter(params: Option<Value>) -> Result<Value> {
-    let params: FilterParams = parse_params(params)?;
-
+pub(crate) async fn handle_inventory_filter(
+    params: FilterParams,
+) -> Result<InventoryFilterResponse> {
     let encrypted = params.encrypted.unwrap_or(false);
     let (inventory, used_custom_path) = if let Some(path) = params.path.clone() {
         let inv = if encrypted {
@@ -153,12 +171,12 @@ pub(crate) async fn handle_inventory_filter(params: Option<Value>) -> Result<Val
     let meta = storage::read_inventory_meta().unwrap_or_default();
 
     // Count items in selected category for reporting; index uses full inventory for reuse
-    let items_for_counts = collect_inventory_items(&inventory, category, false);
+    let items_for_counts = collect_inventory_items(&inventory, category);
     let total = items_for_counts.len();
 
     // Build or reuse cached index unless a custom inventory path was provided
     let search_index = if used_custom_path {
-        let all_items = collect_inventory_items(&inventory, None, false);
+        let all_items = collect_inventory_items(&inventory, None);
         build_tantivy_index(&all_items)?
     } else {
         get_or_build_inventory_index(&inventory, &meta)?
@@ -195,97 +213,75 @@ pub(crate) async fn handle_inventory_filter(params: Option<Value>) -> Result<Val
         clauses.push((Occur::Must, query));
     }
 
-    let (_total_matches, mut values) = search_inventory(&search_index, clauses)?;
+    let (_total_matches, mut envelopes) = search_inventory(&search_index, clauses)?;
     let offset = params.offset.unwrap_or(0);
     let limit = params.limit.unwrap_or(usize::MAX);
 
     // Apply non-indexable filters and optional detail expansion
-    let mut filtered_values = Vec::new();
-    for value in values.drain(..) {
-        let mut value = value;
-        let mut matches = true;
-        if let Value::Object(ref map) = value {
-            if let Some(tradable) = params.tradable {
-                let item_type = map.get("item_type").and_then(Value::as_str);
-                let category = map.get("category").and_then(Value::as_str);
-                let details = item_type.and_then(|t| lookup_item_info(t, category));
-                let detail_tradable = details.as_ref().and_then(|d| {
-                    d.details
-                        .get("tradable")
-                        .or_else(|| d.details.get("Tradable"))
-                        .and_then(Value::as_bool)
-                });
-                matches = matches && detail_tradable == Some(tradable);
-            }
-
-            if let Some(filter) = params.item_count {
-                if let Some(count) = extract_item_count(map) {
-                    let ok = match filter.op {
-                        CountOp::Gt => count > filter.value,
-                        CountOp::Gte => count >= filter.value,
-                        CountOp::Lt => count < filter.value,
-                        CountOp::Lte => count <= filter.value,
-                        CountOp::Eq => count == filter.value,
-                        CountOp::Ne => count != filter.value,
-                    };
-                    matches = matches && ok;
-                } else {
-                    matches = false;
-                }
+    let mut filtered_items = Vec::new();
+    for mut envelope in envelopes.drain(..) {
+        if let Some(tradable) = params.tradable {
+            let details = lookup_item_info(envelope.item_type(), Some(envelope.category()));
+            let detail_tradable = details.as_ref().map(|d| d.details.tradable());
+            if detail_tradable != Some(tradable) {
+                continue;
             }
         }
 
-        if !matches {
-            continue;
-        }
-
-        if include_details {
-            if let Value::Object(ref mut map) = value {
-                if let Some(item_type) = map.get("item_type").and_then(Value::as_str) {
-                    let category = map.get("category").and_then(Value::as_str);
-                    if let Some(details) = lookup_item_info(item_type, category) {
-                        map.insert("details".to_string(), details.details.clone());
-                    }
-                }
+        if let Some(filter) = params.item_count {
+            let Some(count) = envelope.item_count() else {
+                continue;
+            };
+            let ok = match filter.op {
+                CountOp::Gt => count > filter.value,
+                CountOp::Gte => count >= filter.value,
+                CountOp::Lt => count < filter.value,
+                CountOp::Lte => count <= filter.value,
+                CountOp::Eq => count == filter.value,
+                CountOp::Ne => count != filter.value,
+            };
+            if !ok {
+                continue;
             }
         }
 
-        filtered_values.push(value);
+        if include_details
+            && let Some(details) = lookup_item_info(envelope.item_type(), Some(envelope.category()))
+        {
+            envelope.set_details(details.details);
+        }
+
+        filtered_items.push(envelope);
     }
 
     let include_market = params.include_market.unwrap_or(false);
     if include_market {
-        for value in &mut filtered_values {
-            if let Value::Object(map) = value {
-                if let Some(item_type) = map.get("item_type").and_then(Value::as_str) {
-                    if let Some(market) = fetch_market_summary(item_type).await {
-                        map.insert("market".to_string(), market);
-                    }
-                }
+        for envelope in &mut filtered_items {
+            if let Some(market) = fetch_market_summary(envelope.item_type()).await {
+                envelope.set_market(market);
             }
         }
     }
 
-    let filtered = filtered_values.len();
-    let results: Vec<Value> = filtered_values
+    let filtered = filtered_items.len();
+    let items: Vec<_> = filtered_items
         .into_iter()
         .skip(offset)
         .take(limit)
         .collect();
 
-    Ok(json!({
-        "total": total,
-        "filtered": filtered,
-        "offset": offset,
-        "limit": limit,
-        "items": results,
-        "meta": meta,
-    }))
+    Ok(InventoryFilterResponse {
+        total,
+        filtered,
+        offset,
+        limit,
+        items,
+        meta,
+    })
 }
 
-pub(crate) fn handle_inventory_meta_get() -> Result<Value> {
-    let meta = storage::read_inventory_meta().unwrap_or_default();
-    Ok(serde_json::to_value(meta).context("Failed to serialize inventory metadata")?)
+pub(crate) fn handle_inventory_meta_get() -> Result<storage::InventoryMeta> {
+    Ok(storage::read_inventory_meta().unwrap_or_default())
 }
 
 #[cfg(feature = "memory")]
@@ -298,8 +294,9 @@ pub(crate) struct RefreshParams {
 }
 
 #[cfg(feature = "memory")]
-pub(crate) async fn handle_inventory_refresh(params: Option<Value>) -> Result<Value> {
-    let params: RefreshParams = parse_params(params)?;
+pub(crate) async fn handle_inventory_refresh(
+    params: RefreshParams,
+) -> Result<InventoryLoadResponse> {
     let pid = process::get_warframe_pid()
         .ok_or_else(|| anyhow!("Warframe process not detected; launch the game and try again"))?;
 
@@ -331,28 +328,53 @@ pub(crate) async fn handle_inventory_refresh(params: Option<Value>) -> Result<Va
 
     let meta = storage::read_inventory_meta().unwrap_or_default();
 
-    Ok(json!({
-        "saved": save,
-        "summary": inventory_summary(&inventory),
-        "meta": meta,
-    }))
+    Ok(InventoryLoadResponse {
+        saved: save,
+        summary: inventory_summary(&inventory),
+        meta,
+    })
 }
 
 #[cfg(not(feature = "memory"))]
-pub(crate) async fn handle_inventory_refresh(_params: Option<Value>) -> Result<Value> {
+pub(crate) async fn handle_inventory_refresh() -> Result<InventoryLoadResponse> {
     anyhow::bail!("inventory.refresh requires the 'memory' feature to be enabled")
+}
+
+/// Timestamp accepted as a numeric epoch (seconds or milliseconds) or a
+/// string holding RFC3339 or a stringified epoch.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub(crate) enum TimestampParam {
+    Epoch(i64),
+    Text(String),
+}
+
+impl TimestampParam {
+    fn to_datetime(&self) -> Result<DateTime<Utc>> {
+        match self {
+            Self::Text(s) => {
+                if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
+                    return Ok(dt.with_timezone(&Utc));
+                }
+                if let Ok(num) = s.parse::<i64>() {
+                    return Ok(epoch_to_datetime(num));
+                }
+                Err(anyhow!("Unsupported timestamp string format"))
+            }
+            Self::Epoch(num) => Ok(epoch_to_datetime(*num)),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Default)]
 pub(crate) struct StaleParams {
-    pub timestamp: Option<Value>,
+    pub timestamp: Option<TimestampParam>,
     pub reason: Option<String>,
 }
 
-pub(crate) fn handle_inventory_stale_update(params: Option<Value>) -> Result<Value> {
-    let params: StaleParams = parse_params(params)?;
+pub(crate) fn handle_inventory_stale_update(params: StaleParams) -> Result<storage::InventoryMeta> {
     let timestamp = if let Some(value) = params.timestamp {
-        parse_timestamp(value)?
+        value.to_datetime()?
     } else {
         Utc::now()
     };
@@ -367,25 +389,25 @@ pub(crate) fn handle_inventory_stale_update(params: Option<Value>) -> Result<Val
         reason,
     }));
 
-    Ok(serde_json::to_value(meta).context("Failed to serialize inventory metadata")?)
+    Ok(meta)
 }
 
-pub(crate) fn inventory_summary(inventory: &Inventory) -> Value {
-    json!({
-        "suits": inventory.suits.len(),
-        "long_guns": inventory.long_guns.len(),
-        "pistols": inventory.pistols.len(),
-        "melee": inventory.melee.len(),
-        "space_suits": inventory.space_suits.len(),
-        "space_guns": inventory.space_guns.len(),
-        "space_melee": inventory.space_melee.len(),
-        "raw_upgrades": inventory.raw_upgrades.len(),
-        "upgrades": inventory.upgrades.len(),
-        "recipes": inventory.recipes.len(),
-        "pending_recipes": inventory.pending_recipes.len(),
-        "trades_remaining": inventory.trades_remaining,
-        "supported_syndicates": inventory.supported_syndicates,
-    })
+pub(crate) fn inventory_summary(inventory: &Inventory) -> InventorySummary {
+    InventorySummary {
+        suits: inventory.suits.len(),
+        long_guns: inventory.long_guns.len(),
+        pistols: inventory.pistols.len(),
+        melee: inventory.melee.len(),
+        space_suits: inventory.space_suits.len(),
+        space_guns: inventory.space_guns.len(),
+        space_melee: inventory.space_melee.len(),
+        raw_upgrades: inventory.raw_upgrades.len(),
+        upgrades: inventory.upgrades.len(),
+        recipes: inventory.recipes.len(),
+        pending_recipes: inventory.pending_recipes.len(),
+        trades_remaining: inventory.trades_remaining,
+        supported_syndicates: inventory.supported_syndicates.clone(),
+    }
 }
 
 // TODO: this looks sus
@@ -407,27 +429,6 @@ pub(crate) fn normalize_category(category: &str) -> Option<&'static str> {
     }
 }
 
-fn parse_timestamp(value: Value) -> Result<DateTime<Utc>> {
-    match value {
-        Value::String(s) => {
-            if let Ok(dt) = DateTime::parse_from_rfc3339(&s) {
-                return Ok(dt.with_timezone(&Utc));
-            }
-            if let Ok(num) = s.parse::<i64>() {
-                return Ok(epoch_to_datetime(num));
-            }
-            Err(anyhow!("Unsupported timestamp string format"))
-        }
-        Value::Number(num) => {
-            let Some(num) = num.as_i64() else {
-                return Err(anyhow!("Invalid timestamp number"));
-            };
-            Ok(epoch_to_datetime(num))
-        }
-        _ => Err(anyhow!("Unsupported timestamp format")),
-    }
-}
-
 fn epoch_to_datetime(value: i64) -> DateTime<Utc> {
     let (secs, nsec) = if value > 1_000_000_000_000 {
         let secs = value / 1000;
@@ -441,8 +442,88 @@ fn epoch_to_datetime(value: i64) -> DateTime<Utc> {
         .unwrap_or_else(Utc::now)
 }
 
-fn extract_item_count(map: &serde_json::Map<String, Value>) -> Option<i64> {
-    map.get("ItemCount")
-        .or_else(|| map.get("item_count"))
-        .and_then(|v| v.as_i64())
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// Pins the wire shape of the inventory.load/refresh and inventory.filter
+    /// response payloads against the old json! literals.
+    #[test]
+    fn load_and_filter_responses_match_legacy_shape() {
+        let raw = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../wf-inventory/testdata/inventory/sample_inventory.json"
+        ));
+        let inventory: Inventory = serde_json::from_str(raw).unwrap();
+        let meta = storage::InventoryMeta::default();
+        let meta_value = serde_json::to_value(&meta).unwrap();
+
+        let load = InventoryLoadResponse {
+            saved: true,
+            summary: inventory_summary(&inventory),
+            meta: meta.clone(),
+        };
+        assert_eq!(
+            serde_json::to_value(&load).unwrap(),
+            json!({
+                "saved": true,
+                "summary": serde_json::to_value(inventory_summary(&inventory)).unwrap(),
+                "meta": meta_value,
+            })
+        );
+
+        let items = crate::search::collect_inventory_items(&inventory, Some("suits"));
+        let envelopes: Vec<_> = items.into_iter().map(|v| v.envelope).collect();
+        let filter = InventoryFilterResponse {
+            total: 48,
+            filtered: envelopes.len(),
+            offset: 0,
+            limit: 10,
+            items: envelopes,
+            meta,
+        };
+        let value = serde_json::to_value(&filter).unwrap();
+        assert_eq!(
+            value,
+            json!({
+                "total": 48,
+                "filtered": value["filtered"],
+                "offset": 0,
+                "limit": 10,
+                "items": value["items"],
+                "meta": meta_value,
+            })
+        );
+        assert!(value["items"].as_array().is_some_and(|a| !a.is_empty()));
+        assert_eq!(value["items"][0]["category"], "suits");
+    }
+
+    #[test]
+    fn inventory_summary_matches_legacy_shape() {
+        let raw = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../wf-inventory/testdata/inventory/sample_inventory.json"
+        ));
+        let inventory: Inventory = serde_json::from_str(raw).unwrap();
+        let summary = inventory_summary(&inventory);
+        assert_eq!(
+            serde_json::to_value(&summary).unwrap(),
+            json!({
+                "suits": inventory.suits.len(),
+                "long_guns": inventory.long_guns.len(),
+                "pistols": inventory.pistols.len(),
+                "melee": inventory.melee.len(),
+                "space_suits": inventory.space_suits.len(),
+                "space_guns": inventory.space_guns.len(),
+                "space_melee": inventory.space_melee.len(),
+                "raw_upgrades": inventory.raw_upgrades.len(),
+                "upgrades": inventory.upgrades.len(),
+                "recipes": inventory.recipes.len(),
+                "pending_recipes": inventory.pending_recipes.len(),
+                "trades_remaining": inventory.trades_remaining,
+                "supported_syndicates": inventory.supported_syndicates,
+            })
+        );
+    }
 }

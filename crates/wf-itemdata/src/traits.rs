@@ -27,6 +27,11 @@ pub trait Item {
     /// Image filename for the item
     fn image_name(&self) -> Option<&str>;
 
+    /// Description text shown to players, if available
+    fn description(&self) -> Option<&str> {
+        None
+    }
+
     /// Whether the item can be traded between players
     fn tradable(&self) -> bool;
 
