@@ -72,7 +72,10 @@ pub enum SystemQuitReason {
 }
 
 /// Per-category counts and trade info summarizing a fetched inventory.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// serde(default) so events recorded by older daemons (which emitted a 4-key
+// subset from the watcher path) still deserialize.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct InventorySummary {
     pub suits: usize,
     pub long_guns: usize,

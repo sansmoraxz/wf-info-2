@@ -46,14 +46,22 @@ pub(crate) struct ItemEnvelope<T> {
     pub item_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub item_id: Option<String>,
-    // Injected after tantivy retrieval, never part of the stored raw_json
+    // details/market are injected after tantivy retrieval and are never part
+    // of the stored raw_json; skip_deserializing keeps a stray same-named key
+    // in the item's catch-all from being parsed as these types.
     #[serde(default, skip_serializing_if = "Option::is_none", skip_deserializing)]
     pub details: Option<wf_itemdata::item_data::ItemDetails>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", skip_deserializing)]
     pub market: Option<crate::market::MarketSummary>,
     #[serde(flatten)]
     pub item: T,
 }
+
+/// Keys the envelope itself emits. A game item whose catch-all carried one of
+/// these would serialize as a duplicate JSON key (breaking re-parse) or shadow
+/// the injected value, so they are stripped at envelope construction — the
+/// same overwrite semantics the old map-insertion code had.
+const RESERVED_ENVELOPE_KEYS: [&str; 5] = ["category", "item_type", "item_id", "details", "market"];
 
 /// A searchable inventory item tagged with its category.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -138,6 +146,7 @@ fn extract_other_item_count(other: Option<&serde_json::Value>) -> Option<i64> {
 
 trait HasOther {
     fn other(&self) -> Option<&serde_json::Value>;
+    fn other_mut(&mut self) -> Option<&mut serde_json::Value>;
 }
 
 macro_rules! impl_has_other {
@@ -145,6 +154,9 @@ macro_rules! impl_has_other {
         $(impl HasOther for $ty {
             fn other(&self) -> Option<&serde_json::Value> {
                 self.other.as_ref()
+            }
+            fn other_mut(&mut self) -> Option<&mut serde_json::Value> {
+                self.other.as_mut()
             }
         })+
     };
@@ -191,13 +203,23 @@ pub(crate) fn collect_inventory_items(
         Some(sel) => name == sel,
     };
 
-    fn envelope<T: Clone>(item: &T, item_type: &str, item_id: Option<String>) -> ItemEnvelope<T> {
+    fn envelope<T: Clone + HasOther>(
+        item: &T,
+        item_type: &str,
+        item_id: Option<String>,
+    ) -> ItemEnvelope<T> {
+        let mut item = item.clone();
+        if let Some(serde_json::Value::Object(map)) = item.other_mut() {
+            for key in RESERVED_ENVELOPE_KEYS {
+                map.remove(key);
+            }
+        }
         ItemEnvelope {
             item_type: item_type.to_string(),
             item_id,
             details: None,
             market: None,
-            item: item.clone(),
+            item,
         }
     }
 
@@ -370,7 +392,18 @@ pub(crate) fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchI
     let mut writer = index.writer(20_000_000)?; // ~20MB buffer, tiny dataset
 
     for item in items {
-        let raw = serde_json::to_string(&item.envelope)?;
+        // One unserializable item must not fail the whole index build
+        let raw = match serde_json::to_string(&item.envelope) {
+            Ok(raw) => raw,
+            Err(e) => {
+                log::warn!(
+                    "Skipping unserializable item {}: {}",
+                    item.envelope.item_type(),
+                    e
+                );
+                continue;
+            }
+        };
         let mut doc = doc! {
             item_type_exact => item.envelope.item_type().to_string(),
             category => item.envelope.category().to_string(),
@@ -452,8 +485,24 @@ mod tests {
         serde_json::from_str(raw).unwrap()
     }
 
-    /// The envelope must survive the tantivy raw_json round-trip:
-    /// serialize -> parse -> serialize must be a fixed point.
+    const ALL_CATEGORIES: [&str; 11] = [
+        "suits",
+        "long_guns",
+        "pistols",
+        "melee",
+        "space_suits",
+        "space_guns",
+        "space_melee",
+        "raw_upgrades",
+        "upgrades",
+        "recipes",
+        "pending_recipes",
+    ];
+
+    /// The envelope must survive the tantivy raw_json round-trip
+    /// (serialize -> parse -> serialize must be a fixed point), and the
+    /// serialized "category" tag must agree with the category() accessor,
+    /// for every one of the 11 categories.
     #[test]
     fn envelope_round_trips_through_json_for_all_categories() {
         let inventory = sample_inventory();
@@ -465,87 +514,145 @@ mod tests {
             seen.insert(item.envelope.category());
             let raw = serde_json::to_string(&item.envelope).unwrap();
             let parsed: InventoryItemEnvelope = serde_json::from_str(&raw).unwrap();
+            let value = serde_json::to_value(&parsed).unwrap();
             assert_eq!(
-                serde_json::to_value(&parsed).unwrap(),
+                value,
                 serde_json::to_value(&item.envelope).unwrap(),
                 "round-trip mismatch for category {}",
                 item.envelope.category()
             );
+            // The serde tag and the hand-written category() must never drift
+            assert_eq!(value["category"], item.envelope.category());
         }
-        // Exercise every category present in the fixture
-        for cat in ["suits", "long_guns", "pistols", "melee", "recipes"] {
+        for cat in ALL_CATEGORIES {
             assert!(seen.contains(cat), "fixture missing category {}", cat);
         }
     }
 
-    /// The envelope serialization must produce the same JSON object the old
-    /// push_item logic did: to_value(item) + injected category/item_type/item_id.
+    /// The production collection path must produce the same JSON objects the
+    /// old push_item logic did: to_value(item) + injected
+    /// category/item_type/item_id, for every category and every item.
     #[test]
-    fn envelope_matches_legacy_injected_shape() {
+    fn collected_envelopes_match_legacy_injected_shape() {
         let inventory = sample_inventory();
 
-        let legacy = |item_value: Value, category: &str, item_type: &str, item_id: Option<&str>| {
-            let mut value = item_value;
-            if let Value::Object(ref mut map) = value {
-                map.insert("category".into(), Value::String(category.to_string()));
-                map.insert("item_type".into(), Value::String(item_type.to_string()));
-                if let Some(id) = item_id {
-                    map.insert("item_id".into(), Value::String(id.to_string()));
-                }
+        fn legacy<T: serde::Serialize>(
+            item: &T,
+            category: &str,
+            item_type: &str,
+            item_id: Option<&str>,
+        ) -> Value {
+            let mut value = serde_json::to_value(item).unwrap();
+            let map = value.as_object_mut().unwrap();
+            map.insert("category".into(), Value::String(category.to_string()));
+            map.insert("item_type".into(), Value::String(item_type.to_string()));
+            if let Some(id) = item_id {
+                map.insert("item_id".into(), Value::String(id.to_string()));
             }
             value
-        };
-
-        for item in &inventory.suits {
-            let expected = legacy(
-                serde_json::to_value(item).unwrap(),
-                "suits",
-                &item.item_type,
-                Some(&item.item_id.oid),
-            );
-            let envelope = InventoryItemEnvelope::Suits(ItemEnvelope {
-                item_type: item.item_type.clone(),
-                item_id: Some(item.item_id.oid.clone()),
-                details: None,
-                market: None,
-                item: item.clone(),
-            });
-            assert_eq!(serde_json::to_value(&envelope).unwrap(), expected);
         }
 
-        for item in &inventory.recipes {
-            let expected = legacy(
-                serde_json::to_value(item).unwrap(),
-                "recipes",
-                &item.item_type,
-                None,
-            );
-            let envelope = InventoryItemEnvelope::Recipes(ItemEnvelope {
-                item_type: item.item_type.clone(),
-                item_id: None,
-                details: None,
-                market: None,
-                item: item.clone(),
-            });
-            assert_eq!(serde_json::to_value(&envelope).unwrap(), expected);
+        macro_rules! check_category {
+            ($field:ident, $cat:literal, $id:expr) => {
+                let views = collect_inventory_items(&inventory, Some($cat));
+                assert_eq!(views.len(), inventory.$field.len(), $cat);
+                for (view, item) in views.iter().zip(&inventory.$field) {
+                    let id: Option<&str> = $id(item);
+                    let expected = legacy(item, $cat, &item.item_type, id);
+                    assert_eq!(
+                        serde_json::to_value(&view.envelope).unwrap(),
+                        expected,
+                        "legacy shape mismatch in {}",
+                        $cat
+                    );
+                }
+            };
         }
 
-        for item in &inventory.raw_upgrades {
-            let expected = legacy(
-                serde_json::to_value(item).unwrap(),
-                "raw_upgrades",
-                &item.item_type,
-                Some(&item.last_added_id.oid),
-            );
-            let envelope = InventoryItemEnvelope::RawUpgrades(ItemEnvelope {
-                item_type: item.item_type.clone(),
-                item_id: Some(item.last_added_id.oid.clone()),
-                details: None,
-                market: None,
-                item: item.clone(),
-            });
-            assert_eq!(serde_json::to_value(&envelope).unwrap(), expected);
-        }
+        type IdOf<T> = fn(&T) -> Option<&str>;
+        check_category!(
+            suits,
+            "suits",
+            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::suit::Suit>
+        );
+        check_category!(
+            long_guns,
+            "long_guns",
+            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::long_gun::LongGun>
+        );
+        check_category!(
+            pistols,
+            "pistols",
+            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::pistol::Pistol>
+        );
+        check_category!(
+            melee,
+            "melee",
+            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::melee::Melee>
+        );
+        check_category!(
+            space_suits,
+            "space_suits",
+            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::space_suit::SpaceSuit>
+        );
+        check_category!(
+            space_guns,
+            "space_guns",
+            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::space_gun::SpaceGun>
+        );
+        check_category!(
+            space_melee,
+            "space_melee",
+            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::space_melee::SpaceMelee>
+        );
+        check_category!(
+            raw_upgrades,
+            "raw_upgrades",
+            (|i| Some(i.last_added_id.oid.as_str())) as IdOf<wf_inventory::upgrades::RawUpgrade>
+        );
+        check_category!(
+            upgrades,
+            "upgrades",
+            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::upgrades::Upgrade>
+        );
+        check_category!(
+            recipes,
+            "recipes",
+            (|_| None) as IdOf<wf_inventory::recipe::Recipe>
+        );
+        check_category!(
+            pending_recipes,
+            "pending_recipes",
+            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::recipe::PendingRecipe>
+        );
+    }
+
+    /// Reserved envelope keys in an item's catch-all must be stripped at
+    /// construction — otherwise serialization emits duplicate JSON keys and
+    /// retrieval silently drops the item.
+    #[test]
+    fn reserved_keys_in_catch_all_are_stripped() {
+        let inventory = sample_inventory();
+        let mut suit = inventory.suits[0].clone();
+        let mut extra = serde_json::Map::new();
+        extra.insert("category".into(), Value::String("evil".into()));
+        extra.insert("market".into(), Value::String("evil".into()));
+        extra.insert("details".into(), Value::String("evil".into()));
+        extra.insert("KeptKey".into(), Value::String("kept".into()));
+        suit.other = Some(Value::Object(extra));
+
+        let mut poisoned = inventory.clone();
+        poisoned.suits = vec![suit];
+        let items = collect_inventory_items(&poisoned, Some("suits"));
+        assert_eq!(items.len(), 1);
+
+        let raw = serde_json::to_string(&items[0].envelope).unwrap();
+        let parsed: InventoryItemEnvelope = serde_json::from_str(&raw).unwrap();
+        let value = serde_json::to_value(&parsed).unwrap();
+        assert_eq!(value["category"], "suits");
+        assert_eq!(value["KeptKey"], "kept");
+        assert!(value.get("market").is_none());
+        assert!(value.get("details").is_none());
     }
 
     #[test]

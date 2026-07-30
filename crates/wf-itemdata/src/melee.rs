@@ -83,6 +83,9 @@ impl Item for Melee {
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()
     }
+    fn description(&self) -> Option<&str> {
+        self.detail.description.as_deref()
+    }
     fn tradable(&self) -> bool {
         self.trade.tradable
     }

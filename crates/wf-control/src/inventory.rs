@@ -246,8 +246,7 @@ pub(crate) async fn handle_inventory_filter(
         }
 
         if include_details
-            && let Some(details) =
-                lookup_item_info(envelope.item_type(), Some(envelope.category()))
+            && let Some(details) = lookup_item_info(envelope.item_type(), Some(envelope.category()))
         {
             envelope.set_details(details.details);
         }
@@ -447,6 +446,58 @@ fn epoch_to_datetime(value: i64) -> DateTime<Utc> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// Pins the wire shape of the inventory.load/refresh and inventory.filter
+    /// response payloads against the old json! literals.
+    #[test]
+    fn load_and_filter_responses_match_legacy_shape() {
+        let raw = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../wf-inventory/testdata/inventory/sample_inventory.json"
+        ));
+        let inventory: Inventory = serde_json::from_str(raw).unwrap();
+        let meta = storage::InventoryMeta::default();
+        let meta_value = serde_json::to_value(&meta).unwrap();
+
+        let load = InventoryLoadResponse {
+            saved: true,
+            summary: inventory_summary(&inventory),
+            meta: meta.clone(),
+        };
+        assert_eq!(
+            serde_json::to_value(&load).unwrap(),
+            json!({
+                "saved": true,
+                "summary": serde_json::to_value(inventory_summary(&inventory)).unwrap(),
+                "meta": meta_value,
+            })
+        );
+
+        let items = crate::search::collect_inventory_items(&inventory, Some("suits"));
+        let envelopes: Vec<_> = items.into_iter().map(|v| v.envelope).collect();
+        let filter = InventoryFilterResponse {
+            total: 48,
+            filtered: envelopes.len(),
+            offset: 0,
+            limit: 10,
+            items: envelopes,
+            meta,
+        };
+        let value = serde_json::to_value(&filter).unwrap();
+        assert_eq!(
+            value,
+            json!({
+                "total": 48,
+                "filtered": value["filtered"],
+                "offset": 0,
+                "limit": 10,
+                "items": value["items"],
+                "meta": meta_value,
+            })
+        );
+        assert!(value["items"].as_array().is_some_and(|a| !a.is_empty()));
+        assert_eq!(value["items"][0]["category"], "suits");
+    }
 
     #[test]
     fn inventory_summary_matches_legacy_shape() {

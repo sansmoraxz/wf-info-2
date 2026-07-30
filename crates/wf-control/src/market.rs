@@ -463,9 +463,7 @@ pub(crate) struct MarketRefreshResponse {
     pub refreshed_at: String,
 }
 
-pub(crate) async fn handle_market_price(
-    params: MarketPriceParams,
-) -> Result<MarketPriceResponse> {
+pub(crate) async fn handle_market_price(params: MarketPriceParams) -> Result<MarketPriceResponse> {
     if params.item_type.is_none() && params.search.is_none() {
         return Err(anyhow!(
             "wfm.price requires 'item_type' or 'search' parameter"

@@ -67,10 +67,10 @@ pub async fn update_cache() -> anyhow::Result<()> {
                 }
 
                 // Save ETag if present
-                if let Some(etag) = resp.headers().get("etag") {
-                    if let Ok(val) = etag.to_str() {
-                        let _ = fs::write(&etag_path, val);
-                    }
+                if let Some(etag) = resp.headers().get("etag")
+                    && let Ok(val) = etag.to_str()
+                {
+                    let _ = fs::write(&etag_path, val);
                 }
 
                 let body = resp.text().await?;

@@ -190,6 +190,13 @@ impl Item for WarframeEntry {
             WarframeEntry::Helminth(w) => w.detail.image_name.as_deref(),
         }
     }
+    fn description(&self) -> Option<&str> {
+        match self {
+            WarframeEntry::Suits(w) => w.detail.description.as_deref(),
+            WarframeEntry::MechSuits(w) => w.detail.description.as_deref(),
+            WarframeEntry::Helminth(w) => w.detail.description.as_deref(),
+        }
+    }
     fn tradable(&self) -> bool {
         match self {
             WarframeEntry::Suits(w) => w.trade.tradable,

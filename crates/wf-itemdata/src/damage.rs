@@ -143,8 +143,10 @@ pub struct Attack {
 #[serde(untagged)]
 pub enum SlideValue {
     Label(String),
-    // Int before Float so integer values round-trip without a trailing .0
+    // Integer variants before Float so integer values round-trip exactly
+    // (no trailing .0, no precision loss above i64::MAX)
     Int(i64),
+    UInt(u64),
     Float(f64),
 }
 
@@ -193,13 +195,24 @@ mod tests {
 
     #[test]
     fn test_slide_value_round_trip() {
-        for raw in [r#""Slide""#, "8", "12.5"] {
+        for raw in [
+            r#""Slide""#,
+            r#""8""#,
+            "8",
+            "-8",
+            "12.5",
+            "10000000000000000000",
+        ] {
             let parsed: SlideValue = serde_json::from_str(raw).unwrap();
             assert_eq!(serde_json::to_string(&parsed).unwrap(), raw);
         }
         assert!(matches!(
             serde_json::from_str::<SlideValue>("8").unwrap(),
             SlideValue::Int(8)
+        ));
+        assert!(matches!(
+            serde_json::from_str::<SlideValue>("10000000000000000000").unwrap(),
+            SlideValue::UInt(10000000000000000000)
         ));
     }
 

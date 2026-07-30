@@ -4,20 +4,18 @@ use serde_json::Value;
 use crate::control_ops::ControlOp;
 
 use super::inventory::{
-    FilterParams, InventoryFilterResponse, InventoryLoadResponse, LoadInventoryParams, StaleParams,
-    handle_inventory_filter, handle_inventory_load, handle_inventory_meta_get,
-    handle_inventory_refresh, handle_inventory_stale_update,
+    InventoryFilterResponse, InventoryLoadResponse, handle_inventory_filter, handle_inventory_load,
+    handle_inventory_meta_get, handle_inventory_refresh, handle_inventory_stale_update,
 };
 use super::market::{
-    MarketPriceParams, MarketPriceResponse, MarketRefreshResponse, handle_market_price,
-    handle_market_refresh,
+    MarketPriceResponse, MarketRefreshResponse, handle_market_price, handle_market_refresh,
 };
-use super::screenshot::{ScreenshotEvent, ScreenshotParams, handle_screenshot_trigger};
+use super::screenshot::{ScreenshotEvent, handle_screenshot_trigger};
 use super::subscription::{self, EventFilter, SubscribeParams, SubscribeResponse};
 use super::utils::parse_params;
 use super::wfm_auth::{
-    SignstatusParams, SignstatusResponse, handle_wfm_signin, handle_wfm_signout,
-    handle_wfm_signstatus, parse_signin_params,
+    SignstatusResponse, handle_wfm_signin, handle_wfm_signout, handle_wfm_signstatus,
+    parse_signin_params,
 };
 
 #[derive(Debug, Deserialize)]
@@ -105,8 +103,8 @@ async fn handle_request(req: Request) -> HandleResult {
 
     // Handle subscribe separately since it needs to return the filter
     if let Ok(ControlOp::Subscribe) = ControlOp::parse(&req.op) {
-        let result = parse_params::<SubscribeParams>(req.params)
-            .and_then(subscription::handle_subscribe);
+        let result =
+            parse_params::<SubscribeParams>(req.params).and_then(subscription::handle_subscribe);
         return match result {
             Ok(result) => HandleResult {
                 response: Response::ok(id, ResponseData::Subscribe(Box::new(result.response))),
@@ -119,62 +117,7 @@ async fn handle_request(req: Request) -> HandleResult {
         };
     }
 
-    let result = match ControlOp::parse(&req.op) {
-        Ok(ControlOp::Ping) => Ok(ResponseData::Ping(Box::new(PingResponse { pong: true }))),
-        Ok(ControlOp::InventoryLoad) => match parse::<LoadInventoryParams>(req.params) {
-            Ok(params) => handle_inventory_load(params)
-                .await
-                .map(|resp| ResponseData::InventoryLoad(Box::new(resp))),
-            Err(e) => Err(e),
-        },
-        Ok(ControlOp::InventoryFilter) => match parse::<FilterParams>(req.params) {
-            Ok(params) => handle_inventory_filter(params)
-                .await
-                .map(|resp| ResponseData::InventoryFilter(Box::new(resp))),
-            Err(e) => Err(e),
-        },
-        Ok(ControlOp::InventoryMetaGet) => {
-            handle_inventory_meta_get().map(|resp| ResponseData::InventoryMeta(Box::new(resp)))
-        }
-        Ok(ControlOp::InventoryStaleUpdate) => match parse::<StaleParams>(req.params) {
-            Ok(params) => handle_inventory_stale_update(params)
-                .map(|resp| ResponseData::InventoryMeta(Box::new(resp))),
-            Err(e) => Err(e),
-        },
-        Ok(ControlOp::ScreenshotTrigger) => match parse::<ScreenshotParams>(req.params) {
-            Ok(params) => handle_screenshot_trigger(params)
-                .await
-                .map(|resp| ResponseData::Screenshot(Box::new(resp))),
-            Err(e) => Err(e),
-        },
-        Ok(ControlOp::InventoryRefresh) => dispatch_refresh(req.params).await,
-        Ok(ControlOp::WFMarketPrice) => match parse::<MarketPriceParams>(req.params) {
-            Ok(params) => handle_market_price(params)
-                .await
-                .map(|resp| ResponseData::MarketPrice(Box::new(resp))),
-            Err(e) => Err(e),
-        },
-        Ok(ControlOp::WFMarketRefresh) => handle_market_refresh()
-            .await
-            .map(|resp| ResponseData::MarketRefresh(Box::new(resp))),
-        Ok(ControlOp::WfmSignstatus) => match parse::<SignstatusParams>(req.params) {
-            Ok(params) => handle_wfm_signstatus(params)
-                .await
-                .map(|resp| ResponseData::Signstatus(Box::new(resp))),
-            Err(e) => Err(e),
-        },
-        Ok(ControlOp::WfmSignin) => match parse_signin_params(req.params) {
-            Ok(params) => handle_wfm_signin(params)
-                .await
-                .map(|()| ResponseData::Empty(Box::new(EmptyResponse {}))),
-            Err(e) => Err(e),
-        },
-        Ok(ControlOp::WfmSignout) => handle_wfm_signout()
-            .await
-            .map(|()| ResponseData::Empty(Box::new(EmptyResponse {}))),
-        Ok(ControlOp::Subscribe) => Err(anyhow::anyhow!("Unexpected subscribe operation")),
-        Err(e) => Err(e),
-    };
+    let result = dispatch(&req.op, req.params).await;
 
     HandleResult {
         response: match result {
@@ -185,23 +128,56 @@ async fn handle_request(req: Request) -> HandleResult {
     }
 }
 
-fn parse<T: for<'de> Deserialize<'de> + Default>(params: Option<Value>) -> anyhow::Result<T> {
-    parse_params(params)
+async fn dispatch(op: &str, params: Option<Value>) -> anyhow::Result<ResponseData> {
+    Ok(match ControlOp::parse(op)? {
+        ControlOp::Ping => ResponseData::Ping(Box::new(PingResponse { pong: true })),
+        ControlOp::InventoryLoad => ResponseData::InventoryLoad(Box::new(
+            handle_inventory_load(parse_params(params)?).await?,
+        )),
+        ControlOp::InventoryFilter => ResponseData::InventoryFilter(Box::new(
+            handle_inventory_filter(parse_params(params)?).await?,
+        )),
+        ControlOp::InventoryMetaGet => {
+            ResponseData::InventoryMeta(Box::new(handle_inventory_meta_get()?))
+        }
+        ControlOp::InventoryStaleUpdate => ResponseData::InventoryMeta(Box::new(
+            handle_inventory_stale_update(parse_params(params)?)?,
+        )),
+        ControlOp::ScreenshotTrigger => ResponseData::Screenshot(Box::new(
+            handle_screenshot_trigger(parse_params(params)?).await?,
+        )),
+        ControlOp::InventoryRefresh => {
+            ResponseData::InventoryLoad(Box::new(dispatch_refresh(params).await?))
+        }
+        ControlOp::WFMarketPrice => {
+            ResponseData::MarketPrice(Box::new(handle_market_price(parse_params(params)?).await?))
+        }
+        ControlOp::WFMarketRefresh => {
+            ResponseData::MarketRefresh(Box::new(handle_market_refresh().await?))
+        }
+        ControlOp::WfmSignstatus => ResponseData::Signstatus(Box::new(
+            handle_wfm_signstatus(parse_params(params)?).await?,
+        )),
+        ControlOp::WfmSignin => {
+            handle_wfm_signin(parse_signin_params(params)?).await?;
+            ResponseData::Empty(Box::new(EmptyResponse {}))
+        }
+        ControlOp::WfmSignout => {
+            handle_wfm_signout().await?;
+            ResponseData::Empty(Box::new(EmptyResponse {}))
+        }
+        ControlOp::Subscribe => return Err(anyhow::anyhow!("Unexpected subscribe operation")),
+    })
 }
 
 #[cfg(feature = "memory")]
-async fn dispatch_refresh(params: Option<Value>) -> anyhow::Result<ResponseData> {
-    let params = parse::<super::inventory::RefreshParams>(params)?;
-    handle_inventory_refresh(params)
-        .await
-        .map(|resp| ResponseData::InventoryLoad(Box::new(resp)))
+async fn dispatch_refresh(params: Option<Value>) -> anyhow::Result<InventoryLoadResponse> {
+    handle_inventory_refresh(parse_params(params)?).await
 }
 
 #[cfg(not(feature = "memory"))]
-async fn dispatch_refresh(_params: Option<Value>) -> anyhow::Result<ResponseData> {
-    handle_inventory_refresh()
-        .await
-        .map(|resp| ResponseData::InventoryLoad(Box::new(resp)))
+async fn dispatch_refresh(_params: Option<Value>) -> anyhow::Result<InventoryLoadResponse> {
+    handle_inventory_refresh().await
 }
 
 #[cfg(test)]
@@ -225,7 +201,12 @@ mod tests {
         let result = handle_line("not json").await;
         let value = serde_json::to_value(&result.response).unwrap();
         assert_eq!(value["ok"], json!(false));
-        assert!(value["error"].as_str().unwrap().starts_with("Invalid request:"));
+        assert!(
+            value["error"]
+                .as_str()
+                .unwrap()
+                .starts_with("Invalid request:")
+        );
         assert!(value.get("data").is_none());
         assert_eq!(value["id"], json!(null));
     }
@@ -240,7 +221,8 @@ mod tests {
 
     #[tokio::test]
     async fn subscribe_returns_filter_and_typed_response() {
-        let result = handle_line(r#"{"id":"3","op":"subscribe","params":{"events":["game_start"]}}"#).await;
+        let result =
+            handle_line(r#"{"id":"3","op":"subscribe","params":{"events":["game_start"]}}"#).await;
         let value = serde_json::to_value(&result.response).unwrap();
         assert_eq!(value["ok"], json!(true));
         assert_eq!(value["data"]["subscribed"], json!(true));
@@ -253,10 +235,7 @@ mod tests {
 
     #[test]
     fn empty_response_serializes_to_empty_object() {
-        assert_eq!(
-            serde_json::to_value(EmptyResponse {}).unwrap(),
-            json!({})
-        );
+        assert_eq!(serde_json::to_value(EmptyResponse {}).unwrap(), json!({}));
     }
 
     #[test]
