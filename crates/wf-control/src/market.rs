@@ -80,8 +80,10 @@ pub(crate) struct WfmItem {
 }
 
 struct WfmCache {
-    game_ref_index: HashMap<String, WfmItem>,
-    id_index: HashMap<String, WfmItem>,
+    // Positions into `items`; the cache is only ever replaced wholesale,
+    // so indices stay valid for its lifetime.
+    game_ref_index: HashMap<String, usize>,
+    id_index: HashMap<String, usize>,
     items: Vec<WfmItem>,
     last_refreshed_at: DateTime<Utc>,
     #[allow(dead_code)]
@@ -149,10 +151,11 @@ async fn refresh_cache() -> Result<(usize, DateTime<Utc>)> {
             ducats: raw.ducats,
         };
 
+        let pos = items.len();
         if let Some(ref gr) = item.game_ref {
-            game_ref_index.insert(gr.clone(), item.clone());
+            game_ref_index.insert(gr.clone(), pos);
         }
-        id_index.insert(item.id.clone(), item.clone());
+        id_index.insert(item.id.clone(), pos);
         items.push(item);
     }
 
@@ -179,13 +182,15 @@ fn lookup_by_game_ref(game_ref: &str) -> Option<WfmItem> {
     let guard = lock.read().unwrap();
     guard
         .as_ref()
-        .and_then(|c| c.game_ref_index.get(game_ref).cloned())
+        .and_then(|c| Some(c.items[*c.game_ref_index.get(game_ref)?].clone()))
 }
 
 fn lookup_by_id(id: &str) -> Option<WfmItem> {
     let lock = get_cache_lock();
     let guard = lock.read().unwrap();
-    guard.as_ref().and_then(|c| c.id_index.get(id).cloned())
+    guard
+        .as_ref()
+        .and_then(|c| Some(c.items[*c.id_index.get(id)?].clone()))
 }
 
 fn search_items(query: &str) -> Vec<WfmItem> {
@@ -323,7 +328,7 @@ fn price_stats(prices: &[f64]) -> PriceStats {
 
     let min = sorted.first().copied();
     let max = sorted.last().copied();
-    let median = if sorted.len() % 2 == 0 {
+    let median = if sorted.len().is_multiple_of(2) {
         let mid = sorted.len() / 2;
         Some((sorted[mid - 1] + sorted[mid]) / 2.0)
     } else {

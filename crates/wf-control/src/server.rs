@@ -282,11 +282,10 @@ where
             event_result = receiver.recv() => {
                 match event_result {
                     Ok(event) => {
-                        if filter.matches(&event) {
-                            if let Err(e) = event_writer(event, writer).await  {
+                        if filter.matches(&event)
+                            && let Err(e) = event_writer(event, writer).await  {
                                 log::error!("Error publishing event {:?}", e);
                             }
-                        }
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {
                         log::warn!("Subscription client lagged, missed {} events", count);
@@ -339,15 +338,14 @@ struct UnixSocketGuard {
 #[cfg(unix)]
 impl Drop for UnixSocketGuard {
     fn drop(&mut self) {
-        if let Err(e) = fs::remove_file(&self.path) {
-            if e.kind() != std::io::ErrorKind::NotFound {
+        if let Err(e) = fs::remove_file(&self.path)
+            && e.kind() != std::io::ErrorKind::NotFound {
                 log::debug!(
                     "Failed to cleanup unix socket {}: {}",
                     self.path.display(),
                     e
                 );
             }
-        }
     }
 }
 
@@ -355,7 +353,7 @@ impl Drop for UnixSocketGuard {
 fn default_unix_socket_path() -> Option<PathBuf> {
     let base = dirs::runtime_dir()
         .or_else(dirs::cache_dir)
-        .or_else(|| dirs::data_dir())?;
+        .or_else(dirs::data_dir)?;
     Some(base.join("wf-info-2").join("control.sock"))
 }
 

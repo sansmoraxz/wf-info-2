@@ -28,9 +28,9 @@ pub type Root = Vec<WarframeEntry>;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum WarframeEntry {
-    Suits(WarframeData),
-    MechSuits(NecramechData),
-    Helminth(HelminthData),
+    Suits(Box<WarframeData>),
+    MechSuits(Box<NecramechData>),
+    Helminth(Box<HelminthData>),
 }
 
 /// Standard warframe (113 entries, productCategory = "Suits").

@@ -282,11 +282,9 @@ fn encode_x11_image_bmp(
                 .get(source_start..source_end)
                 .ok_or_else(|| anyhow!("X11 image data ended unexpectedly"))?;
             let bmp_row_start = pixel_offset + y * bmp_stride;
-            for (x, pixel) in source_row.chunks_exact(4).enumerate() {
-                let bmp_offset = bmp_row_start + x * 3;
-                bmp[bmp_offset] = pixel[0];
-                bmp[bmp_offset + 1] = pixel[1];
-                bmp[bmp_offset + 2] = pixel[2];
+            let bmp_row = &mut bmp[bmp_row_start..bmp_row_start + width_usize * 3];
+            for (out, pixel) in bmp_row.chunks_exact_mut(3).zip(source_row.chunks_exact(4)) {
+                out.copy_from_slice(&pixel[..3]);
             }
         }
         return Ok(bmp);

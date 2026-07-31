@@ -359,7 +359,7 @@ async fn handle_relic_selection_popup() {
 
     let res = capture_screen().await;
     match res {
-        Ok((image_bytes, _)) => match load_image(image_bytes) {
+        Ok((image_bytes, _)) => match load_image(&image_bytes) {
             Ok(img) => match RELIC_RECOG_ENGINE.recognize_and_list(&img) {
                 Ok(mut v) => {
                     log::info!("Got relic items: {:?}", v);

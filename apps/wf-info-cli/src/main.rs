@@ -367,8 +367,8 @@ impl ConnectionArgs {
             }
         };
 
-        if should_load_defaults {
-            if let Some(default_cfg) = ControlConfig::from_env() {
+        if should_load_defaults
+            && let Some(default_cfg) = ControlConfig::from_env() {
                 for endpoint in default_cfg.endpoints {
                     match endpoint {
                         ControlEndpoint::Tcp(addr) if cfg.tcp_addr.is_none() => {
@@ -404,7 +404,6 @@ impl ConnectionArgs {
                     }
                 }
             }
-        }
 
         let missing_target = {
             #[cfg(windows)]

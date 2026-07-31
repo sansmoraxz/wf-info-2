@@ -64,7 +64,7 @@ impl LogProcessingEngine {
         let reset: RegexSet = RegexSet::new(rv)?;
         Ok(Self {
             transformers: v,
-            reset: reset,
+            reset,
         })
     }
 
@@ -74,10 +74,8 @@ impl LogProcessingEngine {
         let mut v: VecDeque<_> = set
             .matches(s)
             .into_iter()
-            .filter_map(move |cap_idx| {
-                // Dereference the match index to get the corresponding
-                // compiled pattern.
-                let g = container[cap_idx]
+            .flat_map(move |cap_idx| {
+                container[cap_idx]
                     .pattern()
                     .captures_iter(s)
                     .filter_map(move |c| {
@@ -85,14 +83,11 @@ impl LogProcessingEngine {
                         let event = container[cap_idx].transform(&c)?;
                         Some(LogRecords { pos, event })
                     })
-                    .into_iter()
-                    .collect::<Vec<_>>();
-                return Some(g);
+                    .collect::<Vec<_>>()
             })
-            .flatten()
             .collect();
 
-        v.make_contiguous().sort_by(|a, b| a.pos.cmp(&b.pos));
+        v.make_contiguous().sort_by_key(|a| a.pos);
         v.drain(..).map(move |rec| rec.event).collect()
     }
 }
@@ -123,18 +118,16 @@ impl LogEntryTransformer for TradeConfirmEntry {
 
 fn trade_confirm_item_filter(a: &str) -> Option<(String, u32)> {
     let a = a.trim();
-    if a.len() == 0 {
+    if a.is_empty() {
         return None;
     }
-    if let Some(csplit) = a.rfind(" x ") {
-        if let Some(r) = a.get(csplit + 3..) {
-            if let Ok(count) = r.trim().parse::<u32>() {
+    if let Some(csplit) = a.rfind(" x ")
+        && let Some(r) = a.get(csplit + 3..)
+            && let Ok(count) = r.trim().parse::<u32>() {
                 let l = a.get(..csplit)?;
                 return Some((l.trim().to_string(), count));
             }
-        }
-    }
-    return Some((a.to_string(), 1));
+    Some((a.to_string(), 1))
 }
 
 fn extract_trade_items(s: &str) -> Vec<TradeItem> {
@@ -145,10 +138,10 @@ fn extract_trade_items(s: &str) -> Vec<TradeItem> {
     }
     m.drain()
         .map(|(name, count)| {
-            return TradeItem {
-                name: name,
-                count: count,
-            };
+            TradeItem {
+                name,
+                count,
+            }
         })
         .collect()
 }
@@ -197,8 +190,8 @@ impl LogEntryTransformer for LoginEntry {
         let clan = [clan_name, "#".to_string(), clan_id].concat();
         let account_info = AccountInfo {
             username: name,
-            platform: platform,
-            clan: clan,
+            platform,
+            clan,
         };
         Some(LogEvent::Login(account_info))
     }

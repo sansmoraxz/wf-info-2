@@ -1,3 +1,6 @@
+// Tuple-typed fixture tables read best inline; a type alias per test adds noise.
+#![allow(clippy::type_complexity)]
+
 use std::collections::HashMap;
 
 use crate as itemdata;

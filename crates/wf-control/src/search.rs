@@ -380,13 +380,11 @@ pub(crate) fn get_or_build_inventory_index(
     meta: &storage::InventoryMeta,
 ) -> Result<InventorySearchIndex> {
     // Fast path: reuse cached index if metadata matches last update timestamp
-    if let Ok(guard) = inventory_index_cache().read() {
-        if let Some(cached) = guard.as_ref() {
-            if cached.meta_last_updated == meta.last_updated {
+    if let Ok(guard) = inventory_index_cache().read()
+        && let Some(cached) = guard.as_ref()
+            && cached.meta_last_updated == meta.last_updated {
                 return Ok(cached.index.clone());
             }
-        }
-    }
 
     // Build fresh index over the entire inventory
     let items = collect_inventory_items(inventory, None);
@@ -486,7 +484,7 @@ pub(crate) fn search_inventory(
         Box::new(BooleanQuery::new(clauses))
     };
 
-    let total_matches = searcher.search(&query, &Count)? as usize;
+    let total_matches = searcher.search(&query, &Count)?;
 
     let top_docs = if total_matches == 0 {
         Vec::new()

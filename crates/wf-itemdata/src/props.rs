@@ -208,7 +208,7 @@ pub struct ComponentWeaponData {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ComponentWeapon {
-    Armed(ComponentWeaponData),
+    Armed(Box<ComponentWeaponData>),
     Unarmed {},
 }
 

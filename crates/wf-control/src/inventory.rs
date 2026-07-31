@@ -446,7 +446,7 @@ pub(crate) fn inventory_summary(inventory: &Inventory) -> InventorySummary {
 fn epoch_to_datetime(value: i64) -> DateTime<Utc> {
     let (secs, nsec) = if value > 1_000_000_000_000 {
         let secs = value / 1000;
-        let nsec = ((value % 1000).abs() as u32) * 1_000_000;
+        let nsec = ((value % 1000).unsigned_abs() as u32) * 1_000_000;
         (secs, nsec)
     } else {
         (value, 0)

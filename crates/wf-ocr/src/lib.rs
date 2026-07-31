@@ -12,7 +12,7 @@ mod ocr;
 
 pub use ocr::{DEFAULT_OCR_ENGINE, new_default_ocr_engine};
 
-pub fn load_image(bytes: Vec<u8>) -> anyhow::Result<image::DynamicImage> {
+pub fn load_image(bytes: &[u8]) -> anyhow::Result<image::DynamicImage> {
     Ok(ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()?
         .decode()?)
@@ -71,10 +71,10 @@ impl<'a> RelicRecognizer<'a> {
 
         // merge text and sort by cordinates
         let res = rg
-            .iter()
-            .map(|(_, v)| {
+            .values()
+            .map(|v| {
                 let text = v.iter().map(|ores| &ores.text).join(" ").trim().to_string();
-                let rec = v.get(0).unwrap();
+                let rec = v.first().unwrap();
                 let x = rec.bbox.rect.left() as u32;
                 let y = rec.bbox.rect.top() as u32;
                 RelicRecogizeText { text, x, y }

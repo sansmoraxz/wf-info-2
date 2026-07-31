@@ -207,11 +207,12 @@ fn sample_to_bmp(sample: gst::Sample) -> Result<Vec<u8>> {
             .as_slice()
             .get(start..end)
             .ok_or_else(|| anyhow!("Wayland ScreenCast frame buffer is smaller than expected"))?;
-        for (column, pixel) in row_bytes.chunks_exact(4).enumerate() {
-            let bmp_offset = pixel_offset + row * bmp_stride + column * 3;
-            bmp[bmp_offset] = pixel[2];
-            bmp[bmp_offset + 1] = pixel[1];
-            bmp[bmp_offset + 2] = pixel[0];
+        let bmp_row_start = pixel_offset + row * bmp_stride;
+        let bmp_row = &mut bmp[bmp_row_start..bmp_row_start + width as usize * 3];
+        for (out, pixel) in bmp_row.chunks_exact_mut(3).zip(row_bytes.chunks_exact(4)) {
+            out[0] = pixel[2];
+            out[1] = pixel[1];
+            out[2] = pixel[0];
         }
     }
     log::trace!(
