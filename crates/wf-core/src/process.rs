@@ -610,6 +610,8 @@ pub async fn scan_memory_for_auth_with_retry(
 }
 
 #[cfg(all(test, feature = "memory"))]
+// clippy's allow-*-in-tests exemption doesn't recognize cfg(all(test, ...)).
+#[allow(clippy::expect_used)]
 mod memory_tests {
     use super::*;
 

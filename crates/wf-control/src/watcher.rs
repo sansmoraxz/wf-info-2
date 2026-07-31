@@ -208,7 +208,7 @@ fn event_emitter_fn(
             }
             LogEvent::TradeSuccess => {
                 if let Some(trades) = state.trade.resolve() {
-                    log::info!("Trade confirmed: {:?}", &trades);
+                    log::info!("Trade confirmed: {:?}", trades);
                     let popup = crate::events::TradeConfirmPopupEvent {
                         sent: trades.sent,
                         received: trades.received,
@@ -224,7 +224,7 @@ fn event_emitter_fn(
             }
             LogEvent::TradeFail(reason) => {
                 if let Some(trades) = state.trade.resolve() {
-                    log::info!("Trade failed: {:?}, reason: {}", &trades, reason);
+                    log::info!("Trade failed: {:?}, reason: {}", trades, reason);
                     let popup = crate::events::TradeConfirmPopupEvent {
                         sent: trades.sent,
                         received: trades.received,
@@ -351,16 +351,24 @@ async fn handle_login_event(
     }
 }
 
-static RELIC_RECOG_ENGINE: LazyLock<wf_ocr::RelicRecognizer> =
-    LazyLock::new(|| RelicRecognizer::new(&wf_ocr::DEFAULT_OCR_ENGINE));
+static RELIC_RECOG_ENGINE: LazyLock<Result<wf_ocr::RelicRecognizer, &'static anyhow::Error>> =
+    LazyLock::new(|| wf_ocr::DEFAULT_OCR_ENGINE.as_ref().map(RelicRecognizer::new));
 
 async fn handle_relic_selection_popup() {
     tokio::time::sleep(Duration::from_millis(500)).await;
 
+    let recognizer = match RELIC_RECOG_ENGINE.as_ref() {
+        Ok(recognizer) => recognizer,
+        Err(e) => {
+            log::error!("OCR engine unavailable: {e}");
+            return;
+        }
+    };
+
     let res = capture_screen().await;
     match res {
         Ok((image_bytes, _)) => match load_image(&image_bytes) {
-            Ok(img) => match RELIC_RECOG_ENGINE.recognize_and_list(&img) {
+            Ok(img) => match recognizer.recognize_and_list(&img) {
                 Ok(mut v) => {
                     log::info!("Got relic items: {:?}", v);
                     let filtered: Vec<String> = v.drain(..).map(|e| e.text).collect();

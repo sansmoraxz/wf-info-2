@@ -437,16 +437,12 @@ impl ConnectionArgs {
 
 impl Commands {
     fn into_cli_mode(self) -> CliMode {
-        match self {
-            Commands::Watch(args) => CliMode::Watch(WatchConfig {
-                events: args.events,
-            }),
-            _ => CliMode::Request(self.into_command()),
-        }
-    }
-
-    fn into_command(self) -> Command {
-        match self {
+        let command = match self {
+            Commands::Watch(args) => {
+                return CliMode::Watch(WatchConfig {
+                    events: args.events,
+                });
+            }
             Commands::Ping => Command {
                 op: CliOp::Known(ControlOp::Ping),
                 params: None,
@@ -518,8 +514,8 @@ impl Commands {
                 op: CliOp::Call(args.op),
                 params: Some(args.params.unwrap_or_else(|| json!({}))),
             },
-            Commands::Watch(_) => unreachable!("Watch handled separately in into_cli_mode"),
-        }
+        };
+        CliMode::Request(command)
     }
 }
 

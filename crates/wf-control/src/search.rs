@@ -426,7 +426,7 @@ pub(crate) fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchI
     let index = Index::create_in_ram(schema);
     index
         .tokenizers()
-        .register("ngram3", NgramTokenizer::new(2, 6, true).unwrap());
+        .register("ngram3", NgramTokenizer::new(2, 6, true)?);
 
     let mut writer = index.writer(20_000_000)?; // ~20MB buffer, tiny dataset
 

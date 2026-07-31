@@ -258,7 +258,7 @@ where
 {
     let msg = EventMessage::from(event);
     let payload =
-        serde_json::to_string(&msg).context(format!("Failed to serialize event {:?}", &msg))?;
+        serde_json::to_string(&msg).context(format!("Failed to serialize event {:?}", msg))?;
     writer.write_all(payload.as_bytes()).await?;
     writer.write_all(b"\n").await?;
 

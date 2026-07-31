@@ -3,6 +3,9 @@ name = "wf-info-daemon"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 clap.workspace = true
 env_logger.workspace = true

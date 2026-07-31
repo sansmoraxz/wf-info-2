@@ -6,23 +6,24 @@ use ocr_rs::OcrEngine;
 #[folder = "models/"]
 struct OcrModelAsset;
 
-pub fn new_default_ocr_engine() -> OcrEngine {
-    OcrEngine::from_bytes(
-        &OcrModelAsset::get("ch_PP-OCRv4_det_infer.mnn")
-            .unwrap()
-            .data,
-        &OcrModelAsset::get("ch_PP-OCRv4_rec_infer.mnn")
-            .unwrap()
-            .data,
-        &OcrModelAsset::get("ppocr_keys_v4.txt").unwrap().data,
-        None,
-    )
-    .unwrap()
+fn asset(name: &str) -> anyhow::Result<rust_embed::EmbeddedFile> {
+    OcrModelAsset::get(name).ok_or_else(|| anyhow::anyhow!("OCR model asset missing: {name}"))
 }
 
-pub static DEFAULT_OCR_ENGINE: LazyLock<OcrEngine> = LazyLock::new(new_default_ocr_engine);
+pub fn new_default_ocr_engine() -> anyhow::Result<OcrEngine> {
+    OcrEngine::from_bytes(
+        &asset("ch_PP-OCRv4_det_infer.mnn")?.data,
+        &asset("ch_PP-OCRv4_rec_infer.mnn")?.data,
+        &asset("ppocr_keys_v4.txt")?.data,
+        None,
+    )
+    .map_err(|e| anyhow::anyhow!("failed to initialize OCR engine: {e}"))
+}
+
+pub static DEFAULT_OCR_ENGINE: LazyLock<anyhow::Result<OcrEngine>> =
+    LazyLock::new(new_default_ocr_engine);
 
 #[test]
 fn engine_load_should_not_panic() {
-    new_default_ocr_engine();
+    new_default_ocr_engine().unwrap();
 }

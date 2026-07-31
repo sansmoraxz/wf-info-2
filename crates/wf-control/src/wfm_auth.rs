@@ -391,7 +391,7 @@ pub(crate) enum SignstatusResponse {
 
 pub(crate) async fn handle_wfm_signstatus(p: SignstatusParams) -> Result<SignstatusResponse> {
     // If no status provided, return current state
-    if p.status.is_none() {
+    let Some(raw_status) = p.status else {
         let guard = session_lock().read().await;
         return match guard.as_ref() {
             Some(session) => {
@@ -405,9 +405,7 @@ pub(crate) async fn handle_wfm_signstatus(p: SignstatusParams) -> Result<Signsta
             }
             None => Ok(SignstatusResponse::Unauthenticated),
         };
-    }
-
-    let raw_status = p.status.unwrap();
+    };
     let status = raw_status.parse::<Status>().map_err(|_| {
         anyhow!(
             "Invalid status '{}'. Must be: online, invisible, ingame",

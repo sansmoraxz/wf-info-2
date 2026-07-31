@@ -14,6 +14,16 @@ resolver = "3"
 edition = "2024"
 version = "0.1.0"
 
+# Panics are not acceptable failure handling in the daemon/CLI at runtime;
+# tests are exempt via clippy.toml (allow-*-in-tests).
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+unreachable = "warn"
+todo = "warn"
+unimplemented = "warn"
+
 [workspace.dependencies]
 aes = "0.8"
 aes-gcm = "0.10"

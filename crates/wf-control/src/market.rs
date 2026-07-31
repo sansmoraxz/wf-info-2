@@ -98,7 +98,7 @@ fn get_cache_lock() -> &'static RwLock<Option<WfmCache>> {
 
 fn is_cache_stale() -> bool {
     let lock = get_cache_lock();
-    let guard = lock.read().unwrap();
+    let guard = lock.read().unwrap_or_else(std::sync::PoisonError::into_inner);
     match guard.as_ref() {
         None => true,
         Some(cache) => {
@@ -110,7 +110,7 @@ fn is_cache_stale() -> bool {
 
 fn cache_age_secs() -> Option<i64> {
     let lock = get_cache_lock();
-    let guard = lock.read().unwrap();
+    let guard = lock.read().unwrap_or_else(std::sync::PoisonError::into_inner);
     guard.as_ref().map(|c| {
         Utc::now()
             .signed_duration_since(c.last_refreshed_at)
@@ -163,7 +163,10 @@ async fn refresh_cache() -> Result<(usize, DateTime<Utc>)> {
     let count = items.len();
 
     let lock = get_cache_lock();
-    let mut guard = lock.write().unwrap();
+    // Poisoning is recoverable: the cache is only ever replaced wholesale.
+    let mut guard = lock
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     *guard = Some(WfmCache {
         game_ref_index,
         id_index,
@@ -179,7 +182,7 @@ async fn refresh_cache() -> Result<(usize, DateTime<Utc>)> {
 
 fn lookup_by_game_ref(game_ref: &str) -> Option<WfmItem> {
     let lock = get_cache_lock();
-    let guard = lock.read().unwrap();
+    let guard = lock.read().unwrap_or_else(std::sync::PoisonError::into_inner);
     guard
         .as_ref()
         .and_then(|c| Some(c.items[*c.game_ref_index.get(game_ref)?].clone()))
@@ -187,7 +190,7 @@ fn lookup_by_game_ref(game_ref: &str) -> Option<WfmItem> {
 
 fn lookup_by_id(id: &str) -> Option<WfmItem> {
     let lock = get_cache_lock();
-    let guard = lock.read().unwrap();
+    let guard = lock.read().unwrap_or_else(std::sync::PoisonError::into_inner);
     guard
         .as_ref()
         .and_then(|c| Some(c.items[*c.id_index.get(id)?].clone()))
@@ -195,7 +198,7 @@ fn lookup_by_id(id: &str) -> Option<WfmItem> {
 
 fn search_items(query: &str) -> Vec<WfmItem> {
     let lock = get_cache_lock();
-    let guard = lock.read().unwrap();
+    let guard = lock.read().unwrap_or_else(std::sync::PoisonError::into_inner);
     let Some(cache) = guard.as_ref() else {
         return Vec::new();
     };
