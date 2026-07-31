@@ -421,7 +421,7 @@ pub(crate) async fn handle_wfm_signin(p: SigninParams) -> Result<()> {
 
     let token_data = AuthTokenData {
         access_token: jwt,
-        refresh_token: String::new(), // v1 API doesn't provide refresh tokens
+        refresh_token: None, // v1 API doesn't provide refresh tokens
         device_id,
         client_id: p.client_id,
         device_name: p.device_name,

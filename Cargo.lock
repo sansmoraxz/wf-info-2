@@ -4805,6 +4805,7 @@ dependencies = [
  "scopeguard",
  "serde",
  "serde_json",
+ "serde_with",
  "sha2",
  "sysinfo",
  "tokio",

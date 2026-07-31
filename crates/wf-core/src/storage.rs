@@ -118,10 +118,14 @@ fn gcm_decrypt(data: &[u8]) -> anyhow::Result<Vec<u8>> {
 }
 
 /// Auth token storage (AES-256-GCM)
+#[serde_with::serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthTokenData {
     pub access_token: String,
-    pub refresh_token: String,
+    /// Stored as `""` on disk
+    /// The v1 API never issues refresh tokens
+    #[serde_as(as = "serde_with::NoneAsEmptyString")]
+    pub refresh_token: Option<String>,
     pub device_id: String,
     pub client_id: String,
     pub device_name: String,
@@ -338,6 +342,31 @@ mod tests {
             "/testdata/inventory/sample_inventory.json"
         )))
         .unwrap()
+    }
+
+    /// Pins the on-disk token format: refresh_token is `""` when absent,
+    /// so files written before the Option<String> change stay readable and
+    /// files written after stay readable by older builds.
+    #[test]
+    fn refresh_token_none_round_trips_as_empty_string() {
+        let data = AuthTokenData {
+            access_token: "jwt".into(),
+            refresh_token: None,
+            device_id: "dev".into(),
+            client_id: "cli".into(),
+            device_name: "name".into(),
+            expires_at: Utc::now(),
+        };
+        let value = serde_json::to_value(&data).unwrap();
+        assert_eq!(value["refresh_token"], "");
+
+        let parsed: AuthTokenData = serde_json::from_value(value).unwrap();
+        assert_eq!(parsed.refresh_token, None);
+
+        let mut value = serde_json::to_value(&data).unwrap();
+        value["refresh_token"] = "tok".into();
+        let parsed: AuthTokenData = serde_json::from_value(value).unwrap();
+        assert_eq!(parsed.refresh_token.as_deref(), Some("tok"));
     }
 
     #[test]

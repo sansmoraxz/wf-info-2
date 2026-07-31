@@ -26,6 +26,8 @@ use wf_itemdata::item_data::lookup_item_info;
 #[cfg(feature = "memory")]
 use wf_core::{inventory_refresh, process};
 
+/// Wire mirror for inventory.load params; converted to [`LoadInventoryRequest`]
+/// so the exactly-one-source rule is enforced before the handler runs.
 #[derive(Debug, Deserialize, Default)]
 pub(crate) struct LoadInventoryParams {
     pub path: Option<String>,
@@ -34,6 +36,69 @@ pub(crate) struct LoadInventoryParams {
     pub save: Option<bool>,
     pub source: Option<Source>,
     pub encrypted: Option<bool>,
+}
+
+/// Exactly one place an inventory can be loaded from. `encrypted` only makes
+/// sense for file reads, so it lives inside `Path`.
+#[derive(Debug)]
+pub(crate) enum InventoryInput {
+    Path { path: String, encrypted: bool },
+    Json(Value),
+    Raw(String),
+}
+
+impl InventoryInput {
+    async fn load(self) -> Result<Inventory> {
+        match self {
+            Self::Path { path, encrypted } => {
+                if encrypted {
+                    let data = tokio::fs::read(&path)
+                        .await
+                        .with_context(|| format!("Failed to read inventory file {}", path))?;
+                    storage::decrypt_inventory_bytes(&data)
+                } else {
+                    let raw = tokio::fs::read_to_string(&path)
+                        .await
+                        .with_context(|| format!("Failed to read inventory file {}", path))?;
+                    serde_json::from_str(&raw).context("Failed to parse inventory JSON")
+                }
+            }
+            Self::Raw(raw) => serde_json::from_str(&raw).context("Failed to parse inventory JSON"),
+            Self::Json(json) => {
+                serde_json::from_value(json).context("Failed to parse inventory JSON")
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct LoadInventoryRequest {
+    pub input: InventoryInput,
+    pub save: bool,
+    pub source: Source,
+}
+
+impl TryFrom<LoadInventoryParams> for LoadInventoryRequest {
+    type Error = anyhow::Error;
+
+    fn try_from(params: LoadInventoryParams) -> Result<Self> {
+        let encrypted = params.encrypted.unwrap_or(false);
+        let input = match (params.path, params.json, params.raw) {
+            (Some(path), None, None) => InventoryInput::Path { path, encrypted },
+            (None, Some(json), None) => InventoryInput::Json(json),
+            (None, None, Some(raw)) => InventoryInput::Raw(raw),
+            _ => {
+                return Err(anyhow!(
+                    "inventory.load expects exactly one of 'path', 'json', or 'raw'"
+                ));
+            }
+        };
+        Ok(Self {
+            input,
+            save: params.save.unwrap_or(true),
+            source: params.source.unwrap_or_default(),
+        })
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -56,37 +121,13 @@ pub(crate) struct InventoryFilterResponse {
 pub(crate) async fn handle_inventory_load(
     params: LoadInventoryParams,
 ) -> Result<InventoryLoadResponse> {
-    let sources =
-        params.path.is_some() as u8 + params.json.is_some() as u8 + params.raw.is_some() as u8;
-    if sources != 1 {
-        return Err(anyhow!(
-            "inventory.load expects exactly one of 'path', 'json', or 'raw'"
-        ));
-    }
+    let LoadInventoryRequest {
+        input,
+        save,
+        source,
+    } = LoadInventoryRequest::try_from(params)?;
+    let inventory = input.load().await?;
 
-    let encrypted = params.encrypted.unwrap_or(false);
-    let inventory = if let Some(path) = params.path {
-        if encrypted {
-            let data = tokio::fs::read(&path)
-                .await
-                .with_context(|| format!("Failed to read inventory file {}", path))?;
-            storage::decrypt_inventory_bytes(&data)?
-        } else {
-            let raw = tokio::fs::read_to_string(&path)
-                .await
-                .with_context(|| format!("Failed to read inventory file {}", path))?;
-            serde_json::from_str(&raw).context("Failed to parse inventory JSON")?
-        }
-    } else if let Some(raw) = params.raw {
-        serde_json::from_str(&raw).context("Failed to parse inventory JSON")?
-    } else if let Some(json) = params.json {
-        serde_json::from_value(json).context("Failed to parse inventory JSON")?
-    } else {
-        return Err(anyhow!("Missing inventory source"));
-    };
-
-    let save = params.save.unwrap_or(true);
-    let source = params.source.unwrap_or_default();
     if save {
         storage::save_inventory(&inventory)?;
         let _ = storage::touch_inventory_updated(Some(&source.to_string()));
@@ -141,24 +182,16 @@ pub(crate) struct CountFilter {
 }
 
 pub(crate) async fn handle_inventory_filter(
-    params: FilterParams,
+    mut params: FilterParams,
 ) -> Result<InventoryFilterResponse> {
-    let encrypted = params.encrypted.unwrap_or(false);
-    let (inventory, used_custom_path) = if let Some(path) = params.path.clone() {
-        let inv = if encrypted {
-            let data = tokio::fs::read(&path)
-                .await
-                .with_context(|| format!("Failed to read inventory file {}", path))?;
-            storage::decrypt_inventory_bytes(&data)?
-        } else {
-            let raw = tokio::fs::read_to_string(&path)
-                .await
-                .with_context(|| format!("Failed to read inventory file {}", path))?;
-            serde_json::from_str(&raw).context("Failed to parse inventory JSON")?
-        };
-        (inv, true)
-    } else {
-        (storage::read_inventory()?, false)
+    let custom_path = params.path.take().map(|path| InventoryInput::Path {
+        path,
+        encrypted: params.encrypted.unwrap_or(false),
+    });
+    let used_custom_path = custom_path.is_some();
+    let inventory = match custom_path {
+        Some(input) => input.load().await?,
+        None => storage::read_inventory()?,
     };
 
     let category = match params.category.as_deref() {
@@ -427,6 +460,30 @@ fn epoch_to_datetime(value: i64) -> DateTime<Utc> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn load_request_requires_exactly_one_source() {
+        let none = LoadInventoryRequest::try_from(LoadInventoryParams::default());
+        assert!(none.is_err());
+
+        let two = LoadInventoryRequest::try_from(LoadInventoryParams {
+            path: Some("a.json".into()),
+            raw: Some("{}".into()),
+            ..Default::default()
+        });
+        assert!(two.is_err());
+
+        let one = LoadInventoryRequest::try_from(LoadInventoryParams {
+            path: Some("a.json".into()),
+            encrypted: Some(true),
+            ..Default::default()
+        })
+        .unwrap();
+        assert!(matches!(
+            one.input,
+            InventoryInput::Path { encrypted: true, .. }
+        ));
+    }
 
     /// Pins the wire shape of the inventory.load/refresh and inventory.filter
     /// response payloads against the old json! literals.
