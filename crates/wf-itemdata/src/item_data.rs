@@ -4,12 +4,15 @@ use std::sync::OnceLock;
 
 use serde::Serialize;
 
+use crate::common::Patchlog;
 use crate::traits::Item;
 use crate::{
     ProductCategory, arch_gun, arch_melee, archwing, melee, mods, primary, secondary, warframe,
 };
 
-/// Typed detail payload for an indexed item.
+/// Typed detail payload for an indexed item. Implements [`Item`] by
+/// delegating to the variant's payload via `enum_dispatch`.
+#[enum_dispatch::enum_dispatch(Item)]
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 pub enum ItemDetails {
@@ -21,37 +24,6 @@ pub enum ItemDetails {
     ArchGun(arch_gun::ArchGun),
     ArchMelee(arch_melee::ArchMelee),
     Mod(mods::ModEntry),
-}
-
-impl ItemDetails {
-    fn as_item(&self) -> &dyn Item {
-        match self {
-            Self::Warframe(x) => x,
-            Self::Primary(x) => x,
-            Self::Secondary(x) => x,
-            Self::Melee(x) => x,
-            Self::Archwing(x) => x,
-            Self::ArchGun(x) => x,
-            Self::ArchMelee(x) => x,
-            Self::Mod(x) => x,
-        }
-    }
-
-    pub fn unique_name(&self) -> &str {
-        self.as_item().unique_name()
-    }
-
-    pub fn name(&self) -> &str {
-        self.as_item().name()
-    }
-
-    pub fn tradable(&self) -> bool {
-        self.as_item().tradable()
-    }
-
-    pub fn description(&self) -> Option<&str> {
-        self.as_item().description()
-    }
 }
 
 #[derive(Debug, Clone, Serialize)]

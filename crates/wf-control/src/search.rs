@@ -104,6 +104,7 @@ pub(crate) enum Category {
 }
 
 /// A searchable inventory item tagged with its category.
+#[enum_dispatch::enum_dispatch(EnvelopeAccess)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "category", rename_all = "snake_case")]
 pub(crate) enum InventoryItemEnvelope {
@@ -120,22 +121,30 @@ pub(crate) enum InventoryItemEnvelope {
     PendingRecipes(ItemEnvelope<wf_inventory::recipe::PendingRecipe>),
 }
 
-macro_rules! for_each_envelope {
-    ($self:expr, $env:ident => $body:expr) => {
-        match $self {
-            InventoryItemEnvelope::Suits($env) => $body,
-            InventoryItemEnvelope::LongGuns($env) => $body,
-            InventoryItemEnvelope::Pistols($env) => $body,
-            InventoryItemEnvelope::Melee($env) => $body,
-            InventoryItemEnvelope::SpaceSuits($env) => $body,
-            InventoryItemEnvelope::SpaceGuns($env) => $body,
-            InventoryItemEnvelope::SpaceMelee($env) => $body,
-            InventoryItemEnvelope::RawUpgrades($env) => $body,
-            InventoryItemEnvelope::Upgrades($env) => $body,
-            InventoryItemEnvelope::Recipes($env) => $body,
-            InventoryItemEnvelope::PendingRecipes($env) => $body,
-        }
-    };
+/// Category-erased view over the `ItemEnvelope<T>` inside each variant —
+/// everything the envelope offers that doesn't depend on the item type.
+/// `enum_dispatch` generates the delegating impl on [`InventoryItemEnvelope`].
+#[enum_dispatch::enum_dispatch]
+pub(crate) trait EnvelopeAccess {
+    fn item_type(&self) -> &str;
+    fn item_other(&self) -> Option<&serde_json::Value>;
+    fn set_details(&mut self, details: wf_itemdata::item_data::ItemDetails);
+    fn set_market(&mut self, market: crate::market::MarketSummary);
+}
+
+impl<T: HasOther> EnvelopeAccess for ItemEnvelope<T> {
+    fn item_type(&self) -> &str {
+        &self.item_type
+    }
+    fn item_other(&self) -> Option<&serde_json::Value> {
+        self.item.other()
+    }
+    fn set_details(&mut self, details: wf_itemdata::item_data::ItemDetails) {
+        self.details = Some(details);
+    }
+    fn set_market(&mut self, market: crate::market::MarketSummary) {
+        self.market = Some(market);
+    }
 }
 
 impl InventoryItemEnvelope {
@@ -155,26 +164,14 @@ impl InventoryItemEnvelope {
         }
     }
 
-    pub fn item_type(&self) -> &str {
-        for_each_envelope!(self, env => &env.item_type)
-    }
-
     pub fn item_count(&self) -> Option<i64> {
         // Only recipes and raw upgrades model ItemCount; preserve the old
         // behavior of also finding it in the flattened catch-all elsewhere.
         match self {
             Self::Recipes(env) => Some(env.item.item_count),
             Self::RawUpgrades(env) => Some(env.item.item_count),
-            _ => for_each_envelope!(self, env => extract_other_item_count(env.item.other())),
+            _ => extract_other_item_count(self.item_other()),
         }
-    }
-
-    pub fn set_details(&mut self, details: wf_itemdata::item_data::ItemDetails) {
-        for_each_envelope!(self, env => env.details = Some(details))
-    }
-
-    pub fn set_market(&mut self, market: crate::market::MarketSummary) {
-        for_each_envelope!(self, env => env.market = Some(market))
     }
 }
 
@@ -189,6 +186,11 @@ trait HasOther {
     fn other_mut(&mut self) -> Option<&mut serde_json::Value>;
 }
 
+// The wf-inventory item types are unrelated structs that each happen to have
+// a `pub other: Option<Value>` catch-all; Rust has no structural typing, so a
+// blanket impl is impossible and the alternatives (a trait+impls in
+// wf-inventory, or a derive crate) are strictly more code for the same 11
+// impls. A field-accessor macro is the cheapest correct form here.
 macro_rules! impl_has_other {
     ($($ty:ty),+ $(,)?) => {
         $(impl HasOther for $ty {

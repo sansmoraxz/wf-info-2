@@ -11,6 +11,7 @@ use crate::enums::{Polarity, Slot, VaultStatus};
 
 /// Core item properties that ALL items in the game have.
 /// This is the base trait that every item type must implement.
+#[enum_dispatch::enum_dispatch]
 pub trait Item {
     /// Internal unique identifier path (e.g., "/Lotus/Powersuits/...")
     fn unique_name(&self) -> &str;

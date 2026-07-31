@@ -18,10 +18,11 @@ use super::events::{
 };
 use super::market::fetch_market_summary;
 use super::search::{
-    Category, InventoryItemEnvelope, build_tantivy_index, collect_inventory_items,
+    Category, EnvelopeAccess, InventoryItemEnvelope, build_tantivy_index, collect_inventory_items,
     get_or_build_inventory_index, search_inventory,
 };
 use wf_itemdata::item_data::lookup_item_info;
+use wf_itemdata::traits::Item as _;
 
 #[cfg(feature = "memory")]
 use wf_core::{inventory_refresh, process};
