@@ -46,6 +46,36 @@ pub enum AutoCallbacks {
     Skip,
 }
 
+/// Whether the relic reward-selection window is on screen.
+#[derive(Debug, Default, PartialEq, Eq)]
+enum RelicState {
+    #[default]
+    Closed,
+    Open,
+}
+
+impl RelicState {
+    /// Transition to open. Returns `false` on a duplicate open (window
+    /// already showing), so the caller can skip re-triggering OCR.
+    fn open(&mut self) -> bool {
+        if *self == Self::Open {
+            return false;
+        }
+        *self = Self::Open;
+        true
+    }
+
+    /// Transition to closed. Returns `false` when the window was never
+    /// observed open (stale close event).
+    fn close(&mut self) -> bool {
+        if *self == Self::Closed {
+            return false;
+        }
+        *self = Self::Closed;
+        true
+    }
+}
+
 #[derive(Debug, Default, PartialEq, Eq)]
 enum SessionState {
     #[default]
@@ -105,6 +135,7 @@ struct WatchState {
     /// Used to suppress DmTabOpened events for tabs we opened ourselves.
     self_initiated_dms: HashSet<String>,
     trade: TradeState,
+    relic: RelicState,
 }
 
 impl WatchState {
@@ -115,6 +146,7 @@ impl WatchState {
             session: SessionState::default(),
             self_initiated_dms: HashSet::new(),
             trade: TradeState::default(),
+            relic: RelicState::default(),
         }
     }
 }
@@ -211,11 +243,20 @@ fn event_emitter_fn(
                 state.trade.confirm_popup(info);
             }
             LogEvent::RelicOpen => {
+                if !state.relic.open() {
+                    log::debug!("Duplicate relic open event; window already showing");
+                    continue;
+                }
                 log::info!("Relic selection window opened");
                 tokio::spawn(handle_relic_selection_popup());
             }
             LogEvent::RelicClose => {
+                if !state.relic.close() {
+                    log::debug!("Relic close event without an observed open");
+                    continue;
+                }
                 log::info!("Relic selection window closed");
+                crate::emit(DaemonEvent::RelicSelectionClosed);
             }
         }
     }
