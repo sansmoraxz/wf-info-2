@@ -293,7 +293,7 @@ enum CliOp {
 impl CliOp {
     fn op_string(&self) -> String {
         match self {
-            Self::Known(op) => op.as_str().to_string(),
+            Self::Known(op) => op.to_string(),
             Self::Call(op) => op.clone(),
         }
     }

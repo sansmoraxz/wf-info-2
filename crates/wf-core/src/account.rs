@@ -1,26 +1,28 @@
 use serde::{Deserialize, Serialize};
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Platform {
-    PC = 0,
-    XBOX = 1,
-    PLAYSTATION = 2,
-    NINTENDO = 3,
-    IOS = 4,
-    ANDROID = 5,
-    UNKNOWN = 1999,
+    PC,
+    XBOX,
+    PLAYSTATION,
+    NINTENDO,
+    IOS,
+    ANDROID,
+    UNKNOWN,
 }
 
-impl From<&str> for Platform {
-    fn from(value: &str) -> Self {
-        use Platform::*;
-        match value {
-            "\u{e000}" => PC,
-            "\u{e001}" => XBOX,
-            "\u{e002}" => PLAYSTATION,
-            "\u{e003}" => NINTENDO,
-            "\u{e004}" => IOS,
-            "\u{e005}" => ANDROID,
-            _ => UNKNOWN,
+impl Platform {
+    /// Lossy lookup from the private-use glyph Warframe appends to player
+    /// names in chat logs; unrecognized glyphs map to `UNKNOWN`.
+    pub fn from_glyph(glyph: &str) -> Self {
+        match glyph {
+            "\u{e000}" => Self::PC,
+            "\u{e001}" => Self::XBOX,
+            "\u{e002}" => Self::PLAYSTATION,
+            "\u{e003}" => Self::NINTENDO,
+            "\u{e004}" => Self::IOS,
+            "\u{e005}" => Self::ANDROID,
+            _ => Self::UNKNOWN,
         }
     }
 }

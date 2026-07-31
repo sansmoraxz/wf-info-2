@@ -126,7 +126,7 @@ async fn handle_request(req: Request) -> HandleOutcome {
     let id = req.id.clone();
 
     // Handle subscribe separately since it needs to return the filter
-    if let Ok(ControlOp::Subscribe) = ControlOp::parse(&req.op) {
+    if let Ok(ControlOp::Subscribe) = req.op.parse() {
         let result =
             parse_params::<SubscribeParams>(req.params).and_then(subscription::handle_subscribe);
         return match result {
@@ -145,7 +145,10 @@ async fn handle_request(req: Request) -> HandleOutcome {
 }
 
 async fn dispatch(op: &str, params: Option<Value>) -> anyhow::Result<ResponseData> {
-    Ok(match ControlOp::parse(op)? {
+    let op: ControlOp = op
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Unknown operation '{}'", op))?;
+    Ok(match op {
         ControlOp::Ping => ResponseData::Ping(Box::new(PingResponse { pong: true })),
         ControlOp::InventoryLoad => ResponseData::InventoryLoad(Box::new(
             handle_inventory_load(parse_params(params)?).await?,

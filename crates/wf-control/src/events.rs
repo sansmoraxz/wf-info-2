@@ -204,4 +204,18 @@ mod tests {
         assert_eq!(value["payload"]["type"], "system_quit");
         assert_eq!(value["payload"]["reason"], "requested");
     }
+
+    #[test]
+    fn dm_tab_opened_platform_serializes_as_variant_name() {
+        let event = DmTabOpenedEvent {
+            timestamp: Utc::now(),
+            username: "player".into(),
+            platform: Platform::PLAYSTATION,
+        };
+        let value = serde_json::to_value(&event).unwrap();
+        assert_eq!(value["platform"], "PLAYSTATION");
+
+        let unknown = serde_json::to_value(Platform::UNKNOWN).unwrap();
+        assert_eq!(unknown, "UNKNOWN");
+    }
 }

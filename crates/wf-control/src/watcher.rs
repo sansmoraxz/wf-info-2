@@ -39,51 +39,95 @@ impl GameLifecycleTracker {
     }
 }
 
-struct WatchState {
-    current_username: Option<String>,
-    /// Usernames for which we issued `IRC out: WHO` (self-initiated DMs).
-    /// Used to suppress DmTabOpened events for tabs we opened ourselves.
-    self_initiated_dms: HashSet<String>,
-    /// Pending trade stored from recent confirmations
-    trades: Option<logs::TradeInfo>,
-    // Relic selection open
-    relic_countdown: bool,
+/// Whether login events trigger the automatic profile/inventory fetch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutoCallbacks {
+    Enabled,
+    Skip,
 }
 
-impl WatchState {
-    fn new() -> Self {
-        Self {
-            current_username: None,
-            self_initiated_dms: HashSet::new(),
-            trades: None,
-            relic_countdown: false,
-        }
-    }
+#[derive(Debug, Default, PartialEq, Eq)]
+enum SessionState {
+    #[default]
+    LoggedOut,
+    LoggedIn {
+        username: String,
+    },
+}
 
-    fn accept_login(&mut self, username: &str) -> bool {
-        if self.current_username.as_deref() == Some(username) {
+impl SessionState {
+    /// Transition to logged-in. Returns `false` when this is a duplicate
+    /// login for the same username (dedup lives in the transition).
+    fn login(&mut self, username: &str) -> bool {
+        if matches!(self, Self::LoggedIn { username: u } if u == username) {
             return false;
         }
-        self.current_username = Some(username.to_string());
+        *self = Self::LoggedIn {
+            username: username.to_string(),
+        };
         true
     }
 
-    fn reset_login(&mut self) {
-        self.current_username = None;
+    fn logout(&mut self) {
+        *self = Self::LoggedOut;
+    }
+}
+
+#[derive(Debug, Default)]
+enum TradeState {
+    #[default]
+    Idle,
+    Pending(logs::TradeInfo),
+}
+
+impl TradeState {
+    fn confirm_popup(&mut self, info: logs::TradeInfo) {
+        *self = Self::Pending(info);
+    }
+
+    /// Take the pending trade on success/failure; `None` when no trade was
+    /// pending (log stream out of sync).
+    fn resolve(&mut self) -> Option<logs::TradeInfo> {
+        match std::mem::take(self) {
+            Self::Pending(info) => Some(info),
+            Self::Idle => None,
+        }
+    }
+}
+
+struct WatchState {
+    #[cfg_attr(not(feature = "memory"), allow(dead_code))]
+    warframe_pid: Option<u32>,
+    #[cfg_attr(not(feature = "memory"), allow(dead_code))]
+    auto_callbacks: AutoCallbacks,
+    session: SessionState,
+    /// Usernames for which we issued `IRC out: WHO` (self-initiated DMs).
+    /// Used to suppress DmTabOpened events for tabs we opened ourselves.
+    self_initiated_dms: HashSet<String>,
+    trade: TradeState,
+}
+
+impl WatchState {
+    fn new(warframe_pid: Option<u32>, auto_callbacks: AutoCallbacks) -> Self {
+        Self {
+            warframe_pid,
+            auto_callbacks,
+            session: SessionState::default(),
+            self_initiated_dms: HashSet::new(),
+            trade: TradeState::default(),
+        }
     }
 }
 
 fn event_emitter_fn(
     mut state: WatchState,
     entries: Vec<LogEvent>,
-    _warframe_pid: Option<u32>,
-    _skip_cb: bool,
     lifecycle: &GameLifecycleTracker,
 ) -> WatchState {
     for entry in entries {
         match entry {
             LogEvent::Login(AccountInfo { username, .. }) => {
-                if !state.accept_login(&username) {
+                if !state.session.login(&username) {
                     log::debug!("Duplicate login event for username={}", username);
                     continue;
                 }
@@ -93,10 +137,14 @@ fn event_emitter_fn(
                     username: username.clone(),
                 }));
                 #[cfg(feature = "memory")]
-                tokio::spawn(handle_login_event(username, _warframe_pid, _skip_cb));
+                tokio::spawn(handle_login_event(
+                    username,
+                    state.warframe_pid,
+                    state.auto_callbacks,
+                ));
             }
             LogEvent::Logout => {
-                state.reset_login();
+                state.session.logout();
                 log::info!("User logged out");
                 crate::emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
                     timestamp: Utc::now(),
@@ -127,7 +175,7 @@ fn event_emitter_fn(
                 }
             }
             LogEvent::TradeSuccess => {
-                if let Some(trades) = state.trades.take() {
+                if let Some(trades) = state.trade.resolve() {
                     log::info!("Trade confirmed: {:?}", &trades);
                     let popup = crate::events::TradeConfirmPopupEvent {
                         sent: trades.sent,
@@ -143,7 +191,7 @@ fn event_emitter_fn(
                 }
             }
             LogEvent::TradeFail(reason) => {
-                if let Some(trades) = state.trades.take() {
+                if let Some(trades) = state.trade.resolve() {
                     log::info!("Trade failed: {:?}, reason: {}", &trades, reason);
                     let popup = crate::events::TradeConfirmPopupEvent {
                         sent: trades.sent,
@@ -160,15 +208,13 @@ fn event_emitter_fn(
             }
             LogEvent::TradeConfirmPopup(info) => {
                 log::info!("Got trade request confirmation: {:?}", info);
-                state.trades = Some(info);
+                state.trade.confirm_popup(info);
             }
             LogEvent::RelicOpen => {
                 log::info!("Relic selection window opened");
-                state.relic_countdown = true;
                 tokio::spawn(handle_relic_selection_popup());
             }
             LogEvent::RelicClose => {
-                state.relic_countdown = false;
                 log::info!("Relic selection window closed");
             }
         }
@@ -177,7 +223,11 @@ fn event_emitter_fn(
 }
 
 #[cfg(feature = "memory")]
-async fn handle_login_event(user_name: String, known_pid: Option<u32>, skip_cb: bool) {
+async fn handle_login_event(
+    user_name: String,
+    known_pid: Option<u32>,
+    auto_callbacks: AutoCallbacks,
+) {
     let Some(pid) = known_pid.or_else(process::get_warframe_pid) else {
         log::info!("Warframe not running - skipping profile and inventory fetch");
         return;
@@ -220,7 +270,7 @@ async fn handle_login_event(user_name: String, known_pid: Option<u32>, skip_cb: 
         }
     }
 
-    if skip_cb {
+    if auto_callbacks == AutoCallbacks::Skip {
         log::info!("Skipping auto fetch inventory. Fetch manually if required.");
         return;
     }
@@ -287,12 +337,12 @@ async fn handle_relic_selection_popup() {
 pub async fn observe_warframe_activity<S: LogSource>(
     source: S,
     warframe_pid: Option<u32>,
-    skip_cb: bool,
+    auto_callbacks: AutoCallbacks,
 ) -> Result<(), Box<dyn std::error::Error>> {
     observe_warframe_activity_with_lifecycle(
         source,
         warframe_pid,
-        skip_cb,
+        auto_callbacks,
         GameLifecycleTracker::default(),
     )
     .await
@@ -301,12 +351,12 @@ pub async fn observe_warframe_activity<S: LogSource>(
 pub async fn observe_warframe_activity_with_lifecycle<S: LogSource>(
     mut source: S,
     warframe_pid: Option<u32>,
-    skip_cb: bool,
+    auto_callbacks: AutoCallbacks,
     lifecycle: GameLifecycleTracker,
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Watching for Warframe activity...");
     let log_processor = LogProcessingEngine::new()?;
-    let mut state = WatchState::new();
+    let mut state = WatchState::new(warframe_pid, auto_callbacks);
     let mut assembler = LineAssembler::default();
 
     loop {
@@ -318,7 +368,7 @@ pub async fn observe_warframe_activity_with_lifecycle<S: LogSource>(
                 }
                 let entries = log_processor.extract_events(&lines);
                 log::debug!("Observed entries: {:?}", entries);
-                state = event_emitter_fn(state, entries, warframe_pid, skip_cb, &lifecycle);
+                state = event_emitter_fn(state, entries, &lifecycle);
             }
             None => {
                 log::info!("Log source closed");
@@ -472,15 +522,15 @@ mod tests {
 
     #[test]
     fn test_duplicate_login_suppression_resets_on_logout() {
-        let mut state = WatchState::new();
+        let mut session = SessionState::default();
 
-        assert!(state.accept_login(USERNAME));
-        assert!(!state.accept_login(USERNAME));
-        assert!(state.accept_login("AnotherPlayer"));
-        assert!(!state.accept_login("AnotherPlayer"));
+        assert!(session.login(USERNAME));
+        assert!(!session.login(USERNAME));
+        assert!(session.login("AnotherPlayer"));
+        assert!(!session.login("AnotherPlayer"));
 
-        state.reset_login();
-        assert!(state.accept_login("AnotherPlayer"));
+        session.logout();
+        assert!(session.login("AnotherPlayer"));
     }
 
     #[test]
@@ -489,10 +539,8 @@ mod tests {
         assert_eq!(lifecycle.exit_reason(), SystemQuitReason::Unexpected);
 
         event_emitter_fn(
-            WatchState::new(),
+            WatchState::new(None, AutoCallbacks::Skip),
             vec![LogEvent::QuitRequested],
-            None,
-            true,
             &lifecycle,
         );
 
@@ -741,7 +789,7 @@ mod tests {
             chunks: VecDeque::from([Ok(None)]),
         };
 
-        observe_warframe_activity(source, Some(1234), true)
+        observe_warframe_activity(source, Some(1234), AutoCallbacks::Skip)
             .await
             .unwrap();
     }

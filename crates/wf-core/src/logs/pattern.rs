@@ -2,7 +2,7 @@ use anyhow::Error;
 use regex::{Captures, Regex, RegexSet};
 
 use crate::{
-    account::AccountInfo,
+    account::{AccountInfo, Platform},
     logs::{DirectMessageInfo, LogEvent, TradeItem},
 };
 
@@ -109,7 +109,7 @@ impl LogEntryTransformer for TradeConfirmEntry {
         let sent = extract_trade_items(c.get(1)?.as_str());
         let name = c.get(2)?.as_str().to_string();
         let received = extract_trade_items(c.get(4)?.as_str());
-        let platform = c.get(3)?.as_str().into();
+        let platform = Platform::from_glyph(c.get(3)?.as_str());
 
         let info = crate::logs::TradeInfo {
             sent,
@@ -191,7 +191,7 @@ impl LogEntryTransformer for LoginEntry {
     /// A legacy `AccountId:` suffix may be present, but is deliberately ignored.
     fn transform(&self, c: &Captures) -> Option<LogEvent> {
         let name = c.get(1)?.as_str().to_string();
-        let platform = c.get(2)?.as_str().into();
+        let platform = Platform::from_glyph(c.get(2)?.as_str());
         let clan_name = c.get(3)?.as_str().to_string();
         let clan_id = c.get(4)?.as_str().to_string();
         let clan = [clan_name, "#".to_string(), clan_id].concat();
@@ -239,7 +239,7 @@ impl LogEntryTransformer for DMTabEntry {
     /// G1: name, G2: platform
     fn transform(&self, c: &Captures) -> Option<LogEvent> {
         let username = c.get(1)?.as_str().to_string();
-        let platform = c.get(2)?.as_str().into();
+        let platform = Platform::from_glyph(c.get(2)?.as_str());
         let dm_info = DirectMessageInfo { username, platform };
         Some(LogEvent::DmTabOpened(dm_info))
     }

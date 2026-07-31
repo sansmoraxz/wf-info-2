@@ -17,7 +17,7 @@ use tokio::task::JoinHandle;
 #[cfg(windows)]
 use tokio::time::{Sleep, sleep};
 
-use wf_control::watcher::GameLifecycleTracker;
+use wf_control::watcher::{AutoCallbacks, GameLifecycleTracker};
 use wf_control::{
     self, ControlConfig, ControlEndpoint, DaemonEvent, GameStartEvent, ScreenshotConfig,
     SystemQuitEvent,
@@ -99,8 +99,12 @@ impl ServerArgs {
     }
 }
 
-fn skip_auto_events() -> bool {
-    std::env::var("WF_SKIP_AUTO_CALLBACK").map_or(false, |v| v.eq_ignore_ascii_case("TRUE"))
+fn auto_callbacks_from_env() -> AutoCallbacks {
+    if std::env::var("WF_SKIP_AUTO_CALLBACK").is_ok_and(|v| v.eq_ignore_ascii_case("TRUE")) {
+        AutoCallbacks::Skip
+    } else {
+        AutoCallbacks::Enabled
+    }
 }
 
 fn emit_game_start() {
@@ -109,7 +113,7 @@ fn emit_game_start() {
     }));
 }
 
-async fn handle_game_exit(lifecycle: &GameLifecycleTracker, skip_cb: bool) {
+async fn handle_game_exit(lifecycle: &GameLifecycleTracker, auto_callbacks: AutoCallbacks) {
     let reason = lifecycle.exit_reason();
     log::info!("Warframe game process exited: reason={:?}", reason);
     wf_control::emit(DaemonEvent::SystemQuit(SystemQuitEvent {
@@ -117,7 +121,7 @@ async fn handle_game_exit(lifecycle: &GameLifecycleTracker, skip_cb: bool) {
         reason,
     }));
 
-    if !skip_cb {
+    if auto_callbacks == AutoCallbacks::Enabled {
         wf_control::wfm_auth::set_status_if_connected(wf_control::wfm_auth::Status::Invisible)
             .await;
     }
@@ -204,7 +208,7 @@ async fn wait_for_new_game_pid_or_launcher_exit(
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
-    let skip_cb = skip_auto_events();
+    let auto_callbacks = auto_callbacks_from_env();
 
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     log::info!("Warframe Account Info Scanner started");
@@ -306,7 +310,7 @@ async fn main() {
 
     emit_game_start();
 
-    if skip_cb {
+    if auto_callbacks == AutoCallbacks::Skip {
         log::info!("Skipping auto set of warframe market status...");
     } else {
         tokio::spawn(async {
@@ -341,7 +345,7 @@ async fn main() {
         if let Err(e) = wf_control::watcher::observe_warframe_activity_with_lifecycle(
             log_source,
             Some(warframe_pid),
-            skip_cb,
+            auto_callbacks,
             watcher_lifecycle,
         )
         .await
@@ -376,7 +380,7 @@ async fn main() {
     };
 
     if game_exited {
-        handle_game_exit(&lifecycle, skip_cb).await;
+        handle_game_exit(&lifecycle, auto_callbacks).await;
     }
 }
 
@@ -414,7 +418,7 @@ mod tests {
             DaemonEvent::GameStart(_)
         ));
 
-        handle_game_exit(&GameLifecycleTracker::default(), true).await;
+        handle_game_exit(&GameLifecycleTracker::default(), AutoCallbacks::Skip).await;
         assert!(matches!(
             events.recv().await.unwrap(),
             DaemonEvent::SystemQuit(SystemQuitEvent {
