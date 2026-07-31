@@ -86,9 +86,45 @@ pub async fn wait_for_warframe_start() -> u32 {
     }
 }
 
-pub async fn wait_for_new_warframe_start(existing_pids: &HashSet<u32>) -> u32 {
+fn is_descendant_of(system: &System, pid: u32, ancestor_pid: u32) -> bool {
+    let ancestor = sysinfo::Pid::from_u32(ancestor_pid);
+    let mut current = sysinfo::Pid::from_u32(pid);
+    // Bounded walk guards against parent-chain cycles from PID reuse.
+    for _ in 0..64 {
+        let Some(parent) = system.process(current).and_then(|p| p.parent()) else {
+            return false;
+        };
+        if parent == ancestor {
+            return true;
+        }
+        current = parent;
+    }
+    false
+}
+
+fn find_new_warframe_pid(
+    system: &System,
+    existing_pids: &HashSet<u32>,
+    launcher_pid: u32,
+) -> Option<u32> {
+    let candidates: Vec<u32> = find_all_warframe_pids(system)
+        .into_iter()
+        .filter(|pid| !existing_pids.contains(pid))
+        .collect();
+    candidates
+        .iter()
+        .copied()
+        .find(|pid| is_descendant_of(system, *pid, launcher_pid))
+        // Wine/Steam can reparent the game process out of the launcher's
+        // tree (e.g. under Steam's subreaper), so fall back to any new
+        // Warframe game process.
+        .or_else(|| candidates.first().copied())
+}
+
+pub async fn wait_for_new_warframe_start(existing_pids: &HashSet<u32>, launcher_pid: u32) -> u32 {
     log::info!(
-        "Waiting for launched Warframe game process; excluding existing PIDs: {:?}",
+        "Waiting for launched Warframe game process under launcher PID {}; excluding existing PIDs: {:?}",
+        launcher_pid,
         existing_pids
     );
     let mut system = System::new();
@@ -96,10 +132,7 @@ pub async fn wait_for_new_warframe_start(existing_pids: &HashSet<u32>) -> u32 {
     loop {
         refresh_all_process_commands(&mut system);
 
-        if let Some(pid) = find_all_warframe_pids(&system)
-            .into_iter()
-            .find(|pid| !existing_pids.contains(pid))
-        {
+        if let Some(pid) = find_new_warframe_pid(&system, existing_pids, launcher_pid) {
             log::info!("Launched Warframe game process detected (PID: {}).", pid);
             return pid;
         }
@@ -108,9 +141,52 @@ pub async fn wait_for_new_warframe_start(existing_pids: &HashSet<u32>) -> u32 {
     }
 }
 
-pub async fn wait_for_warframe_exit(pid: u32) {
-    while is_warframe_pid(pid) {
-        sleep(Duration::from_secs(1)).await;
+const DEFAULT_HANDOFF_GRACE: Duration = Duration::from_secs(10);
+
+/// How long to keep scanning for a successor Warframe process after the
+/// tracked one dies before declaring the game exited: the bootstrap
+/// Warframe.x64.exe hands off to the real game process, and on slow systems
+/// the successor may not be up yet. Tradeoff: a genuine quit is only reported
+/// after this window. Tunable via WF_HANDOFF_GRACE_SECS.
+pub fn handoff_grace() -> Duration {
+    std::env::var("WF_HANDOFF_GRACE_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .map(Duration::from_secs)
+        .unwrap_or(DEFAULT_HANDOFF_GRACE)
+}
+
+pub async fn wait_for_warframe_exit(pid: u32, launcher_pid: u32, existing_pids: &HashSet<u32>) {
+    let mut tracked = pid;
+    loop {
+        while is_warframe_pid(tracked) {
+            sleep(Duration::from_secs(1)).await;
+        }
+
+        let deadline = tokio::time::Instant::now() + handoff_grace();
+        let successor = loop {
+            let mut system = System::new();
+            refresh_all_process_commands(&mut system);
+            if let Some(next) = find_new_warframe_pid(&system, existing_pids, launcher_pid) {
+                break Some(next);
+            }
+            if tokio::time::Instant::now() >= deadline {
+                break None;
+            }
+            sleep(Duration::from_secs(1)).await;
+        };
+
+        match successor {
+            Some(next) => {
+                log::info!(
+                    "Tracked Warframe PID {} exited; continuing with successor PID {}",
+                    tracked,
+                    next
+                );
+                tracked = next;
+            }
+            None => return,
+        }
     }
 }
 

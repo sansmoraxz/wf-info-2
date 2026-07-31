@@ -160,14 +160,12 @@ fn merged_winedebug_value(existing: Option<OsString>) -> OsString {
 }
 
 #[cfg(windows)]
-const GAME_START_TIMEOUT: Duration = Duration::from_secs(120);
-
-#[cfg(windows)]
 async fn wait_for_new_game_pid_or_launcher_exit(
     existing_pids: &std::collections::HashSet<u32>,
+    launcher_pid: u32,
     child_handle: &mut JoinHandle<Result<std::process::ExitStatus, std::io::Error>>,
 ) -> u32 {
-    let wait_for_pid = process::wait_for_new_warframe_start(existing_pids);
+    let wait_for_pid = process::wait_for_new_warframe_start(existing_pids, launcher_pid);
     tokio::pin!(wait_for_pid);
 
     let mut timeout: Option<Pin<Box<Sleep>>> = None;
@@ -181,7 +179,7 @@ async fn wait_for_new_game_pid_or_launcher_exit(
                 match result {
                     Ok(Ok(status)) => {
                         log::info!("Warframe launcher exited with status: {}", status);
-                        timeout = Some(Box::pin(sleep(GAME_START_TIMEOUT)));
+                        timeout = Some(Box::pin(sleep(process::handoff_grace())));
                     }
                     Ok(Err(e)) => {
                         log::error!("Error waiting for Warframe launcher process: {}", e);
@@ -281,7 +279,8 @@ async fn main() {
 
     #[cfg(unix)]
     let warframe_pid = {
-        let wait_for_pid = process::wait_for_new_warframe_start(&existing_warframe_pids);
+        let wait_for_pid =
+            process::wait_for_new_warframe_start(&existing_warframe_pids, launcher_pid);
         tokio::pin!(wait_for_pid);
 
         tokio::select! {
@@ -290,8 +289,12 @@ async fn main() {
         }
     };
     #[cfg(windows)]
-    let warframe_pid =
-        wait_for_new_game_pid_or_launcher_exit(&existing_warframe_pids, &mut child_handle).await;
+    let warframe_pid = wait_for_new_game_pid_or_launcher_exit(
+        &existing_warframe_pids,
+        launcher_pid,
+        &mut child_handle,
+    )
+    .await;
 
     #[cfg(windows)]
     {
@@ -354,7 +357,8 @@ async fn main() {
         }
     });
 
-    let game_exit = process::wait_for_warframe_exit(warframe_pid);
+    let game_exit =
+        process::wait_for_warframe_exit(warframe_pid, launcher_pid, &existing_warframe_pids);
     tokio::pin!(game_exit);
 
     let game_exited = tokio::select! {
