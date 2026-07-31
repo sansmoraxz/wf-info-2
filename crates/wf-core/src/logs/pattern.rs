@@ -268,7 +268,7 @@ impl LogEntryTransformer for RelicRewardOpen {
 lgreg!(
     RelicRewardClose,
     RELIC_CLOSE_REGEX,
-    r"(?Rm)\d+\.\d+ Script \[Info\]: ProjectionRewardChoice\.lua: Relic timer closed$"
+    r"(?Rm)\d+\.\d+ Script \[Info\]: ProjectionRewardChoice\.lua: Relic reward screen shut down$"
 );
 
 impl LogEntryTransformer for RelicRewardClose {
