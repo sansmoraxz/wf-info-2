@@ -120,7 +120,9 @@ fn capture_pipewire_frame(portal_stream: PortalStream) -> Result<Vec<u8>> {
     let appsink = gst_app::AppSink::builder()
         .caps(
             &gst::Caps::builder("video/x-raw")
-                .field("format", "RGBA")
+                // BGRA matches BMP's byte order, so rows copy straight
+                // through; videoconvert does any swizzling upstream.
+                .field("format", "BGRA")
                 .build(),
         )
         .max_buffers(1)
@@ -210,13 +212,11 @@ fn sample_to_bmp(sample: gst::Sample) -> Result<Vec<u8>> {
         let bmp_row_start = pixel_offset + row * bmp_stride;
         let bmp_row = &mut bmp[bmp_row_start..bmp_row_start + width as usize * 3];
         for (out, pixel) in bmp_row.chunks_exact_mut(3).zip(row_bytes.chunks_exact(4)) {
-            out[0] = pixel[2];
-            out[1] = pixel[1];
-            out[2] = pixel[0];
+            out.copy_from_slice(&pixel[..3]);
         }
     }
     log::trace!(
-        "Screenshot Wayland portal RGBA-to-BMP pixel conversion completed in {:?}",
+        "Screenshot Wayland portal BGRA-to-BMP pixel conversion completed in {:?}",
         convert_start.elapsed()
     );
 
