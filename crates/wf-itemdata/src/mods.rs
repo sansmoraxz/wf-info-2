@@ -21,7 +21,7 @@ pub type Root = Vec<ModEntry>;
 /// 2. SetMemberModData (requires `modSet` field)
 /// 3. SetDefinitionModData (requires `numUpgradesInSet` field)
 /// 4. RegularModData (fallback)
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, derive_more::IsVariant)]
 #[serde(untagged)]
 pub enum ModEntry {
     Riven(RivenModData),
@@ -196,24 +196,8 @@ impl ModEntry {
         }
     }
 
-    pub fn is_riven(&self) -> bool {
-        matches!(self, ModEntry::Riven(_))
-    }
-
     pub fn is_set(&self) -> bool {
-        matches!(self, ModEntry::SetMember(_) | ModEntry::SetDefinition(_))
-    }
-
-    pub fn is_set_member(&self) -> bool {
-        matches!(self, ModEntry::SetMember(_))
-    }
-
-    pub fn is_set_definition(&self) -> bool {
-        matches!(self, ModEntry::SetDefinition(_))
-    }
-
-    pub fn is_regular(&self) -> bool {
-        matches!(self, ModEntry::Regular(_))
+        self.is_set_member() || self.is_set_definition()
     }
 }
 

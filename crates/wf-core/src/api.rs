@@ -1,25 +1,13 @@
 use crate::process::AuthQuery;
 use crate::profile::ProfileData;
-use std::fmt;
 use wf_inventory::Inventory;
 
 const PLAYER_INFO_URL: &str = "https://api.warframe.com/cdn/getProfileViewingData.php";
 const INVENTORY_URL: &str = "https://api.warframe.com/api/inventory.php";
 
-#[derive(Debug)]
-pub struct InventoryAuthorizationRejected(reqwest::StatusCode);
-
-impl fmt::Display for InventoryAuthorizationRejected {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "Inventory authorization was rejected with status {}",
-            self.0
-        )
-    }
-}
-
-impl std::error::Error for InventoryAuthorizationRejected {}
+#[derive(Debug, derive_more::Display, derive_more::Error)]
+#[display("Inventory authorization was rejected with status {_0}")]
+pub struct InventoryAuthorizationRejected(#[error(not(source))] reqwest::StatusCode);
 
 pub fn is_inventory_authorization_rejected(error: &anyhow::Error) -> bool {
     error

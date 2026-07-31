@@ -9,6 +9,7 @@ aes-gcm.workspace = true
 anyhow.workspace = true
 cbc.workspace = true
 chrono.workspace = true
+derive_more.workspace = true
 dirs.workspace = true
 log.workspace = true
 rand.workspace = true

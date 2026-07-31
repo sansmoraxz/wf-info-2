@@ -231,7 +231,7 @@ impl ComponentWeapon {
 ///
 /// This enum represents whether an item has ranged (gun) or melee weapon stats.
 /// It's computed from the presence of type-specific fields, not directly deserialized.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, derive_more::IsVariant)]
 pub enum WeaponTypeStats {
     /// Ranged weapon (gun) - has magazine, reload, trigger, noise
     Ranged(RangedWeaponData),
@@ -349,16 +349,6 @@ impl WeaponTypeStats {
         } else {
             WeaponTypeStats::None
         }
-    }
-
-    /// Check if this is a ranged weapon
-    pub fn is_ranged(&self) -> bool {
-        matches!(self, WeaponTypeStats::Ranged(_))
-    }
-
-    /// Check if this is a melee weapon
-    pub fn is_melee(&self) -> bool {
-        matches!(self, WeaponTypeStats::Melee(_))
     }
 
     /// Get ranged weapon data if available

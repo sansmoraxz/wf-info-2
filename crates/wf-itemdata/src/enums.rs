@@ -1295,7 +1295,7 @@ pub enum Slot {
 ///
 /// This is a computed enum derived from the combination of `is_prime`,
 /// `vaulted`, `vault_date`, and `estimated_vault_date` fields.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, derive_more::IsVariant)]
 pub enum VaultStatus {
     /// Not a Prime item (is_prime = false)
     #[default]
@@ -1335,11 +1335,7 @@ impl VaultStatus {
     }
 
     pub fn is_prime(&self) -> bool {
-        !matches!(self, VaultStatus::NotPrime)
-    }
-
-    pub fn is_vaulted(&self) -> bool {
-        matches!(self, VaultStatus::Vaulted { .. })
+        !self.is_not_prime()
     }
 
     pub fn is_accessible(&self) -> bool {
@@ -1364,7 +1360,7 @@ impl VaultStatus {
 /// Mod category classification.
 ///
 /// This is a computed enum derived from mod field presence.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, derive_more::IsVariant)]
 pub enum ModCategory {
     /// Riven mod with unveiling challenges
     Riven,
@@ -1378,27 +1374,8 @@ pub enum ModCategory {
 }
 
 impl ModCategory {
-    pub fn is_riven(&self) -> bool {
-        matches!(self, ModCategory::Riven)
-    }
-
     pub fn is_set(&self) -> bool {
-        matches!(
-            self,
-            ModCategory::SetMember { .. } | ModCategory::SetDefinition { .. }
-        )
-    }
-
-    pub fn is_set_member(&self) -> bool {
-        matches!(self, ModCategory::SetMember { .. })
-    }
-
-    pub fn is_set_definition(&self) -> bool {
-        matches!(self, ModCategory::SetDefinition { .. })
-    }
-
-    pub fn is_regular(&self) -> bool {
-        matches!(self, ModCategory::Regular)
+        self.is_set_member() || self.is_set_definition()
     }
 
     pub fn mod_set(&self) -> Option<&str> {
