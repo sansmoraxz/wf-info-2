@@ -302,20 +302,15 @@ struct StatusSetPayload {
 }
 
 #[derive(Debug, Serialize)]
-#[serde(untagged)]
+#[serde(tag = "state", rename_all = "snake_case")]
 pub(crate) enum SignstatusResponse {
     Authenticated {
-        authenticated: bool,
         status: Option<Status>,
         expires_at: String,
         expired: bool,
     },
-    Unauthenticated {
-        authenticated: bool,
-        status: Option<Status>,
-    },
+    Unauthenticated,
     Set {
-        ok: bool,
         status: Status,
     },
 }
@@ -329,16 +324,12 @@ pub(crate) async fn handle_wfm_signstatus(p: SignstatusParams) -> Result<Signsta
                 let expires_at = session.tokens.expires_at;
                 let expired = expires_at < Utc::now();
                 Ok(SignstatusResponse::Authenticated {
-                    authenticated: true,
                     status: session.current_status,
                     expires_at: expires_at.to_rfc3339(),
                     expired,
                 })
             }
-            None => Ok(SignstatusResponse::Unauthenticated {
-                authenticated: false,
-                status: None,
-            }),
+            None => Ok(SignstatusResponse::Unauthenticated),
         };
     }
 
@@ -378,7 +369,7 @@ pub(crate) async fn handle_wfm_signstatus(p: SignstatusParams) -> Result<Signsta
         }
     }
 
-    Ok(SignstatusResponse::Set { ok: true, status })
+    Ok(SignstatusResponse::Set { status })
 }
 
 // ── Sign in handler ──

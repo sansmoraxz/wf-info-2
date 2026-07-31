@@ -236,25 +236,17 @@ where
             continue;
         }
 
-        let response = requests::handle_line(line).await;
+        let outcome = requests::handle_line(line).await;
 
-        // Check if this is a subscribe response that transitions to subscription mode
-        if let Some(filter) = response.subscription_filter.clone() {
-            // Send the success response first
-            let payload = serde_json::to_string(&response.response)
-                .context("Failed to serialize response")?;
-            writer.write_all(payload.as_bytes()).await?;
-            writer.write_all(b"\n").await?;
+        let payload =
+            serde_json::to_string(outcome.response()).context("Failed to serialize response")?;
+        writer.write_all(payload.as_bytes()).await?;
+        writer.write_all(b"\n").await?;
 
-            // Enter subscription mode
+        if let requests::HandleOutcome::EnterSubscription { filter, .. } = outcome {
             handle_subscription_mode(&mut lines, &mut writer, filter).await?;
             return Ok(());
         }
-
-        let payload =
-            serde_json::to_string(&response.response).context("Failed to serialize response")?;
-        writer.write_all(payload.as_bytes()).await?;
-        writer.write_all(b"\n").await?;
     }
 
     Ok(())
@@ -316,8 +308,8 @@ where
                         }
 
                         // Handle regular requests while subscribed (e.g., ping)
-                        let response = requests::handle_line(line).await;
-                        let payload = serde_json::to_string(&response.response)
+                        let outcome = requests::handle_line(line).await;
+                        let payload = serde_json::to_string(outcome.response())
                             .context("Failed to serialize response")?;
                         writer.write_all(payload.as_bytes()).await?;
                         writer.write_all(b"\n").await?;

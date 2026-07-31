@@ -54,51 +54,75 @@ pub(crate) enum ResponseData {
 #[derive(Debug, Serialize)]
 pub struct Response {
     pub id: Option<String>,
-    pub ok: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<ResponseData>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+    #[serde(flatten)]
+    body: ResponseBody,
+}
+
+/// Success and failure are mutually exclusive; the `ok` wire marker is fixed
+/// per variant via `monostate` (legacy shape:
+/// `{"ok":true,"data":..}` / `{"ok":false,"error":..}`).
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+enum ResponseBody {
+    Ok {
+        ok: monostate::MustBe!(true),
+        data: ResponseData,
+    },
+    Err {
+        ok: monostate::MustBe!(false),
+        error: String,
+    },
 }
 
 impl Response {
     fn ok(id: Option<String>, data: ResponseData) -> Self {
         Self {
             id,
-            ok: true,
-            data: Some(data),
-            error: None,
+            body: ResponseBody::Ok {
+                ok: monostate::MustBe!(true),
+                data,
+            },
         }
     }
 
     fn error(id: Option<String>, message: String) -> Self {
         Self {
             id,
-            ok: false,
-            data: None,
-            error: Some(message),
+            body: ResponseBody::Err {
+                ok: monostate::MustBe!(false),
+                error: message,
+            },
         }
     }
 }
 
-/// Result of handling a request, including optional subscription filter.
-pub(crate) struct HandleResult {
-    pub response: Response,
-    /// If set, the connection should transition to subscription mode with this filter.
-    pub subscription_filter: Option<EventFilter>,
+/// Outcome of handling a request line: either a plain reply, or a reply that
+/// transitions the connection into subscription mode.
+pub(crate) enum HandleOutcome {
+    Reply(Response),
+    EnterSubscription {
+        response: Response,
+        filter: EventFilter,
+    },
 }
 
-pub(crate) async fn handle_line(line: &str) -> HandleResult {
-    match serde_json::from_str::<Request>(line) {
-        Ok(req) => handle_request(req).await,
-        Err(e) => HandleResult {
-            response: Response::error(None, format!("Invalid request: {}", e)),
-            subscription_filter: None,
-        },
+impl HandleOutcome {
+    pub(crate) fn response(&self) -> &Response {
+        match self {
+            Self::Reply(response) => response,
+            Self::EnterSubscription { response, .. } => response,
+        }
     }
 }
 
-async fn handle_request(req: Request) -> HandleResult {
+pub(crate) async fn handle_line(line: &str) -> HandleOutcome {
+    match serde_json::from_str::<Request>(line) {
+        Ok(req) => handle_request(req).await,
+        Err(e) => HandleOutcome::Reply(Response::error(None, format!("Invalid request: {}", e))),
+    }
+}
+
+async fn handle_request(req: Request) -> HandleOutcome {
     let id = req.id.clone();
 
     // Handle subscribe separately since it needs to return the filter
@@ -106,26 +130,18 @@ async fn handle_request(req: Request) -> HandleResult {
         let result =
             parse_params::<SubscribeParams>(req.params).and_then(subscription::handle_subscribe);
         return match result {
-            Ok(result) => HandleResult {
+            Ok(result) => HandleOutcome::EnterSubscription {
                 response: Response::ok(id, ResponseData::Subscribe(Box::new(result.response))),
-                subscription_filter: Some(result.filter),
+                filter: result.filter,
             },
-            Err(e) => HandleResult {
-                response: Response::error(id, e.to_string()),
-                subscription_filter: None,
-            },
+            Err(e) => HandleOutcome::Reply(Response::error(id, e.to_string())),
         };
     }
 
-    let result = dispatch(&req.op, req.params).await;
-
-    HandleResult {
-        response: match result {
-            Ok(data) => Response::ok(id, data),
-            Err(e) => Response::error(id, e.to_string()),
-        },
-        subscription_filter: None,
-    }
+    HandleOutcome::Reply(match dispatch(&req.op, req.params).await {
+        Ok(data) => Response::ok(id, data),
+        Err(e) => Response::error(id, e.to_string()),
+    })
 }
 
 async fn dispatch(op: &str, params: Option<Value>) -> anyhow::Result<ResponseData> {
@@ -187,19 +203,19 @@ mod tests {
 
     #[tokio::test]
     async fn ping_response_matches_legacy_wire_shape() {
-        let result = handle_line(r#"{"id":"1","op":"ping"}"#).await;
-        let value = serde_json::to_value(&result.response).unwrap();
+        let outcome = handle_line(r#"{"id":"1","op":"ping"}"#).await;
+        let value = serde_json::to_value(outcome.response()).unwrap();
         assert_eq!(
             value,
             json!({ "id": "1", "ok": true, "data": { "pong": true } })
         );
-        assert!(result.subscription_filter.is_none());
+        assert!(matches!(outcome, HandleOutcome::Reply(_)));
     }
 
     #[tokio::test]
     async fn malformed_request_returns_error_shape() {
-        let result = handle_line("not json").await;
-        let value = serde_json::to_value(&result.response).unwrap();
+        let outcome = handle_line("not json").await;
+        let value = serde_json::to_value(outcome.response()).unwrap();
         assert_eq!(value["ok"], json!(false));
         assert!(
             value["error"]
@@ -213,24 +229,24 @@ mod tests {
 
     #[tokio::test]
     async fn unknown_op_returns_error() {
-        let result = handle_line(r#"{"id":"2","op":"nope"}"#).await;
-        let value = serde_json::to_value(&result.response).unwrap();
+        let outcome = handle_line(r#"{"id":"2","op":"nope"}"#).await;
+        let value = serde_json::to_value(outcome.response()).unwrap();
         assert_eq!(value["ok"], json!(false));
         assert_eq!(value["error"], json!("Unknown operation 'nope'"));
     }
 
     #[tokio::test]
     async fn subscribe_returns_filter_and_typed_response() {
-        let result =
+        let outcome =
             handle_line(r#"{"id":"3","op":"subscribe","params":{"events":["game_start"]}}"#).await;
-        let value = serde_json::to_value(&result.response).unwrap();
+        let value = serde_json::to_value(outcome.response()).unwrap();
         assert_eq!(value["ok"], json!(true));
         assert_eq!(value["data"]["subscribed"], json!(true));
         assert_eq!(
             value["data"]["filter"]["allowed_events"],
             json!(["game_start"])
         );
-        assert!(result.subscription_filter.is_some());
+        assert!(matches!(outcome, HandleOutcome::EnterSubscription { .. }));
     }
 
     #[test]
@@ -239,18 +255,14 @@ mod tests {
     }
 
     #[test]
-    fn signstatus_response_matches_legacy_shapes() {
-        let unauth = SignstatusResponse::Unauthenticated {
-            authenticated: false,
-            status: None,
-        };
+    fn signstatus_response_wire_shapes() {
+        let unauth = SignstatusResponse::Unauthenticated;
         assert_eq!(
             serde_json::to_value(&unauth).unwrap(),
-            json!({ "authenticated": false, "status": null })
+            json!({ "state": "unauthenticated" })
         );
 
         let auth = SignstatusResponse::Authenticated {
-            authenticated: true,
             status: Some(crate::wfm_auth::Status::Online),
             expires_at: "2026-07-27T00:00:00+00:00".into(),
             expired: false,
@@ -258,7 +270,7 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&auth).unwrap(),
             json!({
-                "authenticated": true,
+                "state": "authenticated",
                 "status": "online",
                 "expires_at": "2026-07-27T00:00:00+00:00",
                 "expired": false,
@@ -266,12 +278,11 @@ mod tests {
         );
 
         let set = SignstatusResponse::Set {
-            ok: true,
             status: crate::wfm_auth::Status::Ingame,
         };
         assert_eq!(
             serde_json::to_value(&set).unwrap(),
-            json!({ "ok": true, "status": "ingame" })
+            json!({ "state": "set", "status": "ingame" })
         );
     }
 }

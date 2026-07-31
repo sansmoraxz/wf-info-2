@@ -11,6 +11,7 @@ dirs.workspace = true
 futures-util.workspace = true
 image.workspace = true
 log.workspace = true
+monostate.workspace = true
 notify.workspace = true
 notify-debouncer-mini.workspace = true
 rand.workspace = true
