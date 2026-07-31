@@ -27,6 +27,69 @@ struct WsMessage {
     ref_id: Option<String>,
 }
 
+// ── WS routes ──
+
+/// Outbound command routes on the WFM socket.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString)]
+enum WsRoute {
+    #[strum(serialize = "@wfm|cmd/auth/signIn")]
+    AuthSignIn,
+    #[strum(serialize = "@wfm|cmd/status/set")]
+    StatusSet,
+}
+
+/// Server-pushed event routes on the WFM socket.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString)]
+enum WsEvent {
+    #[strum(serialize = "@wfm|event/status/set")]
+    StatusSet,
+    #[strum(serialize = "@wfm|event/auth/revoked")]
+    AuthRevoked,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReplyOutcome {
+    Ok,
+    Error,
+}
+
+/// A classified incoming route: the server replies to a command sent as
+/// `cmd/foo` with `cmd/foo:ok` or `cmd/foo:error`.
+enum IncomingRoute {
+    Reply {
+        command: WsRoute,
+        outcome: ReplyOutcome,
+    },
+    Event(WsEvent),
+    Other,
+}
+
+impl From<&str> for IncomingRoute {
+    fn from(route: &str) -> Self {
+        let (base, outcome) = if let Some(base) = route.strip_suffix(":ok") {
+            (base, ReplyOutcome::Ok)
+        } else if let Some(base) = route.strip_suffix(":error") {
+            (base, ReplyOutcome::Error)
+        } else {
+            return route.parse::<WsEvent>().map_or(Self::Other, Self::Event);
+        };
+        base.parse::<WsRoute>()
+            .map_or(Self::Other, |command| Self::Reply { command, outcome })
+    }
+}
+
+/// Reply to a command, as delivered by the recv loop.
+#[derive(Debug)]
+struct WsReply {
+    outcome: ReplyOutcome,
+    payload: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StatusEventPayload {
+    status: Status,
+}
+
 // ── Session state ──
 
 /// A warframe.market profile status. Serialized lowercase on the WFM wire.
@@ -48,16 +111,25 @@ pub enum Status {
     Ingame,
 }
 
-struct WfmSession {
+type PendingMap = Arc<Mutex<HashMap<WsRoute, oneshot::Sender<WsReply>>>>;
+
+/// An open WFM WebSocket that has NOT been authenticated yet. The only way to
+/// obtain a [`WfmSession`] is to consume this via [`WsConnection::authenticate`],
+/// so an unauthenticated connection can never be stored in the global session.
+struct WsConnection {
     ws_tx: futures_util::stream::SplitSink<
         WebSocketStream<MaybeTlsStream<TcpStream>>,
         tungstenite::Message,
     >,
+    /// Pending requests waiting for a response, keyed by command route
+    pending: PendingMap,
+}
+
+struct WfmSession {
+    conn: WsConnection,
     #[allow(dead_code)]
     tokens: AuthTokenData,
     current_status: Option<Status>,
-    /// Pending requests waiting for a response, keyed by route
-    pending: Arc<Mutex<HashMap<String, oneshot::Sender<WsMessage>>>>,
 }
 
 static SESSION: OnceLock<RwLock<Option<WfmSession>>> = OnceLock::new();
@@ -114,63 +186,88 @@ async fn rest_signin(email: &str, password: &str, device_id: &str) -> Result<Str
 
 // ── WebSocket connection ──
 
-async fn connect_and_auth(tokens: AuthTokenData) -> Result<()> {
-    let mut request = WFM_WS_URL.into_client_request()?;
-    request
-        .headers_mut()
-        .insert(header::SEC_WEBSOCKET_PROTOCOL, WFM_SUB_PROTOCOL.parse()?);
+impl WsConnection {
+    /// Open the WFM WebSocket and spawn its recv loop. The connection is not
+    /// authenticated yet — call [`Self::authenticate`] to obtain a session.
+    async fn connect() -> Result<Self> {
+        let mut request = WFM_WS_URL.into_client_request()?;
+        request
+            .headers_mut()
+            .insert(header::SEC_WEBSOCKET_PROTOCOL, WFM_SUB_PROTOCOL.parse()?);
 
-    let (ws_stream, _response) = tokio_tungstenite::connect_async(request).await?;
+        let (ws_stream, _response) = tokio_tungstenite::connect_async(request).await?;
 
-    let pending: Arc<Mutex<HashMap<String, oneshot::Sender<WsMessage>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+        let pending: PendingMap = Arc::new(Mutex::new(HashMap::new()));
+        let (ws_tx, ws_rx) = ws_stream.split();
 
-    let (ws_tx, ws_rx) = ws_stream.split();
+        tokio::spawn(ws_recv_loop(ws_rx, pending.clone()));
 
-    // Spawn reader task
-    let pending_clone = pending.clone();
-    tokio::spawn(ws_recv_loop(ws_rx, pending_clone));
-
-    let session = WfmSession {
-        ws_tx,
-        tokens: tokens.clone(),
-        current_status: None,
-        pending,
-    };
-
-    {
-        let mut guard = session_lock().write().await;
-        *guard = Some(session);
+        Ok(Self { ws_tx, pending })
     }
 
-    // Authenticate on the WebSocket
-    let resp = ws_command(
-        "@wfm|cmd/auth/signIn",
-        json!({ "token": tokens.access_token }),
-    )
-    .await?;
+    /// Authenticate on the socket, consuming the connection. On failure the
+    /// connection is dropped — an unauthenticated session can never leak out.
+    async fn authenticate(mut self, tokens: AuthTokenData) -> Result<WfmSession> {
+        let rx = self
+            .send_command(WsRoute::AuthSignIn, json!({ "token": tokens.access_token }))
+            .await?;
+        let reply = await_reply(rx).await?;
 
-    if let Some(route) = &resp.route {
-        if route.ends_with(":error") {
-            let err_msg = resp
+        if reply.outcome == ReplyOutcome::Error {
+            let err_msg = reply
                 .payload
                 .as_ref()
                 .and_then(|p| p.as_str())
                 .unwrap_or("unknown error");
-            // Clear session on auth failure
-            let mut guard = session_lock().write().await;
-            *guard = None;
             return Err(anyhow!("WS auth failed: {}", err_msg));
         }
+
+        log::info!("WFM WebSocket authenticated");
+        Ok(WfmSession {
+            conn: self,
+            tokens,
+            current_status: None,
+        })
     }
 
-    log::info!("WFM WebSocket authenticated");
+    /// Register a pending reply slot and send the command. The returned
+    /// receiver resolves when the recv loop delivers the matching reply.
+    async fn send_command(
+        &mut self,
+        route: WsRoute,
+        payload: Value,
+    ) -> Result<oneshot::Receiver<WsReply>> {
+        let (tx, rx) = oneshot::channel();
+        let json_msg = json!({
+            "route": route.to_string(),
+            "payload": payload,
+        });
+
+        self.pending.lock().await.insert(route, tx);
+        self.ws_tx
+            .send(tungstenite::Message::Text(json_msg.to_string().into()))
+            .await
+            .map_err(|e| anyhow!("WS send failed: {}", e))?;
+        Ok(rx)
+    }
+}
+
+async fn await_reply(rx: oneshot::Receiver<WsReply>) -> Result<WsReply> {
+    tokio::time::timeout(std::time::Duration::from_secs(15), rx)
+        .await
+        .map_err(|_| anyhow!("WFM command timed out"))?
+        .map_err(|_| anyhow!("WFM response channel closed"))
+}
+
+async fn connect_and_auth(tokens: AuthTokenData) -> Result<()> {
+    let session = WsConnection::connect().await?.authenticate(tokens).await?;
+    *session_lock().write().await = Some(session);
     Ok(())
 }
 
 async fn ws_recv_loop(
     mut ws_rx: futures_util::stream::SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
-    pending: Arc<Mutex<HashMap<String, oneshot::Sender<WsMessage>>>>,
+    pending: PendingMap,
 ) {
     while let Some(msg_result) = ws_rx.next().await {
         let msg = match msg_result {
@@ -203,46 +300,41 @@ async fn ws_recv_loop(
             parsed.ref_id
         );
 
-        // If this is a response to a pending command, deliver it.
-        // Server responds with route like "cmd/foo:ok" or "cmd/foo:error"
-        // for a command sent as "cmd/foo". Match by stripping the suffix.
-        if let Some(ref route) = parsed.route {
-            if let Some(base_route) = route
-                .strip_suffix(":ok")
-                .or_else(|| route.strip_suffix(":error"))
-            {
+        let Some(ref route) = parsed.route else {
+            continue;
+        };
+
+        match IncomingRoute::from(route.as_str()) {
+            IncomingRoute::Reply { command, outcome } => {
                 let mut map = pending.lock().await;
-                if let Some(tx) = map.remove(base_route) {
-                    let _ = tx.send(parsed);
-                    continue;
+                if let Some(tx) = map.remove(&command) {
+                    let _ = tx.send(WsReply {
+                        outcome,
+                        payload: parsed.payload,
+                    });
                 }
             }
-        }
-
-        // Handle events
-        if let Some(ref route) = parsed.route {
-            if route == "@wfm|event/status/set" {
-                if let Some(status) = parsed
+            IncomingRoute::Event(WsEvent::StatusSet) => {
+                let payload = parsed
                     .payload
-                    .as_ref()
-                    .and_then(|p| p.get("status"))
-                    .and_then(|s| s.as_str())
-                {
-                    match status.parse::<Status>() {
-                        Ok(status) => {
-                            let mut guard = session_lock().write().await;
-                            if let Some(ref mut session) = *guard {
-                                session.current_status = Some(status);
-                            }
+                    .map(serde_json::from_value::<StatusEventPayload>);
+                match payload {
+                    Some(Ok(StatusEventPayload { status })) => {
+                        let mut guard = session_lock().write().await;
+                        if let Some(ref mut session) = *guard {
+                            session.current_status = Some(status);
                         }
-                        Err(_) => log::debug!("Ignoring unknown WFM status '{}'", status),
                     }
+                    Some(Err(e)) => log::debug!("Ignoring unparseable WFM status event: {}", e),
+                    None => {}
                 }
-            } else if route == "@wfm|event/auth/revoked" {
+            }
+            IncomingRoute::Event(WsEvent::AuthRevoked) => {
                 log::warn!("WFM auth token revoked by server");
                 let mut guard = session_lock().write().await;
                 *guard = None;
             }
+            IncomingRoute::Other => {}
         }
     }
 
@@ -252,36 +344,18 @@ async fn ws_recv_loop(
     log::info!("WFM WebSocket disconnected");
 }
 
-/// Send a command and wait for the response.
-async fn ws_command(route: &str, payload: Value) -> Result<WsMessage> {
-    let (tx, rx) = oneshot::channel();
-
-    let json_msg = json!({
-        "route": route,
-        "payload": payload,
-    });
-
-    {
+/// Send a command on the globally stored (authenticated) session and wait for
+/// the reply. The session lock is released while waiting.
+async fn ws_command(route: WsRoute, payload: Value) -> Result<WsReply> {
+    let rx = {
         let mut guard = session_lock().write().await;
         let session = guard
             .as_mut()
             .ok_or_else(|| anyhow!("Not connected to WFM"))?;
+        session.conn.send_command(route, payload).await?
+    };
 
-        session.pending.lock().await.insert(route.to_string(), tx);
-
-        session
-            .ws_tx
-            .send(tungstenite::Message::Text(json_msg.to_string().into()))
-            .await
-            .map_err(|e| anyhow!("WS send failed: {}", e))?;
-    }
-
-    let resp = tokio::time::timeout(std::time::Duration::from_secs(15), rx)
-        .await
-        .map_err(|_| anyhow!("WFM command timed out"))?
-        .map_err(|_| anyhow!("WFM response channel closed"))?;
-
-    Ok(resp)
+    await_reply(rx).await
 }
 
 // ── Handlers ──
@@ -348,17 +422,15 @@ pub(crate) async fn handle_wfm_signstatus(p: SignstatusParams) -> Result<Signsta
         duration: p.duration,
     })?;
 
-    let resp = ws_command("@wfm|cmd/status/set", payload).await?;
+    let reply = ws_command(WsRoute::StatusSet, payload).await?;
 
-    if let Some(route) = &resp.route {
-        if route.ends_with(":error") {
-            let err_msg = resp
-                .payload
-                .as_ref()
-                .map(|p| serde_json::to_string(p).unwrap_or_default())
-                .unwrap_or_else(|| "unknown error".into());
-            return Err(anyhow!("Status update failed: {}", err_msg));
-        }
+    if reply.outcome == ReplyOutcome::Error {
+        let err_msg = reply
+            .payload
+            .as_ref()
+            .map(|p| serde_json::to_string(p).unwrap_or_default())
+            .unwrap_or_else(|| "unknown error".into());
+        return Err(anyhow!("Status update failed: {}", err_msg));
     }
 
     // Update local state
@@ -474,7 +546,7 @@ pub async fn set_status_if_connected(status: Status) {
         return;
     }
 
-    match ws_command("@wfm|cmd/status/set", json!({ "status": status })).await {
+    match ws_command(WsRoute::StatusSet, json!({ "status": status })).await {
         Ok(_) => {
             let mut guard = session_lock().write().await;
             if let Some(ref mut session) = *guard {
