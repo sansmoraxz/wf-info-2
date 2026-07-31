@@ -29,6 +29,25 @@ struct WsMessage {
 
 // ── Session state ──
 
+/// A warframe.market profile status. Serialized lowercase on the WFM wire.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    strum::Display,
+    strum::EnumString,
+    serde_with::SerializeDisplay,
+    serde_with::DeserializeFromStr,
+)]
+#[strum(serialize_all = "lowercase")]
+pub enum Status {
+    Online,
+    Invisible,
+    Ingame,
+}
+
 struct WfmSession {
     ws_tx: futures_util::stream::SplitSink<
         WebSocketStream<MaybeTlsStream<TcpStream>>,
@@ -36,7 +55,7 @@ struct WfmSession {
     >,
     #[allow(dead_code)]
     tokens: AuthTokenData,
-    current_status: Option<String>,
+    current_status: Option<Status>,
     /// Pending requests waiting for a response, keyed by route
     pending: Arc<Mutex<HashMap<String, oneshot::Sender<WsMessage>>>>,
 }
@@ -203,12 +222,20 @@ async fn ws_recv_loop(
         // Handle events
         if let Some(ref route) = parsed.route {
             if route == "@wfm|event/status/set" {
-                if let Some(ref payload) = parsed.payload {
-                    if let Some(status) = payload.get("status").and_then(|s| s.as_str()) {
-                        let mut guard = session_lock().write().await;
-                        if let Some(ref mut session) = *guard {
-                            session.current_status = Some(status.to_string());
+                if let Some(status) = parsed
+                    .payload
+                    .as_ref()
+                    .and_then(|p| p.get("status"))
+                    .and_then(|s| s.as_str())
+                {
+                    match status.parse::<Status>() {
+                        Ok(status) => {
+                            let mut guard = session_lock().write().await;
+                            if let Some(ref mut session) = *guard {
+                                session.current_status = Some(status);
+                            }
                         }
+                        Err(_) => log::debug!("Ignoring unknown WFM status '{}'", status),
                     }
                 }
             } else if route == "@wfm|event/auth/revoked" {
@@ -269,7 +296,7 @@ pub(crate) struct SignstatusParams {
 
 #[derive(Debug, Serialize)]
 struct StatusSetPayload {
-    status: String,
+    status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
     duration: Option<Option<u64>>,
 }
@@ -279,17 +306,17 @@ struct StatusSetPayload {
 pub(crate) enum SignstatusResponse {
     Authenticated {
         authenticated: bool,
-        status: Option<String>,
+        status: Option<Status>,
         expires_at: String,
         expired: bool,
     },
     Unauthenticated {
         authenticated: bool,
-        status: Option<String>,
+        status: Option<Status>,
     },
     Set {
         ok: bool,
-        status: String,
+        status: Status,
     },
 }
 
@@ -303,7 +330,7 @@ pub(crate) async fn handle_wfm_signstatus(p: SignstatusParams) -> Result<Signsta
                 let expired = expires_at < Utc::now();
                 Ok(SignstatusResponse::Authenticated {
                     authenticated: true,
-                    status: session.current_status.clone(),
+                    status: session.current_status,
                     expires_at: expires_at.to_rfc3339(),
                     expired,
                 })
@@ -315,21 +342,18 @@ pub(crate) async fn handle_wfm_signstatus(p: SignstatusParams) -> Result<Signsta
         };
     }
 
-    let status = p.status.unwrap();
-    match status.as_str() {
-        "online" | "invisible" | "ingame" => {}
-        other => {
-            return Err(anyhow!(
-                "Invalid status '{}'. Must be: online, invisible, ingame",
-                other
-            ));
-        }
-    }
+    let raw_status = p.status.unwrap();
+    let status = raw_status.parse::<Status>().map_err(|_| {
+        anyhow!(
+            "Invalid status '{}'. Must be: online, invisible, ingame",
+            raw_status
+        )
+    })?;
 
     // Build payload with PATCH semantics for duration:
     // None serializes as omitted, Some(None) as null, Some(Some(n)) as n
     let payload = serde_json::to_value(StatusSetPayload {
-        status: status.clone(),
+        status,
         duration: p.duration,
     })?;
 
@@ -350,7 +374,7 @@ pub(crate) async fn handle_wfm_signstatus(p: SignstatusParams) -> Result<Signsta
     {
         let mut guard = session_lock().write().await;
         if let Some(ref mut session) = *guard {
-            session.current_status = Some(status.clone());
+            session.current_status = Some(status);
         }
     }
 
@@ -449,7 +473,7 @@ pub async fn try_restore_session() {
 }
 
 /// Set the WFM profile status if authenticated. Used by daemon for auto-status.
-pub async fn set_status_if_connected(status: &str) {
+pub async fn set_status_if_connected(status: Status) {
     let is_connected = {
         let guard = session_lock().read().await;
         guard.is_some()
@@ -463,7 +487,7 @@ pub async fn set_status_if_connected(status: &str) {
         Ok(_) => {
             let mut guard = session_lock().write().await;
             if let Some(ref mut session) = *guard {
-                session.current_status = Some(status.to_string());
+                session.current_status = Some(status);
             }
             log::info!("WFM status set to '{}'", status);
         }
@@ -492,14 +516,14 @@ mod tests {
     #[test]
     fn status_set_payload_matches_patch_wire_shape() {
         let omitted = serde_json::to_value(StatusSetPayload {
-            status: "online".into(),
+            status: Status::Online,
             duration: None,
         })
         .unwrap();
         assert_eq!(omitted, serde_json::json!({ "status": "online" }));
 
         let null = serde_json::to_value(StatusSetPayload {
-            status: "online".into(),
+            status: Status::Online,
             duration: Some(None),
         })
         .unwrap();
@@ -509,7 +533,7 @@ mod tests {
         );
 
         let set = serde_json::to_value(StatusSetPayload {
-            status: "online".into(),
+            status: Status::Online,
             duration: Some(Some(60)),
         })
         .unwrap();

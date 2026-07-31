@@ -4,8 +4,19 @@ use wf_core::{account::Platform, logs::TradeItem};
 use wf_inventory::FractionSyndicates;
 
 /// All daemon events that can be emitted and subscribed to.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// The generated [`DaemonEventKind`] discriminant enum carries the
+/// subscription wire names; note that the relic kinds intentionally differ
+/// from the serde `type` tags ("relic_opened"/"relic_closed" vs
+/// "relic_selection_open"/"relic_selection_closed") — a pre-existing wire
+/// contract that must be preserved.
+#[derive(Debug, Clone, Serialize, Deserialize, strum::EnumDiscriminants)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[strum_discriminants(
+    name(DaemonEventKind),
+    derive(Hash, strum::Display, strum::EnumString),
+    strum(serialize_all = "snake_case")
+)]
 pub enum DaemonEvent {
     GameStart(GameStartEvent),
     AccountLogin(AccountLoginEvent),
@@ -18,27 +29,15 @@ pub enum DaemonEvent {
     DmTabOpened(DmTabOpenedEvent),
     TradeSuccess(TradeSuccessEvent),
     TradeFailed(TradeFailedEvent),
+    #[strum_discriminants(strum(serialize = "relic_opened"))]
     RelicSelectionOpen(RelicSelectionPopup),
+    #[strum_discriminants(strum(serialize = "relic_closed"))]
     RelicSelectionClosed,
 }
 
 impl DaemonEvent {
-    pub fn event_type(&self) -> &'static str {
-        match self {
-            DaemonEvent::GameStart(_) => "game_start",
-            DaemonEvent::AccountLogin(_) => "account_login",
-            DaemonEvent::AccountLogout(_) => "account_logout",
-            DaemonEvent::SystemQuit(_) => "system_quit",
-            DaemonEvent::InventoryFetched(_) => "inventory_fetched",
-            DaemonEvent::InventoryStale(_) => "inventory_stale",
-            DaemonEvent::ProfileUpdated(_) => "profile_updated",
-            DaemonEvent::ScreenshotTriggered(_) => "screenshot_triggered",
-            DaemonEvent::DmTabOpened(_) => "dm_tab_opened",
-            DaemonEvent::TradeSuccess(_) => "trade_success",
-            DaemonEvent::TradeFailed(_) => "trade_failed",
-            DaemonEvent::RelicSelectionOpen(_) => "relic_opened",
-            DaemonEvent::RelicSelectionClosed => "relic_closed",
-        }
+    pub fn kind(&self) -> DaemonEventKind {
+        self.into()
     }
 }
 
@@ -92,10 +91,33 @@ pub struct InventorySummary {
     pub supported_syndicates: Option<FractionSyndicates>,
 }
 
+/// Where an inventory fetch originated. Free-form user-supplied sources are
+/// preserved verbatim in `Other`.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Default,
+    strum::Display,
+    strum::EnumString,
+    serde_with::SerializeDisplay,
+    serde_with::DeserializeFromStr,
+)]
+#[strum(serialize_all = "kebab-case")]
+pub enum Source {
+    #[default]
+    Manual,
+    LiveRefresh,
+    Auto,
+    #[strum(default)]
+    Other(String),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InventoryFetchedEvent {
     pub timestamp: DateTime<Utc>,
-    pub source: String,
+    pub source: Source,
     pub summary: InventorySummary,
 }
 
@@ -151,10 +173,10 @@ pub struct EventMessage {
     pub payload: DaemonEvent,
 }
 
-impl EventMessage {
-    pub fn from_event(event: DaemonEvent) -> Self {
+impl From<DaemonEvent> for EventMessage {
+    fn from(event: DaemonEvent) -> Self {
         Self {
-            event: event.event_type().to_string(),
+            event: event.kind().to_string(),
             payload: event,
         }
     }
@@ -169,13 +191,13 @@ mod tests {
         let start = DaemonEvent::GameStart(GameStartEvent {
             timestamp: Utc::now(),
         });
-        assert_eq!(start.event_type(), "game_start");
+        assert_eq!(start.kind().to_string(), "game_start");
 
         let quit = DaemonEvent::SystemQuit(SystemQuitEvent {
             timestamp: Utc::now(),
             reason: SystemQuitReason::Requested,
         });
-        let message = EventMessage::from_event(quit);
+        let message = EventMessage::from(quit);
         let value = serde_json::to_value(message).unwrap();
 
         assert_eq!(value["event"], "system_quit");

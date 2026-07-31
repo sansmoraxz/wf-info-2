@@ -63,6 +63,46 @@ pub(crate) struct ItemEnvelope<T> {
 /// same overwrite semantics the old map-insertion code had.
 const RESERVED_ENVELOPE_KEYS: [&str; 5] = ["category", "item_type", "item_id", "details", "market"];
 
+/// An inventory category. `Display` emits the wire names used as serde tags
+/// on [`InventoryItemEnvelope`]; `FromStr` additionally accepts the user-facing
+/// aliases previously handled by `normalize_category`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
+pub(crate) enum Category {
+    #[strum(to_string = "suits", serialize = "suit", serialize = "warframe", serialize = "warframes")]
+    Suits,
+    #[strum(
+        to_string = "long_guns",
+        serialize = "long_gun",
+        serialize = "primary",
+        serialize = "primaries",
+        serialize = "rifles"
+    )]
+    LongGuns,
+    #[strum(to_string = "pistols", serialize = "pistol", serialize = "secondary", serialize = "secondaries")]
+    Pistols,
+    Melee,
+    #[strum(to_string = "space_suits", serialize = "space_suit", serialize = "archwing")]
+    SpaceSuits,
+    #[strum(to_string = "space_guns", serialize = "space_gun", serialize = "archgun", serialize = "arch_gun")]
+    SpaceGuns,
+    #[strum(
+        to_string = "space_melee",
+        serialize = "space_melees",
+        serialize = "archmelee",
+        serialize = "arch_melee"
+    )]
+    SpaceMelee,
+    #[strum(to_string = "raw_upgrades", serialize = "rawmods", serialize = "raw_mods")]
+    RawUpgrades,
+    #[strum(to_string = "upgrades", serialize = "mods", serialize = "arcanes")]
+    Upgrades,
+    #[strum(to_string = "recipes", serialize = "blueprints")]
+    Recipes,
+    #[strum(to_string = "pending_recipes", serialize = "pending")]
+    PendingRecipes,
+}
+
 /// A searchable inventory item tagged with its category.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "category", rename_all = "snake_case")]
@@ -99,19 +139,19 @@ macro_rules! for_each_envelope {
 }
 
 impl InventoryItemEnvelope {
-    pub fn category(&self) -> &'static str {
+    pub fn category(&self) -> Category {
         match self {
-            Self::Suits(_) => "suits",
-            Self::LongGuns(_) => "long_guns",
-            Self::Pistols(_) => "pistols",
-            Self::Melee(_) => "melee",
-            Self::SpaceSuits(_) => "space_suits",
-            Self::SpaceGuns(_) => "space_guns",
-            Self::SpaceMelee(_) => "space_melee",
-            Self::RawUpgrades(_) => "raw_upgrades",
-            Self::Upgrades(_) => "upgrades",
-            Self::Recipes(_) => "recipes",
-            Self::PendingRecipes(_) => "pending_recipes",
+            Self::Suits(_) => Category::Suits,
+            Self::LongGuns(_) => Category::LongGuns,
+            Self::Pistols(_) => Category::Pistols,
+            Self::Melee(_) => Category::Melee,
+            Self::SpaceSuits(_) => Category::SpaceSuits,
+            Self::SpaceGuns(_) => Category::SpaceGuns,
+            Self::SpaceMelee(_) => Category::SpaceMelee,
+            Self::RawUpgrades(_) => Category::RawUpgrades,
+            Self::Upgrades(_) => Category::Upgrades,
+            Self::Recipes(_) => Category::Recipes,
+            Self::PendingRecipes(_) => Category::PendingRecipes,
         }
     }
 
@@ -184,12 +224,12 @@ pub(crate) struct ItemView {
 
 pub(crate) fn collect_inventory_items(
     inventory: &Inventory,
-    category: Option<&str>,
+    category: Option<Category>,
 ) -> Vec<ItemView> {
     let mut items = Vec::new();
 
     let mut push_item = |envelope: InventoryItemEnvelope| {
-        let info = lookup_item_info(envelope.item_type(), Some(envelope.category()));
+        let info = lookup_item_info(envelope.item_type(), Some(envelope.category().as_ref()));
         items.push(ItemView {
             details_name: info.as_ref().and_then(|item| item.name.clone()),
             details_desc: info.as_ref().and_then(|item| item.description.clone()),
@@ -197,9 +237,8 @@ pub(crate) fn collect_inventory_items(
         });
     };
 
-    let include = |name: &str, selected: Option<&str>| match selected {
+    let include = |name: Category, selected: Option<Category>| match selected {
         None => true,
-        Some("unknown") => false,
         Some(sel) => name == sel,
     };
 
@@ -223,7 +262,7 @@ pub(crate) fn collect_inventory_items(
         }
     }
 
-    if include("suits", category) {
+    if include(Category::Suits, category) {
         for item in &inventory.suits {
             push_item(InventoryItemEnvelope::Suits(envelope(
                 item,
@@ -233,7 +272,7 @@ pub(crate) fn collect_inventory_items(
         }
     }
 
-    if include("long_guns", category) {
+    if include(Category::LongGuns, category) {
         for item in &inventory.long_guns {
             push_item(InventoryItemEnvelope::LongGuns(envelope(
                 item,
@@ -243,7 +282,7 @@ pub(crate) fn collect_inventory_items(
         }
     }
 
-    if include("pistols", category) {
+    if include(Category::Pistols, category) {
         for item in &inventory.pistols {
             push_item(InventoryItemEnvelope::Pistols(envelope(
                 item,
@@ -253,7 +292,7 @@ pub(crate) fn collect_inventory_items(
         }
     }
 
-    if include("melee", category) {
+    if include(Category::Melee, category) {
         for item in &inventory.melee {
             push_item(InventoryItemEnvelope::Melee(envelope(
                 item,
@@ -263,7 +302,7 @@ pub(crate) fn collect_inventory_items(
         }
     }
 
-    if include("space_suits", category) {
+    if include(Category::SpaceSuits, category) {
         for item in &inventory.space_suits {
             push_item(InventoryItemEnvelope::SpaceSuits(envelope(
                 item,
@@ -273,7 +312,7 @@ pub(crate) fn collect_inventory_items(
         }
     }
 
-    if include("space_guns", category) {
+    if include(Category::SpaceGuns, category) {
         for item in &inventory.space_guns {
             push_item(InventoryItemEnvelope::SpaceGuns(envelope(
                 item,
@@ -283,7 +322,7 @@ pub(crate) fn collect_inventory_items(
         }
     }
 
-    if include("space_melee", category) {
+    if include(Category::SpaceMelee, category) {
         for item in &inventory.space_melee {
             push_item(InventoryItemEnvelope::SpaceMelee(envelope(
                 item,
@@ -293,7 +332,7 @@ pub(crate) fn collect_inventory_items(
         }
     }
 
-    if include("raw_upgrades", category) {
+    if include(Category::RawUpgrades, category) {
         for item in &inventory.raw_upgrades {
             push_item(InventoryItemEnvelope::RawUpgrades(envelope(
                 item,
@@ -303,7 +342,7 @@ pub(crate) fn collect_inventory_items(
         }
     }
 
-    if include("upgrades", category) {
+    if include(Category::Upgrades, category) {
         for item in &inventory.upgrades {
             push_item(InventoryItemEnvelope::Upgrades(envelope(
                 item,
@@ -313,7 +352,7 @@ pub(crate) fn collect_inventory_items(
         }
     }
 
-    if include("recipes", category) {
+    if include(Category::Recipes, category) {
         for item in &inventory.recipes {
             push_item(InventoryItemEnvelope::Recipes(envelope(
                 item,
@@ -323,7 +362,7 @@ pub(crate) fn collect_inventory_items(
         }
     }
 
-    if include("pending_recipes", category) {
+    if include(Category::PendingRecipes, category) {
         for item in &inventory.pending_recipes {
             push_item(InventoryItemEnvelope::PendingRecipes(envelope(
                 item,
@@ -485,18 +524,18 @@ mod tests {
         serde_json::from_str(raw).unwrap()
     }
 
-    const ALL_CATEGORIES: [&str; 11] = [
-        "suits",
-        "long_guns",
-        "pistols",
-        "melee",
-        "space_suits",
-        "space_guns",
-        "space_melee",
-        "raw_upgrades",
-        "upgrades",
-        "recipes",
-        "pending_recipes",
+    const ALL_CATEGORIES: [(Category, &str); 11] = [
+        (Category::Suits, "suits"),
+        (Category::LongGuns, "long_guns"),
+        (Category::Pistols, "pistols"),
+        (Category::Melee, "melee"),
+        (Category::SpaceSuits, "space_suits"),
+        (Category::SpaceGuns, "space_guns"),
+        (Category::SpaceMelee, "space_melee"),
+        (Category::RawUpgrades, "raw_upgrades"),
+        (Category::Upgrades, "upgrades"),
+        (Category::Recipes, "recipes"),
+        (Category::PendingRecipes, "pending_recipes"),
     ];
 
     /// The envelope must survive the tantivy raw_json round-trip
@@ -522,10 +561,14 @@ mod tests {
                 item.envelope.category()
             );
             // The serde tag and the hand-written category() must never drift
-            assert_eq!(value["category"], item.envelope.category());
+            assert_eq!(value["category"], item.envelope.category().to_string());
         }
-        for cat in ALL_CATEGORIES {
-            assert!(seen.contains(cat), "fixture missing category {}", cat);
+        for (cat, wire) in ALL_CATEGORIES {
+            assert!(seen.contains(&cat), "fixture missing category {}", cat);
+            // Category's Display must byte-match the serde tag wire names
+            assert_eq!(cat.to_string(), wire);
+            // ...and FromStr must round-trip the canonical name
+            assert_eq!(wire.parse::<Category>().unwrap(), cat);
         }
     }
 
@@ -554,7 +597,7 @@ mod tests {
 
         macro_rules! check_category {
             ($field:ident, $cat:literal, $id:expr) => {
-                let views = collect_inventory_items(&inventory, Some($cat));
+                let views = collect_inventory_items(&inventory, Some($cat.parse().unwrap()));
                 assert_eq!(views.len(), inventory.$field.len(), $cat);
                 for (view, item) in views.iter().zip(&inventory.$field) {
                     let id: Option<&str> = $id(item);
@@ -643,7 +686,7 @@ mod tests {
 
         let mut poisoned = inventory.clone();
         poisoned.suits = vec![suit];
-        let items = collect_inventory_items(&poisoned, Some("suits"));
+        let items = collect_inventory_items(&poisoned, Some(Category::Suits));
         assert_eq!(items.len(), 1);
 
         let raw = serde_json::to_string(&items[0].envelope).unwrap();

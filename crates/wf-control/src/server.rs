@@ -264,7 +264,7 @@ async fn event_writer<W>(event: crate::DaemonEvent, writer: &mut W) -> Result<()
 where
     W: AsyncWrite + Unpin,
 {
-    let msg = EventMessage::from_event(event);
+    let msg = EventMessage::from(event);
     let payload =
         serde_json::to_string(&msg).context(format!("Failed to serialize event {:?}", &msg))?;
     writer.write_all(payload.as_bytes()).await?;

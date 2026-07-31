@@ -238,12 +238,14 @@ async fn handle_login_event(user_name: String, known_pid: Option<u32>, skip_cb: 
             if let Err(e) = storage::save_inventory(&result.inventory) {
                 log::error!("Failed to save inventory: {}", e);
             } else {
-                if let Err(e) = storage::touch_inventory_updated(Some("auto")) {
+                if let Err(e) =
+                    storage::touch_inventory_updated(Some(&crate::events::Source::Auto.to_string()))
+                {
                     log::warn!("Failed to update inventory metadata: {}", e);
                 }
                 crate::emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
                     timestamp: Utc::now(),
-                    source: "auto".to_string(),
+                    source: crate::events::Source::Auto,
                     summary: crate::inventory::inventory_summary(&result.inventory),
                 }));
             }

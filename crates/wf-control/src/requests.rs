@@ -251,7 +251,7 @@ mod tests {
 
         let auth = SignstatusResponse::Authenticated {
             authenticated: true,
-            status: Some("online".into()),
+            status: Some(crate::wfm_auth::Status::Online),
             expires_at: "2026-07-27T00:00:00+00:00".into(),
             expired: false,
         };
@@ -267,7 +267,7 @@ mod tests {
 
         let set = SignstatusResponse::Set {
             ok: true,
-            status: "ingame".into(),
+            status: crate::wfm_auth::Status::Ingame,
         };
         assert_eq!(
             serde_json::to_value(&set).unwrap(),

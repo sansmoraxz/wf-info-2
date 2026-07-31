@@ -4772,6 +4772,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "strum",
  "tantivy",
  "tokio",
  "tokio-tungstenite",

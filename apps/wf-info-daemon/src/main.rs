@@ -118,7 +118,8 @@ async fn handle_game_exit(lifecycle: &GameLifecycleTracker, skip_cb: bool) {
     }));
 
     if !skip_cb {
-        wf_control::wfm_auth::set_status_if_connected("invisible").await;
+        wf_control::wfm_auth::set_status_if_connected(wf_control::wfm_auth::Status::Invisible)
+            .await;
     }
 }
 
@@ -313,10 +314,16 @@ async fn main() {
             loop {
                 match rx.recv().await {
                     Ok(DaemonEvent::AccountLogin(_)) => {
-                        wf_control::wfm_auth::set_status_if_connected("ingame").await;
+                        wf_control::wfm_auth::set_status_if_connected(
+                            wf_control::wfm_auth::Status::Ingame,
+                        )
+                        .await;
                     }
                     Ok(DaemonEvent::AccountLogout(_)) => {
-                        wf_control::wfm_auth::set_status_if_connected("invisible").await;
+                        wf_control::wfm_auth::set_status_if_connected(
+                            wf_control::wfm_auth::Status::Invisible,
+                        )
+                        .await;
                     }
                     Ok(_) => {}
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {

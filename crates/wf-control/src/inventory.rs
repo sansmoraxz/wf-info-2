@@ -13,10 +13,12 @@ use wf_core::storage;
 use wf_inventory::Inventory;
 
 use super::broadcaster;
-use super::events::{DaemonEvent, InventoryFetchedEvent, InventoryStaleEvent, InventorySummary};
+use super::events::{
+    DaemonEvent, InventoryFetchedEvent, InventoryStaleEvent, InventorySummary, Source,
+};
 use super::market::fetch_market_summary;
 use super::search::{
-    InventoryItemEnvelope, build_tantivy_index, collect_inventory_items,
+    Category, InventoryItemEnvelope, build_tantivy_index, collect_inventory_items,
     get_or_build_inventory_index, search_inventory,
 };
 use wf_itemdata::item_data::lookup_item_info;
@@ -30,7 +32,7 @@ pub(crate) struct LoadInventoryParams {
     pub json: Option<Value>,
     pub raw: Option<String>,
     pub save: Option<bool>,
-    pub source: Option<String>,
+    pub source: Option<Source>,
     pub encrypted: Option<bool>,
 }
 
@@ -84,15 +86,15 @@ pub(crate) async fn handle_inventory_load(
     };
 
     let save = params.save.unwrap_or(true);
-    let source = params.source.as_deref().unwrap_or("manual").to_string();
+    let source = params.source.unwrap_or_default();
     if save {
         storage::save_inventory(&inventory)?;
-        let _ = storage::touch_inventory_updated(Some(&source));
+        let _ = storage::touch_inventory_updated(Some(&source.to_string()));
 
         // Emit inventory fetched event
         broadcaster::emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
             timestamp: Utc::now(),
-            source: source.clone(),
+            source,
             summary: inventory_summary(&inventory),
         }));
     }
@@ -159,13 +161,14 @@ pub(crate) async fn handle_inventory_filter(
         (storage::read_inventory()?, false)
     };
 
-    let category = params.category.as_deref().and_then(normalize_category);
-    if matches!(category, Some("unknown")) {
-        return Err(anyhow!(
-            "Unknown category '{}'",
-            params.category.as_deref().unwrap_or_default()
-        ));
-    }
+    let category = match params.category.as_deref() {
+        None => None,
+        Some(raw) if raw.eq_ignore_ascii_case("all") => None,
+        Some(raw) => Some(
+            raw.parse::<Category>()
+                .map_err(|_| anyhow!("Unknown category '{}'", raw))?,
+        ),
+    };
     let include_details = params.include_details.unwrap_or(false);
 
     let meta = storage::read_inventory_meta().unwrap_or_default();
@@ -185,7 +188,7 @@ pub(crate) async fn handle_inventory_filter(
     let mut clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
 
     if let Some(cat) = category {
-        let term = Term::from_field_text(search_index.category, cat);
+        let term = Term::from_field_text(search_index.category, cat.as_ref());
         clauses.push((
             Occur::Must,
             Box::new(TermQuery::new(term, IndexRecordOption::Basic)),
@@ -221,7 +224,7 @@ pub(crate) async fn handle_inventory_filter(
     let mut filtered_items = Vec::new();
     for mut envelope in envelopes.drain(..) {
         if let Some(tradable) = params.tradable {
-            let details = lookup_item_info(envelope.item_type(), Some(envelope.category()));
+            let details = lookup_item_info(envelope.item_type(), Some(envelope.category().as_ref()));
             let detail_tradable = details.as_ref().map(|d| d.details.tradable());
             if detail_tradable != Some(tradable) {
                 continue;
@@ -246,7 +249,8 @@ pub(crate) async fn handle_inventory_filter(
         }
 
         if include_details
-            && let Some(details) = lookup_item_info(envelope.item_type(), Some(envelope.category()))
+            && let Some(details) =
+                lookup_item_info(envelope.item_type(), Some(envelope.category().as_ref()))
         {
             envelope.set_details(details.details);
         }
@@ -290,7 +294,7 @@ pub(crate) struct RefreshParams {
     pub scan_retries: Option<u32>,
     pub scan_delay_ms: Option<u64>,
     pub save: Option<bool>,
-    pub source: Option<String>,
+    pub source: Option<Source>,
 }
 
 #[cfg(feature = "memory")]
@@ -309,19 +313,15 @@ pub(crate) async fn handle_inventory_refresh(
         .inventory;
 
     let save = params.save.unwrap_or(true);
-    let source = params
-        .source
-        .as_deref()
-        .unwrap_or("live-refresh")
-        .to_string();
+    let source = params.source.unwrap_or(Source::LiveRefresh);
     if save {
         storage::save_inventory(&inventory)?;
-        let _ = storage::touch_inventory_updated(Some(&source));
+        let _ = storage::touch_inventory_updated(Some(&source.to_string()));
 
         // Emit inventory fetched event
         broadcaster::emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
             timestamp: Utc::now(),
-            source: source.clone(),
+            source,
             summary: inventory_summary(&inventory),
         }));
     }
@@ -410,25 +410,6 @@ pub(crate) fn inventory_summary(inventory: &Inventory) -> InventorySummary {
     }
 }
 
-// TODO: this looks sus
-pub(crate) fn normalize_category(category: &str) -> Option<&'static str> {
-    match category.to_lowercase().as_str() {
-        "all" => None,
-        "suit" | "suits" | "warframe" | "warframes" => Some("suits"),
-        "long_gun" | "long_guns" | "primary" | "primaries" | "rifles" => Some("long_guns"),
-        "pistol" | "pistols" | "secondary" | "secondaries" => Some("pistols"),
-        "melee" => Some("melee"),
-        "archwing" | "space_suit" | "space_suits" => Some("space_suits"),
-        "archgun" | "arch_gun" | "space_gun" | "space_guns" => Some("space_guns"),
-        "archmelee" | "arch_melee" | "space_melee" | "space_melees" => Some("space_melee"),
-        "raw_upgrades" | "rawmods" | "raw_mods" => Some("raw_upgrades"),
-        "upgrades" | "mods" | "arcanes" => Some("upgrades"),
-        "recipes" | "blueprints" => Some("recipes"),
-        "pending_recipes" | "pending" => Some("pending_recipes"),
-        _ => Some("unknown"),
-    }
-}
-
 fn epoch_to_datetime(value: i64) -> DateTime<Utc> {
     let (secs, nsec) = if value > 1_000_000_000_000 {
         let secs = value / 1000;
@@ -473,7 +454,7 @@ mod tests {
             })
         );
 
-        let items = crate::search::collect_inventory_items(&inventory, Some("suits"));
+        let items = crate::search::collect_inventory_items(&inventory, Some(Category::Suits));
         let envelopes: Vec<_> = items.into_iter().map(|v| v.envelope).collect();
         let filter = InventoryFilterResponse {
             total: 48,

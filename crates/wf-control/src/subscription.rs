@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
-use super::events::DaemonEvent;
+use super::events::{DaemonEvent, DaemonEventKind};
 
 /// Parameters for subscribe request.
 #[derive(Debug, Deserialize, Default)]
@@ -14,21 +14,27 @@ pub struct SubscribeParams {
 /// Filter for determining which events to send to a subscriber.
 #[derive(Debug, Clone)]
 pub struct EventFilter {
-    /// If Some, only events matching these types are sent.
+    /// If Some, only events matching these kinds are sent.
     /// If None, all events are sent.
-    allowed_events: Option<HashSet<String>>,
+    allowed_events: Option<HashSet<DaemonEventKind>>,
+}
+
+// Unrecognized event names are silently dropped (lenient wire behavior,
+// preserved from the String-based filter).
+impl From<SubscribeParams> for EventFilter {
+    fn from(params: SubscribeParams) -> Self {
+        let allowed_events = params
+            .events
+            .map(|e| e.iter().filter_map(|s| s.parse().ok()).collect());
+        Self { allowed_events }
+    }
 }
 
 impl EventFilter {
-    pub fn new(events: Option<Vec<String>>) -> Self {
-        let allowed_events = events.map(|e| e.into_iter().collect());
-        Self { allowed_events }
-    }
-
     /// Returns true if the event should be sent to the subscriber.
     pub fn matches(&self, event: &DaemonEvent) -> bool {
         match &self.allowed_events {
-            Some(allowed) => allowed.contains(event.event_type()),
+            Some(allowed) => allowed.contains(&event.kind()),
             None => true,
         }
     }
@@ -37,7 +43,7 @@ impl EventFilter {
     pub fn allowed_events(&self) -> Option<Vec<String>> {
         self.allowed_events
             .as_ref()
-            .map(|s| s.iter().cloned().collect())
+            .map(|s| s.iter().map(ToString::to_string).collect())
     }
 }
 
@@ -62,7 +68,7 @@ pub struct SubscribeResult {
 
 /// Handle a subscribe request and return the filter and response.
 pub fn handle_subscribe(params: SubscribeParams) -> anyhow::Result<SubscribeResult> {
-    let filter = EventFilter::new(params.events);
+    let filter = EventFilter::from(params);
 
     let filter_info = filter.allowed_events().map(|events| SubscribeFilterInfo {
         allowed_events: events,
@@ -84,7 +90,9 @@ mod tests {
 
     #[test]
     fn lifecycle_events_can_be_selected_by_wire_name() {
-        let filter = EventFilter::new(Some(vec!["system_quit".to_string()]));
+        let filter = EventFilter::from(SubscribeParams {
+            events: Some(vec!["system_quit".to_string()]),
+        });
         let event = DaemonEvent::SystemQuit(SystemQuitEvent {
             timestamp: Utc::now(),
             reason: SystemQuitReason::Unexpected,
