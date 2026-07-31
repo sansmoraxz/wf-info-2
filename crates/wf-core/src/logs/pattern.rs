@@ -6,38 +6,119 @@ use crate::{
     logs::{DirectMessageInfo, LogEvent, TradeItem},
 };
 
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::LazyLock,
-};
+use std::collections::{HashMap, VecDeque};
 
-pub trait RegMatcher {
-    fn pattern(&self) -> &Regex;
+type Transform = fn(&Captures) -> Option<LogEvent>;
+
+struct Transformer {
+    pattern: Regex,
+    transform: Transform,
 }
 
-pub trait LogEntryTransformer: RegMatcher + Sync + Send {
-    fn transform(&self, c: &Captures) -> Option<LogEvent>;
+/// Pattern table: (regex, capture-group transform). Group meanings are noted
+/// per entry.
+fn transformers() -> Result<Vec<Transformer>, Error> {
+    let table: [(&str, Transform); 10] = [
+        // G1: name
+        (
+            r"(?Rmu)^\d+\.\d+ Net \[Info\]: IRC out: WHO ([\w\.\-]+)\?\?\? n%nu$",
+            transform_who_query,
+        ),
+        // G1: sent, G2: other player name, G3: platform glyph, G4: received
+        (
+            r"(?Rums)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOkCancel\(description=Are you sure you want to accept this trade\? You are offering:(.*?)and will receive from (.*?)(.) the following:(.*?), title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel\)$",
+            transform_trade_confirm,
+        ),
+        (
+            r"(?Rm)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade was successful!, title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok\)$",
+            |_| Some(LogEvent::TradeSuccess),
+        ),
+        // G1: reason
+        (
+            r"(?Rmu)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade failed: (.+?), title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok\)$",
+            |c| Some(LogEvent::TradeFail(c.get(1)?.as_str().to_string())),
+        ),
+        // G1: name, G2: platform glyph, G3: clan, G4: clan hash.
+        // A legacy `AccountId:` suffix may be present, but is deliberately ignored.
+        (
+            r"(?Rum)^\d+\.\d+ Sys \[Info\]: Player name changed to ([\w\.\-]+)(.) Clan: ([\w -]+)#(\d+)(?: AccountId: \w+)?$",
+            transform_login,
+        ),
+        (
+            r"(?Rm)^\d+\.\d+ Sys \[Info\]: Logout confirmed$",
+            |_| Some(LogEvent::Logout),
+        ),
+        (
+            r"(?Rm)^\d+\.\d+ Sys \[Info\]: Executing command: /EE/Editor/ToolMenus/Commands/CmdQuit$",
+            |_| Some(LogEvent::QuitRequested),
+        ),
+        // G1: name, G2: platform glyph
+        (
+            r"(?Rmu)^\d+\.\d+ Script \[Info\]: ChatRedux\.lua: ChatRedux::AddTab: Adding tab with channel name: F([\w\.\-]+)(.) to index \d+$",
+            transform_dm_tab,
+        ),
+        (
+            r"(?Rm)\d+\.\d+ Script \[Info\]: ProjectionRewardChoice\.lua: Got rewards$",
+            |_| Some(LogEvent::RelicOpen),
+        ),
+        (
+            r"(?Rm)\d+\.\d+ Script \[Info\]: ProjectionRewardChoice\.lua: Relic reward screen shut down$",
+            |_| Some(LogEvent::RelicClose),
+        ),
+    ];
+
+    table
+        .into_iter()
+        .map(|(pat, transform)| {
+            Ok(Transformer {
+                pattern: Regex::new(pat)?,
+                transform,
+            })
+        })
+        .collect()
 }
 
-/// Helper to create structs and regex patterns for matching
-macro_rules! lgreg {
-    ($name:ident, $glb:ident, $pat:expr) => {
-        #[allow(non_upper_case_globals, dead_code)]
-        static $glb: LazyLock<Regex> = LazyLock::new(|| Regex::new($pat).unwrap());
+fn transform_who_query(c: &Captures) -> Option<LogEvent> {
+    Some(LogEvent::WhoQuery(c.get(1)?.as_str().to_string()))
+}
 
-        #[allow(dead_code)]
-        pub struct $name;
+fn transform_trade_confirm(c: &Captures) -> Option<LogEvent> {
+    let sent = extract_trade_items(c.get(1)?.as_str());
+    let name = c.get(2)?.as_str().to_string();
+    let received = extract_trade_items(c.get(4)?.as_str());
+    let platform = Platform::from_glyph(c.get(3)?.as_str());
 
-        impl RegMatcher for $name {
-            fn pattern(&self) -> &Regex {
-                &$glb
-            }
-        }
+    let info = crate::logs::TradeInfo {
+        sent,
+        received,
+        name,
+        platform,
     };
+    Some(LogEvent::TradeConfirmPopup(info))
+}
+
+fn transform_login(c: &Captures) -> Option<LogEvent> {
+    let name = c.get(1)?.as_str().to_string();
+    let platform = Platform::from_glyph(c.get(2)?.as_str());
+    let clan_name = c.get(3)?.as_str().to_string();
+    let clan_id = c.get(4)?.as_str().to_string();
+    let clan = [clan_name, "#".to_string(), clan_id].concat();
+    let account_info = AccountInfo {
+        username: name,
+        platform,
+        clan,
+    };
+    Some(LogEvent::Login(account_info))
+}
+
+fn transform_dm_tab(c: &Captures) -> Option<LogEvent> {
+    let username = c.get(1)?.as_str().to_string();
+    let platform = Platform::from_glyph(c.get(2)?.as_str());
+    Some(LogEvent::DmTabOpened(DirectMessageInfo { username, platform }))
 }
 
 pub struct LogProcessingEngine {
-    transformers: Vec<Box<dyn LogEntryTransformer>>,
+    transformers: Vec<Transformer>,
     reset: RegexSet,
 }
 
@@ -49,70 +130,32 @@ struct LogRecords {
 
 impl LogProcessingEngine {
     pub fn new() -> Result<Self, Error> {
-        let t0 = Box::new(WhoQueryEntry);
-        let t1 = Box::new(TradeConfirmEntry);
-        let t2 = Box::new(TradeSuccessEntry);
-        let t3 = Box::new(TradeFailEntry);
-        let t4 = Box::new(LoginEntry);
-        let t5 = Box::new(LogoutEntry);
-        let t6 = Box::new(QuitRequestedEntry);
-        let t7 = Box::new(DMTabEntry);
-        let t8 = Box::new(RelicRewardOpen);
-        let t9 = Box::new(RelicRewardClose);
-        let v: Vec<Box<dyn LogEntryTransformer>> = vec![t0, t1, t2, t3, t4, t5, t6, t7, t8, t9];
-        let rv: Vec<&str> = v.iter().map(|p| p.pattern().as_str()).collect();
-        let reset: RegexSet = RegexSet::new(rv)?;
+        let transformers = transformers()?;
+        let reset = RegexSet::new(transformers.iter().map(|t| t.pattern.as_str()))?;
         Ok(Self {
-            transformers: v,
+            transformers,
             reset,
         })
     }
 
     pub fn extract_events(&self, s: &str) -> Vec<LogEvent> {
-        let set = &self.reset;
         let container = &self.transformers;
-        let mut v: VecDeque<_> = set
+        let mut v: VecDeque<_> = self
+            .reset
             .matches(s)
             .into_iter()
             .flat_map(move |cap_idx| {
-                container[cap_idx]
-                    .pattern()
-                    .captures_iter(s)
-                    .filter_map(move |c| {
-                        let pos = c.get(0)?.start();
-                        let event = container[cap_idx].transform(&c)?;
-                        Some(LogRecords { pos, event })
-                    })
-                    .collect::<Vec<_>>()
+                let t = &container[cap_idx];
+                t.pattern.captures_iter(s).filter_map(move |c| {
+                    let pos = c.get(0)?.start();
+                    let event = (t.transform)(&c)?;
+                    Some(LogRecords { pos, event })
+                })
             })
             .collect();
 
         v.make_contiguous().sort_by_key(|a| a.pos);
         v.drain(..).map(move |rec| rec.event).collect()
-    }
-}
-
-lgreg!(
-    TradeConfirmEntry,
-    TRADE_CONFIRMATION_DIALOG_REGEX,
-    r"(?Rums)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOkCancel\(description=Are you sure you want to accept this trade\? You are offering:(.*?)and will receive from (.*?)(.) the following:(.*?), title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel\)$"
-);
-
-impl LogEntryTransformer for TradeConfirmEntry {
-    /// G1: sent, G2: other player name, G3: platform ucode, G4: received
-    fn transform(&self, c: &Captures<'_>) -> Option<LogEvent> {
-        let sent = extract_trade_items(c.get(1)?.as_str());
-        let name = c.get(2)?.as_str().to_string();
-        let received = extract_trade_items(c.get(4)?.as_str());
-        let platform = Platform::from_glyph(c.get(3)?.as_str());
-
-        let info = crate::logs::TradeInfo {
-            sent,
-            received,
-            name,
-            platform,
-        };
-        Some(crate::logs::LogEvent::TradeConfirmPopup(info))
     }
 }
 
@@ -137,143 +180,6 @@ fn extract_trade_items(s: &str) -> Vec<TradeItem> {
         m.entry(e.0).and_modify(|c| *c += e.1).or_insert(e.1);
     }
     m.drain()
-        .map(|(name, count)| {
-            TradeItem {
-                name,
-                count,
-            }
-        })
+        .map(|(name, count)| TradeItem { name, count })
         .collect()
-}
-
-lgreg!(
-    TradeSuccessEntry,
-    TRADE_SUCCESS_REGEX,
-    r"(?Rm)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade was successful!, title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok\)$"
-);
-
-impl LogEntryTransformer for TradeSuccessEntry {
-    /// at this point we are sure that the regex pattern matched
-    fn transform(&self, _: &Captures<'_>) -> Option<LogEvent> {
-        Some(LogEvent::TradeSuccess)
-    }
-}
-
-lgreg!(
-    TradeFailEntry,
-    TRADE_FAIL_REGEX,
-    r"(?Rmu)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade failed: (.+?), title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok\)$"
-);
-
-impl LogEntryTransformer for TradeFailEntry {
-    /// G1: reason
-    fn transform(&self, c: &Captures<'_>) -> Option<LogEvent> {
-        let reason = c.get(1)?.as_str().to_string();
-        Some(LogEvent::TradeFail(reason))
-    }
-}
-
-lgreg!(
-    LoginEntry,
-    LOGIN_DETAILS_REGEX,
-    r"(?Rum)^\d+\.\d+ Sys \[Info\]: Player name changed to ([\w\.\-]+)(.) Clan: ([\w -]+)#(\d+)(?: AccountId: \w+)?$"
-);
-
-impl LogEntryTransformer for LoginEntry {
-    /// G1: name, G2: platform, G3: clan, G4: clan hash.
-    /// A legacy `AccountId:` suffix may be present, but is deliberately ignored.
-    fn transform(&self, c: &Captures) -> Option<LogEvent> {
-        let name = c.get(1)?.as_str().to_string();
-        let platform = Platform::from_glyph(c.get(2)?.as_str());
-        let clan_name = c.get(3)?.as_str().to_string();
-        let clan_id = c.get(4)?.as_str().to_string();
-        let clan = [clan_name, "#".to_string(), clan_id].concat();
-        let account_info = AccountInfo {
-            username: name,
-            platform,
-            clan,
-        };
-        Some(LogEvent::Login(account_info))
-    }
-}
-
-lgreg!(
-    LogoutEntry,
-    LOGOUT_DETAILS_REGEX,
-    r"(?Rm)^\d+\.\d+ Sys \[Info\]: Logout confirmed$"
-);
-
-impl LogEntryTransformer for LogoutEntry {
-    /// implicit
-    fn transform(&self, _: &Captures) -> Option<LogEvent> {
-        Some(LogEvent::Logout)
-    }
-}
-
-lgreg!(
-    QuitRequestedEntry,
-    QUIT_REQUESTED_REGEX,
-    r"(?Rm)^\d+\.\d+ Sys \[Info\]: Executing command: /EE/Editor/ToolMenus/Commands/CmdQuit$"
-);
-
-impl LogEntryTransformer for QuitRequestedEntry {
-    fn transform(&self, _: &Captures) -> Option<LogEvent> {
-        Some(LogEvent::QuitRequested)
-    }
-}
-
-lgreg!(
-    DMTabEntry,
-    DM_TAB_REGEX,
-    r"(?Rmu)^\d+\.\d+ Script \[Info\]: ChatRedux\.lua: ChatRedux::AddTab: Adding tab with channel name: F([\w\.\-]+)(.) to index \d+$"
-);
-
-impl LogEntryTransformer for DMTabEntry {
-    /// G1: name, G2: platform
-    fn transform(&self, c: &Captures) -> Option<LogEvent> {
-        let username = c.get(1)?.as_str().to_string();
-        let platform = Platform::from_glyph(c.get(2)?.as_str());
-        let dm_info = DirectMessageInfo { username, platform };
-        Some(LogEvent::DmTabOpened(dm_info))
-    }
-}
-
-lgreg!(
-    WhoQueryEntry,
-    WHO_REGEX,
-    r"(?Rmu)^\d+\.\d+ Net \[Info\]: IRC out: WHO ([\w\.\-]+)\?\?\? n%nu$"
-);
-
-impl LogEntryTransformer for WhoQueryEntry {
-    /// G1: name
-    fn transform(&self, c: &Captures) -> Option<LogEvent> {
-        let username = c.get(1)?.as_str().to_string();
-        Some(LogEvent::WhoQuery(username))
-    }
-}
-
-lgreg!(
-    RelicRewardOpen,
-    RELIC_OPEN_REGEX,
-    r"(?Rm)\d+\.\d+ Script \[Info\]: ProjectionRewardChoice\.lua: Got rewards$"
-);
-
-impl LogEntryTransformer for RelicRewardOpen {
-    /// implicit
-    fn transform(&self, _: &Captures) -> Option<LogEvent> {
-        Some(LogEvent::RelicOpen)
-    }
-}
-
-lgreg!(
-    RelicRewardClose,
-    RELIC_CLOSE_REGEX,
-    r"(?Rm)\d+\.\d+ Script \[Info\]: ProjectionRewardChoice\.lua: Relic reward screen shut down$"
-);
-
-impl LogEntryTransformer for RelicRewardClose {
-    /// implicit
-    fn transform(&self, _: &Captures) -> Option<LogEvent> {
-        Some(LogEvent::RelicClose)
-    }
 }
