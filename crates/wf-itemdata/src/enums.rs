@@ -4,155 +4,260 @@
 //! Each enum includes an `Unknown(String)` variant to gracefully handle new values
 //! that may be added to the source data in the future, while preserving the original value.
 
-use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use serde_with::{DeserializeFromStr, SerializeDisplay};
+use strum::{AsRefStr, Display, EnumString};
 
-/// Macro for generating string-backed enums with `Unknown(String)` fallback.
+/// Borrowed string form for enums with an `Unknown(String)` fallback variant.
 ///
-/// Each enum gets: `as_str()`, `Display`, custom `Serialize`/`Deserialize`,
-/// and `Default` (either a named variant or `Unknown(String::new())`).
-macro_rules! string_enum {
-    // Default is Unknown
-    ($(#[doc = $doc:expr])* pub enum $name:ident {
-        default Unknown;
-        $( $variant:ident => $str:expr ),* $(,)?
-    }) => {
-        string_enum!(@impl $(#[doc = $doc])* pub enum $name { $( $variant => $str ),* });
-        impl Default for $name {
-            fn default() -> Self { Self::Unknown(String::new()) }
-        }
-    };
-    // Default is a named variant
-    ($(#[doc = $doc:expr])* pub enum $name:ident {
-        default $default:ident;
-        $( $variant:ident => $str:expr ),* $(,)?
-    }) => {
-        string_enum!(@impl $(#[doc = $doc])* pub enum $name { $( $variant => $str ),* });
-        impl Default for $name {
-            fn default() -> Self { Self::$default }
-        }
-    };
-    // Internal: generates the enum, as_str, Serialize, Deserialize, Display
-    (@impl $(#[doc = $doc:expr])* pub enum $name:ident {
-        $( $variant:ident => $str:expr ),*
-    }) => {
-        $(#[doc = $doc])*
-        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-        pub enum $name {
-            $( $variant, )*
-            Unknown(String),
-        }
-
-        impl $name {
+/// strum's derived `AsRefStr` returns the variant *name* ("Unknown") for the
+/// default variant instead of the captured inner string, so `as_str` must
+/// special-case it. Kept as a macro because the impl is identical for all
+/// ~40 enums below.
+macro_rules! impl_as_str {
+    ($($ty:ty),* $(,)?) => {$(
+        impl $ty {
             pub fn as_str(&self) -> &str {
                 match self {
-                    $( Self::$variant => $str, )*
                     Self::Unknown(s) => s,
+                    other => other.as_ref(),
                 }
             }
         }
-
-        impl Serialize for $name {
-            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-                serializer.serialize_str(self.as_str())
-            }
-        }
-
-        impl<'de> Deserialize<'de> for $name {
-            fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-                let s = String::deserialize(deserializer)?;
-                Ok(match s.as_str() {
-                    $( $str => Self::$variant, )*
-                    _ => Self::Unknown(s),
-                })
-            }
-        }
-
-        impl ::std::fmt::Display for $name {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                f.write_str(self.as_str())
-            }
-        }
-    };
+    )*};
 }
+
+impl_as_str!(
+    Trigger,
+    Noise,
+    Rarity,
+    Polarity,
+    Projectile,
+    Disposition,
+    WarframeType,
+    ArcaneType,
+    GearType,
+    ResourceType,
+    PrimaryType,
+    SecondaryType,
+    MeleeType,
+    RailjackType,
+    ArchGunType,
+    ArchMeleeType,
+    ArchwingType,
+    SentinelType,
+    SentinelWeaponType,
+    ModType,
+    RelicType,
+    FishType,
+    GlyphType,
+    SigilType,
+    NodeType,
+    QuestType,
+    SkinType,
+    EnemyType,
+    PetType,
+    MiscType,
+    ResistanceType,
+    ComponentType,
+    PrimaryProductCategory,
+    MeleeProductCategory,
+    Sex,
+    SecondaryProductCategory,
+    ArchwingProductCategory,
+    SentinelProductCategory,
+    SentinelWeaponProductCategory,
+    ArchGunProductCategory,
+    ArchMeleeProductCategory,
+);
 
 // =============================================================================
 // Weapon property enums
 // =============================================================================
 
-string_enum! {
-    /// Weapon trigger types - how the weapon fires
-    pub enum Trigger {
-        default Unknown;
-        Active => "Active",
-        Auto => "Auto",
-        AutoBurst => "Auto Burst",
-        Burst => "Burst",
-        Charge => "Charge",
-        Duplex => "Duplex",
-        Held => "Held",
-        Melee => "Melee",
-        Semi => "Semi",
+/// Weapon trigger types - how the weapon fires
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum Trigger {
+    Active,
+    Auto,
+    #[strum(serialize = "Auto Burst")]
+    AutoBurst,
+    Burst,
+    Charge,
+    Duplex,
+    Held,
+    Melee,
+    Semi,
+    #[strum(default)]
+    Unknown(String),
+}
+
+impl Default for Trigger {
+    fn default() -> Self {
+        Self::Unknown(String::new())
     }
 }
 
-string_enum! {
-    /// Weapon noise level - affects enemy alertness
-    pub enum Noise {
-        default Unknown;
-        Alarming => "Alarming",
-        Silent => "Silent",
+/// Weapon noise level - affects enemy alertness
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum Noise {
+    Alarming,
+    Silent,
+    #[strum(default)]
+    Unknown(String),
+}
+
+impl Default for Noise {
+    fn default() -> Self {
+        Self::Unknown(String::new())
     }
 }
 
-string_enum! {
-    /// Item/drop rarity tiers
-    pub enum Rarity {
-        default Unknown;
-        Common => "Common",
-        Uncommon => "Uncommon",
-        Rare => "Rare",
-        Legendary => "Legendary",
+/// Item/drop rarity tiers
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum Rarity {
+    Common,
+    Uncommon,
+    Rare,
+    Legendary,
+    #[strum(default)]
+    Unknown(String),
+}
+
+impl Default for Rarity {
+    fn default() -> Self {
+        Self::Unknown(String::new())
     }
 }
 
-string_enum! {
-    /// Mod polarity types - determines mod capacity cost
-    pub enum Polarity {
-        default Unknown;
-        Aura => "aura",
-        Madurai => "madurai",
-        Naramon => "naramon",
-        Penjaga => "penjaga",
-        Umbra => "umbra",
-        Unairu => "unairu",
-        Universal => "universal",
-        Vazarin => "vazarin",
-        Zenurik => "zenurik",
-        Any => "any",
+/// Mod polarity types - determines mod capacity cost
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+#[strum(serialize_all = "lowercase")]
+pub enum Polarity {
+    Aura,
+    Madurai,
+    Naramon,
+    Penjaga,
+    Umbra,
+    Unairu,
+    Universal,
+    Vazarin,
+    Zenurik,
+    Any,
+    #[strum(default)]
+    Unknown(String),
+}
+
+impl Default for Polarity {
+    fn default() -> Self {
+        Self::Unknown(String::new())
     }
 }
 
-string_enum! {
-    /// Projectile type for ranged weapons
-    pub enum Projectile {
-        default Unknown;
-        Discharge => "Discharge",
-        Hitscan => "Hitscan",
-        ProjectileType => "Projectile",
-        Thrown => "Thrown",
+/// Projectile type for ranged weapons
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum Projectile {
+    Discharge,
+    Hitscan,
+    #[strum(serialize = "Projectile")]
+    ProjectileType,
+    Thrown,
+    #[strum(default)]
+    Unknown(String),
+}
+
+impl Default for Projectile {
+    fn default() -> Self {
+        Self::Unknown(String::new())
     }
 }
 
-string_enum! {
-    /// Riven disposition - affects Riven mod stat ranges (1-5)
-    pub enum Disposition {
-        default Unknown;
-        One => "1",
-        Two => "2",
-        Three => "3",
-        Four => "4",
-        Five => "5",
+/// Riven disposition - affects Riven mod stat ranges (1-5)
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum Disposition {
+    #[strum(serialize = "1")]
+    One,
+    #[strum(serialize = "2")]
+    Two,
+    #[strum(serialize = "3")]
+    Three,
+    #[strum(serialize = "4")]
+    Four,
+    #[strum(serialize = "5")]
+    Five,
+    #[strum(default)]
+    Unknown(String),
+}
+
+impl Default for Disposition {
+    fn default() -> Self {
+        Self::Unknown(String::new())
     }
 }
 
@@ -174,427 +279,993 @@ impl Disposition {
 // Item type enums (replacing type_field: String)
 // =============================================================================
 
-string_enum! {
-    /// Warframe item type
-    pub enum WarframeType {
-        default Warframe;
-        Warframe => "Warframe",
+/// Warframe item type
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum WarframeType {
+    #[default]
+    Warframe,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Arcane enhancement type classification
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum ArcaneType {
+    #[strum(serialize = "Warframe Arcane")]
+    WarframeArcane,
+    #[strum(serialize = "Operator Arcane")]
+    OperatorArcane,
+    #[strum(serialize = "Secondary Arcane")]
+    SecondaryArcane,
+    #[strum(serialize = "Amp Arcane")]
+    AmpArcane,
+    #[strum(serialize = "Primary Arcane")]
+    PrimaryArcane,
+    #[strum(serialize = "Melee Arcane")]
+    MeleeArcane,
+    Arcane,
+    #[strum(serialize = "Kitgun Arcane")]
+    KitgunArcane,
+    #[strum(serialize = "Zaw Arcane")]
+    ZawArcane,
+    #[strum(serialize = "Bow Arcane")]
+    BowArcane,
+    #[strum(serialize = "Shotgun Arcane")]
+    ShotgunArcane,
+    #[strum(default)]
+    Unknown(String),
+}
+
+impl Default for ArcaneType {
+    fn default() -> Self {
+        Self::Unknown(String::new())
     }
 }
 
-string_enum! {
-    /// Arcane enhancement type classification
-    pub enum ArcaneType {
-        default Unknown;
-        WarframeArcane => "Warframe Arcane",
-        OperatorArcane => "Operator Arcane",
-        SecondaryArcane => "Secondary Arcane",
-        AmpArcane => "Amp Arcane",
-        PrimaryArcane => "Primary Arcane",
-        MeleeArcane => "Melee Arcane",
-        Arcane => "Arcane",
-        KitgunArcane => "Kitgun Arcane",
-        ZawArcane => "Zaw Arcane",
-        BowArcane => "Bow Arcane",
-        ShotgunArcane => "Shotgun Arcane",
+/// Gear item type classification
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum GearType {
+    #[default]
+    Gear,
+    Fish,
+    #[strum(serialize = "Fish Bait")]
+    FishBait,
+    Specter,
+    Key,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Resource type classification
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum ResourceType {
+    #[default]
+    Resource,
+    Gem,
+    Plant,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Primary weapon type classification
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum PrimaryType {
+    Bow,
+    Launcher,
+    Pistol,
+    #[default]
+    Rifle,
+    Shotgun,
+    Sniper,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Secondary weapon type classification
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum SecondaryType {
+    #[strum(serialize = "Dual Pistols")]
+    DualPistols,
+    #[default]
+    Pistol,
+    Throwing,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Melee weapon type classification
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum MeleeType {
+    #[default]
+    Melee,
+    Rifle,
+    #[strum(serialize = "Zaw Component")]
+    ZawComponent,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Railjack weapon types
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum RailjackType {
+    #[default]
+    #[strum(serialize = "Railjack Turret")]
+    RailjackTurret,
+    Shotgun,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Arch-Gun item type
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum ArchGunType {
+    #[default]
+    #[strum(serialize = "Arch-Gun")]
+    ArchGun,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Arch-Melee item type
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum ArchMeleeType {
+    #[default]
+    #[strum(serialize = "Arch-Melee")]
+    ArchMelee,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Archwing item type
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum ArchwingType {
+    #[default]
+    Archwing,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Sentinel item type
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum SentinelType {
+    #[default]
+    Sentinel,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Sentinel weapon item type
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum SentinelWeaponType {
+    #[default]
+    #[strum(serialize = "Companion Weapon")]
+    CompanionWeapon,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Mod item type classification
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum ModType {
+    #[strum(serialize = "Arch-Gun Mod")]
+    ArchGunMod,
+    #[strum(serialize = "Arch-Gun Riven Mod")]
+    ArchGunRivenMod,
+    #[strum(serialize = "Arch-Melee Mod")]
+    ArchMeleeMod,
+    #[strum(serialize = "Archwing Mod")]
+    ArchwingMod,
+    #[strum(serialize = "Companion Mod")]
+    CompanionMod,
+    #[strum(serialize = "Companion Weapon Riven Mod")]
+    CompanionWeaponRivenMod,
+    #[strum(serialize = "Focus Way")]
+    FocusWay,
+    #[strum(serialize = "K-Drive Mod")]
+    KDriveMod,
+    #[strum(serialize = "Kitgun Riven Mod")]
+    KitgunRivenMod,
+    #[strum(serialize = "Melee Mod")]
+    MeleeMod,
+    #[strum(serialize = "Melee Riven Mod")]
+    MeleeRivenMod,
+    #[strum(serialize = "Mod Set Mod")]
+    ModSetMod,
+    #[strum(serialize = "Necramech Mod")]
+    NecramechMod,
+    #[strum(serialize = "Parazon Mod")]
+    ParazonMod,
+    #[strum(serialize = "Peculiar Mod")]
+    PeculiarMod,
+    #[strum(serialize = "Pistol Riven Mod")]
+    PistolRivenMod,
+    #[strum(serialize = "Plexus Mod")]
+    PlexusMod,
+    #[strum(serialize = "Posture Mod")]
+    PostureMod,
+    #[strum(serialize = "Primary Mod")]
+    PrimaryMod,
+    #[strum(serialize = "Railjack Mod")]
+    RailjackMod,
+    #[strum(serialize = "Rifle Riven Mod")]
+    RifleRivenMod,
+    #[strum(serialize = "Secondary Mod")]
+    SecondaryMod,
+    #[strum(serialize = "Shotgun Mod")]
+    ShotgunMod,
+    #[strum(serialize = "Shotgun Riven Mod")]
+    ShotgunRivenMod,
+    #[strum(serialize = "Stance Mod")]
+    StanceMod,
+    #[strum(serialize = "Tektolyst Artifact Mod")]
+    TektolystArtifactMod,
+    #[strum(serialize = "Transmutation Mod")]
+    TransmutationMod,
+    #[strum(serialize = "Warframe Mod")]
+    WarframeMod,
+    #[strum(serialize = "Zaw Riven Mod")]
+    ZawRivenMod,
+    #[strum(default)]
+    Unknown(String),
+}
+
+impl Default for ModType {
+    fn default() -> Self {
+        Self::Unknown(String::new())
     }
 }
 
-string_enum! {
-    /// Gear item type classification
-    pub enum GearType {
-        default Gear;
-        Gear => "Gear",
-        Fish => "Fish",
-        FishBait => "Fish Bait",
-        Specter => "Specter",
-        Key => "Key",
+/// Relic item type
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum RelicType {
+    #[default]
+    Relic,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Fish item type
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum FishType {
+    #[default]
+    Fish,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Glyph item type
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum GlyphType {
+    #[default]
+    Glyph,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Sigil item type
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum SigilType {
+    #[default]
+    Sigil,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Node item type
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum NodeType {
+    #[default]
+    Node,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Quest item type
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum QuestType {
+    #[default]
+    Key,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Skin/cosmetic item type classification
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum SkinType {
+    #[strum(serialize = "Arcade Minigame Unlock")]
+    ArcadeMinigameUnlock,
+    #[strum(serialize = "Color Palette")]
+    ColorPalette,
+    Emotes,
+    #[strum(serialize = "Fur Color")]
+    FurColor,
+    #[strum(serialize = "Fur Pattern")]
+    FurPattern,
+    Glyph,
+    Misc,
+    #[strum(serialize = "Note Packs")]
+    NotePacks,
+    Resource,
+    #[strum(serialize = "Ship Decoration")]
+    ShipDecoration,
+    #[default]
+    Skin,
+    Skins,
+    Syandana,
+    #[strum(serialize = "Theme Background")]
+    ThemeBackground,
+    #[strum(serialize = "Theme Sound")]
+    ThemeSound,
+    Themes,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Enemy faction/type classification
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum EnemyType {
+    Corpus,
+    Grineer,
+    Infestation,
+    Melee,
+    Neutral,
+    Orbiter,
+    Orokin,
+    Predator,
+    Prey,
+    Rifle,
+    Sentient,
+    Shotgun,
+    Stalker,
+    Tenno,
+    Warframe,
+    #[strum(default)]
+    Unknown(String),
+}
+
+impl Default for EnemyType {
+    fn default() -> Self {
+        Self::Unknown(String::new())
     }
 }
 
-string_enum! {
-    /// Resource type classification
-    pub enum ResourceType {
-        default Resource;
-        Resource => "Resource",
-        Gem => "Gem",
-        Plant => "Plant",
+/// Pet item type classification
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum PetType {
+    #[strum(serialize = "Pet Parts")]
+    PetParts,
+    #[strum(serialize = "Pet Resource")]
+    PetResource,
+    Pets,
+    Warframe,
+    #[strum(default)]
+    Unknown(String),
+}
+
+impl Default for PetType {
+    fn default() -> Self {
+        Self::Unknown(String::new())
     }
 }
 
-string_enum! {
-    /// Primary weapon type classification
-    pub enum PrimaryType {
-        default Rifle;
-        Bow => "Bow",
-        Launcher => "Launcher",
-        Pistol => "Pistol",
-        Rifle => "Rifle",
-        Shotgun => "Shotgun",
-        Sniper => "Sniper",
+/// Miscellaneous item type classification
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum MiscType {
+    Alloy,
+    Amp,
+    #[strum(serialize = "Ayatan Sculpture")]
+    AyatanSculpture,
+    #[strum(serialize = "Ayatan Star")]
+    AyatanStar,
+    Boosters,
+    Captura,
+    #[strum(serialize = "Conservation Prey")]
+    ConservationPrey,
+    #[strum(serialize = "Conservation Tag")]
+    ConservationTag,
+    Currency,
+    #[strum(serialize = "Cut Gem")]
+    CutGem,
+    #[strum(serialize = "Eidolon Shard")]
+    EidolonShard,
+    #[strum(serialize = "Equipment Adapter")]
+    EquipmentAdapter,
+    #[strum(serialize = "Exalted Weapon")]
+    ExaltedWeapon,
+    Extractor,
+    #[strum(serialize = "Fish Bait")]
+    FishBait,
+    #[strum(serialize = "Fish Part")]
+    FishPart,
+    #[strum(serialize = "Focus Lens")]
+    FocusLens,
+    #[strum(serialize = "K-Drive Component")]
+    KDriveComponent,
+    Key,
+    #[strum(serialize = "Kitgun Component")]
+    KitgunComponent,
+    #[strum(serialize = "Kitgun Riven Mod")]
+    KitgunRivenMod,
+    Medallion,
+    #[strum(serialize = "Melee Riven Mod")]
+    MeleeRivenMod,
+    #[default]
+    Misc,
+    #[strum(serialize = "Nightwave Challenge")]
+    NightwaveChallenge,
+    Orbiter,
+    #[strum(serialize = "Pet Collar")]
+    PetCollar,
+    #[strum(serialize = "Pet Resource")]
+    PetResource,
+    Pistol,
+    #[strum(serialize = "Pistol Riven Mod")]
+    PistolRivenMod,
+    Resource,
+    Rifle,
+    #[strum(serialize = "Rifle Riven Mod")]
+    RifleRivenMod,
+    #[strum(serialize = "Ship Segment")]
+    ShipSegment,
+    #[strum(serialize = "Shotgun Riven Mod")]
+    ShotgunRivenMod,
+    Simulacrum,
+    Skin,
+    #[strum(serialize = "Zaw Riven Mod")]
+    ZawRivenMod,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Enemy resistance type classification
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum ResistanceType {
+    #[strum(serialize = "Alloy Armor")]
+    AlloyArmor,
+    #[strum(serialize = "Cloned Flesh")]
+    ClonedFlesh,
+    #[strum(serialize = "Ferrite Armor")]
+    FeriteArmor,
+    Flesh,
+    Fossilized,
+    Infested,
+    #[strum(serialize = "Infested Flesh")]
+    InfestedFlesh,
+    #[strum(serialize = "Infested Sinew")]
+    InfestedSinew,
+    Machinery,
+    #[strum(serialize = "None")]
+    NoResistance,
+    #[strum(serialize = "Proto Shield")]
+    ProtoShield,
+    Robotic,
+    Shield,
+    #[strum(default)]
+    Unknown(String),
+}
+
+impl Default for ResistanceType {
+    fn default() -> Self {
+        Self::Unknown(String::new())
     }
 }
 
-string_enum! {
-    /// Secondary weapon type classification
-    pub enum SecondaryType {
-        default Pistol;
-        DualPistols => "Dual Pistols",
-        Pistol => "Pistol",
-        Throwing => "Throwing",
-    }
-}
-
-string_enum! {
-    /// Melee weapon type classification
-    pub enum MeleeType {
-        default Melee;
-        Melee => "Melee",
-        Rifle => "Rifle",
-        ZawComponent => "Zaw Component",
-    }
-}
-
-string_enum! {
-    /// Railjack weapon types
-    pub enum RailjackType {
-        default RailjackTurret;
-        RailjackTurret => "Railjack Turret",
-        Shotgun => "Shotgun",
-    }
-}
-
-string_enum! {
-    /// Arch-Gun item type
-    pub enum ArchGunType {
-        default ArchGun;
-        ArchGun => "Arch-Gun",
-    }
-}
-
-string_enum! {
-    /// Arch-Melee item type
-    pub enum ArchMeleeType {
-        default ArchMelee;
-        ArchMelee => "Arch-Melee",
-    }
-}
-
-string_enum! {
-    /// Archwing item type
-    pub enum ArchwingType {
-        default Archwing;
-        Archwing => "Archwing",
-    }
-}
-
-string_enum! {
-    /// Sentinel item type
-    pub enum SentinelType {
-        default Sentinel;
-        Sentinel => "Sentinel",
-    }
-}
-
-string_enum! {
-    /// Sentinel weapon item type
-    pub enum SentinelWeaponType {
-        default CompanionWeapon;
-        CompanionWeapon => "Companion Weapon",
-    }
-}
-
-string_enum! {
-    /// Mod item type classification
-    pub enum ModType {
-        default Unknown;
-        ArchGunMod => "Arch-Gun Mod",
-        ArchGunRivenMod => "Arch-Gun Riven Mod",
-        ArchMeleeMod => "Arch-Melee Mod",
-        ArchwingMod => "Archwing Mod",
-        CompanionMod => "Companion Mod",
-        CompanionWeaponRivenMod => "Companion Weapon Riven Mod",
-        FocusWay => "Focus Way",
-        KDriveMod => "K-Drive Mod",
-        KitgunRivenMod => "Kitgun Riven Mod",
-        MeleeMod => "Melee Mod",
-        MeleeRivenMod => "Melee Riven Mod",
-        ModSetMod => "Mod Set Mod",
-        NecramechMod => "Necramech Mod",
-        ParazonMod => "Parazon Mod",
-        PeculiarMod => "Peculiar Mod",
-        PistolRivenMod => "Pistol Riven Mod",
-        PlexusMod => "Plexus Mod",
-        PostureMod => "Posture Mod",
-        PrimaryMod => "Primary Mod",
-        RailjackMod => "Railjack Mod",
-        RifleRivenMod => "Rifle Riven Mod",
-        SecondaryMod => "Secondary Mod",
-        ShotgunMod => "Shotgun Mod",
-        ShotgunRivenMod => "Shotgun Riven Mod",
-        StanceMod => "Stance Mod",
-        TektolystArtifactMod => "Tektolyst Artifact Mod",
-        TransmutationMod => "Transmutation Mod",
-        WarframeMod => "Warframe Mod",
-        ZawRivenMod => "Zaw Riven Mod",
-    }
-}
-
-string_enum! {
-    /// Relic item type
-    pub enum RelicType {
-        default Relic;
-        Relic => "Relic",
-    }
-}
-
-string_enum! {
-    /// Fish item type
-    pub enum FishType {
-        default Fish;
-        Fish => "Fish",
-    }
-}
-
-string_enum! {
-    /// Glyph item type
-    pub enum GlyphType {
-        default Glyph;
-        Glyph => "Glyph",
-    }
-}
-
-string_enum! {
-    /// Sigil item type
-    pub enum SigilType {
-        default Sigil;
-        Sigil => "Sigil",
-    }
-}
-
-string_enum! {
-    /// Node item type
-    pub enum NodeType {
-        default Node;
-        Node => "Node",
-    }
-}
-
-string_enum! {
-    /// Quest item type
-    pub enum QuestType {
-        default Key;
-        Key => "Key",
-    }
-}
-
-string_enum! {
-    /// Skin/cosmetic item type classification
-    pub enum SkinType {
-        default Skin;
-        ArcadeMinigameUnlock => "Arcade Minigame Unlock",
-        ColorPalette => "Color Palette",
-        Emotes => "Emotes",
-        FurColor => "Fur Color",
-        FurPattern => "Fur Pattern",
-        Glyph => "Glyph",
-        Misc => "Misc",
-        NotePacks => "Note Packs",
-        Resource => "Resource",
-        ShipDecoration => "Ship Decoration",
-        Skin => "Skin",
-        Skins => "Skins",
-        Syandana => "Syandana",
-        ThemeBackground => "Theme Background",
-        ThemeSound => "Theme Sound",
-        Themes => "Themes",
-    }
-}
-
-string_enum! {
-    /// Enemy faction/type classification
-    pub enum EnemyType {
-        default Unknown;
-        Corpus => "Corpus",
-        Grineer => "Grineer",
-        Infestation => "Infestation",
-        Melee => "Melee",
-        Neutral => "Neutral",
-        Orbiter => "Orbiter",
-        Orokin => "Orokin",
-        Predator => "Predator",
-        Prey => "Prey",
-        Rifle => "Rifle",
-        Sentient => "Sentient",
-        Shotgun => "Shotgun",
-        Stalker => "Stalker",
-        Tenno => "Tenno",
-        Warframe => "Warframe",
-    }
-}
-
-string_enum! {
-    /// Pet item type classification
-    pub enum PetType {
-        default Unknown;
-        PetParts => "Pet Parts",
-        PetResource => "Pet Resource",
-        Pets => "Pets",
-        Warframe => "Warframe",
-    }
-}
-
-string_enum! {
-    /// Miscellaneous item type classification
-    pub enum MiscType {
-        default Misc;
-        Alloy => "Alloy",
-        Amp => "Amp",
-        AyatanSculpture => "Ayatan Sculpture",
-        AyatanStar => "Ayatan Star",
-        Boosters => "Boosters",
-        Captura => "Captura",
-        ConservationPrey => "Conservation Prey",
-        ConservationTag => "Conservation Tag",
-        Currency => "Currency",
-        CutGem => "Cut Gem",
-        EidolonShard => "Eidolon Shard",
-        EquipmentAdapter => "Equipment Adapter",
-        ExaltedWeapon => "Exalted Weapon",
-        Extractor => "Extractor",
-        FishBait => "Fish Bait",
-        FishPart => "Fish Part",
-        FocusLens => "Focus Lens",
-        KDriveComponent => "K-Drive Component",
-        Key => "Key",
-        KitgunComponent => "Kitgun Component",
-        KitgunRivenMod => "Kitgun Riven Mod",
-        Medallion => "Medallion",
-        MeleeRivenMod => "Melee Riven Mod",
-        Misc => "Misc",
-        NightwaveChallenge => "Nightwave Challenge",
-        Orbiter => "Orbiter",
-        PetCollar => "Pet Collar",
-        PetResource => "Pet Resource",
-        Pistol => "Pistol",
-        PistolRivenMod => "Pistol Riven Mod",
-        Resource => "Resource",
-        Rifle => "Rifle",
-        RifleRivenMod => "Rifle Riven Mod",
-        ShipSegment => "Ship Segment",
-        ShotgunRivenMod => "Shotgun Riven Mod",
-        Simulacrum => "Simulacrum",
-        Skin => "Skin",
-        ZawRivenMod => "Zaw Riven Mod",
-    }
-}
-
-string_enum! {
-    /// Enemy resistance type classification
-    pub enum ResistanceType {
-        default Unknown;
-        AlloyArmor => "Alloy Armor",
-        ClonedFlesh => "Cloned Flesh",
-        FeriteArmor => "Ferrite Armor",
-        Flesh => "Flesh",
-        Fossilized => "Fossilized",
-        Infested => "Infested",
-        InfestedFlesh => "Infested Flesh",
-        InfestedSinew => "Infested Sinew",
-        Machinery => "Machinery",
-        NoResistance => "None",
-        ProtoShield => "Proto Shield",
-        Robotic => "Robotic",
-        Shield => "Shield",
-    }
-}
-
-string_enum! {
-    /// Component item type
-    pub enum ComponentType {
-        default Resource;
-        Resource => "Resource",
-    }
+/// Component item type
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum ComponentType {
+    #[default]
+    Resource,
+    #[strum(default)]
+    Unknown(String),
 }
 
 // =============================================================================
 // Product category enums
 // =============================================================================
 
-string_enum! {
-    /// Primary weapon product category
-    pub enum PrimaryProductCategory {
-        default LongGuns;
-        LongGuns => "LongGuns",
-        OperatorAmps => "OperatorAmps",
+/// Primary weapon product category
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum PrimaryProductCategory {
+    #[default]
+    LongGuns,
+    OperatorAmps,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Melee weapon product category
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum MeleeProductCategory {
+    #[default]
+    Melee,
+    Pistols,
+    #[strum(default)]
+    Unknown(String),
+}
+
+/// Warframe sex/gender
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum Sex {
+    Female,
+    Male,
+    #[strum(serialize = "Non-binary")]
+    NonBinary,
+    #[strum(default)]
+    Unknown(String),
+}
+
+impl Default for Sex {
+    fn default() -> Self {
+        Self::Unknown(String::new())
     }
 }
 
-string_enum! {
-    /// Melee weapon product category
-    pub enum MeleeProductCategory {
-        default Melee;
-        Melee => "Melee",
-        Pistols => "Pistols",
-    }
+/// Secondary weapon product category
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum SecondaryProductCategory {
+    #[default]
+    Pistols,
+    #[strum(default)]
+    Unknown(String),
 }
 
-string_enum! {
-    /// Warframe sex/gender
-    pub enum Sex {
-        default Unknown;
-        Female => "Female",
-        Male => "Male",
-        NonBinary => "Non-binary",
-    }
+/// Archwing product category
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum ArchwingProductCategory {
+    #[default]
+    SpaceSuits,
+    #[strum(default)]
+    Unknown(String),
 }
 
-string_enum! {
-    /// Secondary weapon product category
-    pub enum SecondaryProductCategory {
-        default Pistols;
-        Pistols => "Pistols",
-    }
+/// Sentinel product category
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum SentinelProductCategory {
+    #[default]
+    Sentinels,
+    #[strum(default)]
+    Unknown(String),
 }
 
-string_enum! {
-    /// Archwing product category
-    pub enum ArchwingProductCategory {
-        default SpaceSuits;
-        SpaceSuits => "SpaceSuits",
-    }
+/// Sentinel weapon product category
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum SentinelWeaponProductCategory {
+    #[default]
+    SentinelWeapons,
+    #[strum(default)]
+    Unknown(String),
 }
 
-string_enum! {
-    /// Sentinel product category
-    pub enum SentinelProductCategory {
-        default Sentinels;
-        Sentinels => "Sentinels",
-    }
+/// Arch-Gun product category
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum ArchGunProductCategory {
+    #[default]
+    SpaceGuns,
+    #[strum(default)]
+    Unknown(String),
 }
 
-string_enum! {
-    /// Sentinel weapon product category
-    pub enum SentinelWeaponProductCategory {
-        default SentinelWeapons;
-        SentinelWeapons => "SentinelWeapons",
-    }
-}
-
-string_enum! {
-    /// Arch-Gun product category
-    pub enum ArchGunProductCategory {
-        default SpaceGuns;
-        SpaceGuns => "SpaceGuns",
-    }
-}
-
-string_enum! {
-    /// Arch-Melee product category
-    pub enum ArchMeleeProductCategory {
-        default SpaceMelee;
-        SpaceMelee => "SpaceMelee",
-    }
+/// Arch-Melee product category
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Default,
+    Display,
+    EnumString,
+    AsRefStr,
+    SerializeDisplay,
+    DeserializeFromStr,
+)]
+pub enum ArchMeleeProductCategory {
+    #[default]
+    SpaceMelee,
+    #[strum(default)]
+    Unknown(String),
 }
 
 // =============================================================================
