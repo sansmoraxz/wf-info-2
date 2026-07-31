@@ -18,8 +18,8 @@ pub fn load_image(bytes: &[u8]) -> anyhow::Result<image::DynamicImage> {
         .decode()?)
 }
 
-pub struct RelicRecognizer<'a> {
-    ocr_engine: &'a OcrEngine,
+pub struct RelicRecognizer {
+    ocr_engine: &'static OcrEngine,
     pub start_x: u32,
     pub start_y: u32,
     pub box_w: u32,
@@ -33,8 +33,8 @@ pub struct RelicRecogizeText {
     pub text: String,
 }
 
-impl<'a> RelicRecognizer<'a> {
-    pub fn new(ocr_engine: &'a OcrEngine) -> RelicRecognizer<'a> {
+impl RelicRecognizer {
+    pub fn new(ocr_engine: &'static OcrEngine) -> RelicRecognizer {
         // TODO: handle non default scales + widescreen etc.
         RelicRecognizer {
             ocr_engine,
