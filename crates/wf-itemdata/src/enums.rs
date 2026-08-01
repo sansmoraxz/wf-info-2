@@ -1304,36 +1304,12 @@ pub enum VaultStatus {
     Active,
     /// Prime item with predicted vault date (vaulted = false, has estimated date)
     EstimatedVault { estimated_date: String },
-    /// Prime item currently vaulted (vaulted = true)
-    Vaulted { date: String },
+    /// Prime item currently vaulted (vaulted = true); the vault date is not
+    /// always known.
+    Vaulted { date: Option<String> },
 }
 
 impl VaultStatus {
-    /// Compute vault status from individual fields.
-    pub fn from_fields(
-        is_prime: bool,
-        vaulted: Option<bool>,
-        vault_date: Option<&str>,
-        estimated_vault_date: Option<&str>,
-    ) -> Self {
-        if !is_prime {
-            return VaultStatus::NotPrime;
-        }
-
-        match (vaulted, vault_date, estimated_vault_date) {
-            (Some(true), Some(date), _) => VaultStatus::Vaulted {
-                date: date.to_string(),
-            },
-            (Some(true), None, _) => VaultStatus::Vaulted {
-                date: String::new(),
-            },
-            (_, _, Some(est_date)) if !vaulted.unwrap_or(false) => VaultStatus::EstimatedVault {
-                estimated_date: est_date.to_string(),
-            },
-            _ => VaultStatus::Active,
-        }
-    }
-
     pub fn is_prime(&self) -> bool {
         !self.is_not_prime()
     }
@@ -1344,7 +1320,7 @@ impl VaultStatus {
 
     pub fn vault_date(&self) -> Option<&str> {
         match self {
-            VaultStatus::Vaulted { date } if !date.is_empty() => Some(date),
+            VaultStatus::Vaulted { date } => date.as_deref(),
             _ => None,
         }
     }
@@ -1465,8 +1441,7 @@ mod tests {
 
     #[test]
     fn test_vault_status_not_prime() {
-        let status = VaultStatus::from_fields(false, None, None, None);
-        assert_eq!(status, VaultStatus::NotPrime);
+        let status = VaultStatus::NotPrime;
         assert!(!status.is_prime());
         assert!(!status.is_vaulted());
         assert!(status.is_accessible());
@@ -1474,8 +1449,7 @@ mod tests {
 
     #[test]
     fn test_vault_status_active_prime() {
-        let status = VaultStatus::from_fields(true, Some(false), None, None);
-        assert_eq!(status, VaultStatus::Active);
+        let status = VaultStatus::Active;
         assert!(status.is_prime());
         assert!(!status.is_vaulted());
         assert!(status.is_accessible());
@@ -1483,18 +1457,24 @@ mod tests {
 
     #[test]
     fn test_vault_status_vaulted_prime() {
-        let status = VaultStatus::from_fields(true, Some(true), Some("2021-09-08"), None);
-        assert!(matches!(status, VaultStatus::Vaulted { .. }));
+        let status = VaultStatus::Vaulted {
+            date: Some("2021-09-08".to_string()),
+        };
         assert!(status.is_prime());
         assert!(status.is_vaulted());
         assert!(!status.is_accessible());
         assert_eq!(status.vault_date(), Some("2021-09-08"));
+
+        let undated = VaultStatus::Vaulted { date: None };
+        assert!(undated.is_vaulted());
+        assert_eq!(undated.vault_date(), None);
     }
 
     #[test]
     fn test_vault_status_estimated_vault() {
-        let status = VaultStatus::from_fields(true, Some(false), None, Some("2023-03-14"));
-        assert!(matches!(status, VaultStatus::EstimatedVault { .. }));
+        let status = VaultStatus::EstimatedVault {
+            estimated_date: "2023-03-14".to_string(),
+        };
         assert!(status.is_prime());
         assert!(!status.is_vaulted());
         assert!(status.is_accessible());

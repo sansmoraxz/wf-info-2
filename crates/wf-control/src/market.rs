@@ -14,6 +14,44 @@ use wf_itemdata::item_data::lookup_item_info;
 
 const CACHE_TTL: Duration = Duration::from_secs(3600); // 1 hour
 
+// ── Domain newtypes ──
+
+/// In-game item path like `/Lotus/Types/...`. A string on the wire, but must
+/// never be interchanged with [`WfmId`]: each indexes a different cache map.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::AsRef,
+)]
+#[serde(transparent)]
+#[from(forward)]
+#[as_ref(str)]
+pub(crate) struct GameRef(String);
+
+/// warframe.market object id. A string on the wire, but must never be
+/// interchanged with [`GameRef`]: each indexes a different cache map.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Deserialize,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::AsRef,
+)]
+#[serde(transparent)]
+#[as_ref(str)]
+pub(crate) struct WfmId(String);
+
 // ── Types for WFM API responses ──
 
 #[derive(Debug, Clone, Deserialize)]
@@ -23,10 +61,10 @@ struct WfmItemsResponse {
 
 #[derive(Debug, Clone, Deserialize)]
 struct WfmItemRaw {
-    id: String,
+    id: WfmId,
     slug: String,
     #[serde(rename = "gameRef")]
-    game_ref: Option<String>,
+    game_ref: Option<GameRef>,
     #[serde(default)]
     tags: Vec<String>,
     ducats: Option<i64>,
@@ -71,9 +109,9 @@ struct WfmOrderUser {
 
 #[derive(Debug, Clone)]
 pub(crate) struct WfmItem {
-    pub id: String,
+    pub id: WfmId,
     pub slug: String,
-    pub game_ref: Option<String>,
+    pub game_ref: Option<GameRef>,
     pub name: String,
     pub tags: Vec<String>,
     pub ducats: Option<i64>,
@@ -82,8 +120,8 @@ pub(crate) struct WfmItem {
 pub(crate) struct WfmCache {
     // Positions into `items`; the cache is only ever replaced wholesale,
     // so indices stay valid for its lifetime.
-    game_ref_index: HashMap<String, usize>,
-    id_index: HashMap<String, usize>,
+    game_ref_index: HashMap<GameRef, usize>,
+    id_index: HashMap<WfmId, usize>,
     items: Vec<WfmItem>,
     last_refreshed_at: DateTime<Utc>,
     #[allow(dead_code)]
@@ -178,7 +216,7 @@ async fn refresh_cache(state: &AppState) -> Result<(usize, DateTime<Utc>)> {
 
 // ── Cache lookups ──
 
-fn lookup_by_game_ref(state: &AppState, game_ref: &str) -> Option<WfmItem> {
+fn lookup_by_game_ref(state: &AppState, game_ref: &GameRef) -> Option<WfmItem> {
     let guard = state
         .market_cache
         .read()
@@ -188,7 +226,7 @@ fn lookup_by_game_ref(state: &AppState, game_ref: &str) -> Option<WfmItem> {
         .and_then(|c| Some(c.items[*c.game_ref_index.get(game_ref)?].clone()))
 }
 
-fn lookup_by_id(state: &AppState, id: &str) -> Option<WfmItem> {
+fn lookup_by_id(state: &AppState, id: &WfmId) -> Option<WfmItem> {
     let guard = state
         .market_cache
         .read()
@@ -209,6 +247,7 @@ fn search_items(state: &AppState, query: &str) -> Vec<WfmItem> {
 
     let query_lower = query.to_lowercase();
     let query_set = format!("{} set", query_lower);
+    let query_slug = query_lower.replace(' ', "_");
     let mut results: Vec<(usize, &WfmItem)> = cache
         .items
         .iter()
@@ -220,7 +259,7 @@ fn search_items(state: &AppState, query: &str) -> Vec<WfmItem> {
                 Some((1, item))
             } else if name_lower.contains(&query_lower) {
                 Some((2, item))
-            } else if item.slug.contains(&query_lower.replace(' ', "_")) {
+            } else if item.slug.contains(&query_slug) {
                 Some((3, item))
             } else {
                 None
@@ -229,10 +268,11 @@ fn search_items(state: &AppState, query: &str) -> Vec<WfmItem> {
         .collect();
 
     // Sort by: score first, then prefer set items (tagged "set") over components
+    let is_set = |item: &WfmItem| item.tags.iter().any(|t| t == "set");
     results.sort_by(|(score_a, item_a), (score_b, item_b)| {
-        let a_is_set = item_a.tags.contains(&"set".to_string());
-        let b_is_set = item_b.tags.contains(&"set".to_string());
-        score_a.cmp(score_b).then_with(|| b_is_set.cmp(&a_is_set))
+        score_a
+            .cmp(score_b)
+            .then_with(|| is_set(item_b).cmp(&is_set(item_a)))
     });
     results.into_iter().map(|(_, item)| item.clone()).collect()
 }
@@ -247,7 +287,7 @@ struct WfmItemDetailResponse {
 #[derive(Debug, Clone, Deserialize)]
 struct WfmItemDetail {
     #[serde(rename = "setParts")]
-    set_parts: Option<Vec<String>>,
+    set_parts: Option<Vec<WfmId>>,
 }
 
 async fn fetch_item_detail(slug: &str) -> Result<WfmItemDetail> {
@@ -436,7 +476,7 @@ pub(crate) struct MarketPriceParams {
 pub(crate) struct MarketItemInfo {
     pub name: String,
     pub slug: String,
-    pub game_ref: Option<String>,
+    pub game_ref: Option<GameRef>,
     pub ducats: Option<i64>,
     pub tags: Vec<String>,
     pub is_set: bool,
@@ -451,7 +491,7 @@ pub(crate) struct OwnedCount {
 pub(crate) struct SetPartInfo {
     pub name: String,
     pub slug: String,
-    pub game_ref: Option<String>,
+    pub game_ref: Option<GameRef>,
     pub ducats: Option<i64>,
     pub prices: OrderSummary,
     pub inventory: OwnedCount,
@@ -490,7 +530,7 @@ pub(crate) async fn handle_market_price(
     // Resolve the WFM item
     let wfm_item = if let Some(ref item_type) = params.item_type {
         // Try direct gameRef lookup
-        let direct = lookup_by_game_ref(state, item_type);
+        let direct = lookup_by_game_ref(state, &GameRef::from(item_type.as_str()));
         if direct.is_some() {
             direct
         } else {
@@ -515,14 +555,14 @@ pub(crate) async fn handle_market_price(
         wfm_item
             .game_ref
             .as_ref()
-            .map(|gr| count_in_inventory(inv, gr))
+            .map(|gr| count_in_inventory(inv, gr.as_ref()))
     });
 
     // Item details from itemdata
     let details = wfm_item
         .game_ref
         .as_ref()
-        .and_then(|gr| lookup_item_info(gr, None))
+        .and_then(|gr| lookup_item_info(gr.as_ref(), None))
         .map(|info| info.details);
 
     // Set parts: detect set items by "set" tag, then fetch detail for setParts
@@ -543,7 +583,9 @@ pub(crate) async fn handle_market_price(
                             let part_prices = summarize_orders(&part_orders);
 
                             let part_owned = inventory.as_ref().and_then(|inv| {
-                                part.game_ref.as_ref().map(|gr| count_in_inventory(inv, gr))
+                                part.game_ref
+                                    .as_ref()
+                                    .map(|gr| count_in_inventory(inv, gr.as_ref()))
                             });
 
                             parts.push(SetPartInfo {
@@ -595,7 +637,10 @@ pub(crate) async fn handle_market_refresh(state: &AppState) -> Result<MarketRefr
 
 /// Fetch market price summary for a single item by game_ref.
 /// Used by inventory-filter enrichment.
-pub(crate) async fn fetch_market_summary(state: &AppState, game_ref: &str) -> Option<MarketSummary> {
+pub(crate) async fn fetch_market_summary(
+    state: &AppState,
+    game_ref: &GameRef,
+) -> Option<MarketSummary> {
     if ensure_cache(state).await.is_err() {
         return None;
     }

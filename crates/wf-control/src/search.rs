@@ -278,11 +278,6 @@ pub(crate) fn collect_inventory_items(
         });
     };
 
-    let include = |name: Category, selected: Option<Category>| match selected {
-        None => true,
-        Some(sel) => name == sel,
-    };
-
     fn envelope<T: Clone + HasOther>(
         item: &T,
         item_type: &str,
@@ -303,115 +298,41 @@ pub(crate) fn collect_inventory_items(
         }
     }
 
-    if include(Category::Suits, category) {
-        for item in &inventory.suits {
-            push_item(InventoryItemEnvelope::Suits(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
+    // One arm per category: inventory field, envelope variant, and how the
+    // item id is derived (`item_id.oid`, `last_added_id.oid`, or absent).
+    macro_rules! collect {
+        ($cat:ident, $field:ident, |$item:ident| $id:expr) => {
+            if category.is_none_or(|sel| sel == Category::$cat) {
+                for $item in &inventory.$field {
+                    push_item(InventoryItemEnvelope::$cat(envelope(
+                        $item,
+                        &$item.item_type,
+                        $id,
+                    )));
+                }
+            }
+        };
     }
 
-    if include(Category::LongGuns, category) {
-        for item in &inventory.long_guns {
-            push_item(InventoryItemEnvelope::LongGuns(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include(Category::Pistols, category) {
-        for item in &inventory.pistols {
-            push_item(InventoryItemEnvelope::Pistols(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include(Category::Melee, category) {
-        for item in &inventory.melee {
-            push_item(InventoryItemEnvelope::Melee(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include(Category::SpaceSuits, category) {
-        for item in &inventory.space_suits {
-            push_item(InventoryItemEnvelope::SpaceSuits(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include(Category::SpaceGuns, category) {
-        for item in &inventory.space_guns {
-            push_item(InventoryItemEnvelope::SpaceGuns(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include(Category::SpaceMelee, category) {
-        for item in &inventory.space_melee {
-            push_item(InventoryItemEnvelope::SpaceMelee(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include(Category::RawUpgrades, category) {
-        for item in &inventory.raw_upgrades {
-            push_item(InventoryItemEnvelope::RawUpgrades(envelope(
-                item,
-                &item.item_type,
-                Some(item.last_added_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include(Category::Upgrades, category) {
-        for item in &inventory.upgrades {
-            push_item(InventoryItemEnvelope::Upgrades(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include(Category::Recipes, category) {
-        for item in &inventory.recipes {
-            push_item(InventoryItemEnvelope::Recipes(envelope(
-                item,
-                &item.item_type,
-                None,
-            )));
-        }
-    }
-
-    if include(Category::PendingRecipes, category) {
-        for item in &inventory.pending_recipes {
-            push_item(InventoryItemEnvelope::PendingRecipes(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
+    collect!(Suits, suits, |item| Some(item.item_id.oid.clone()));
+    collect!(LongGuns, long_guns, |item| Some(item.item_id.oid.clone()));
+    collect!(Pistols, pistols, |item| Some(item.item_id.oid.clone()));
+    collect!(Melee, melee, |item| Some(item.item_id.oid.clone()));
+    collect!(SpaceSuits, space_suits, |item| Some(
+        item.item_id.oid.clone()
+    ));
+    collect!(SpaceGuns, space_guns, |item| Some(item.item_id.oid.clone()));
+    collect!(SpaceMelee, space_melee, |item| Some(
+        item.item_id.oid.clone()
+    ));
+    collect!(RawUpgrades, raw_upgrades, |item| Some(
+        item.last_added_id.oid.clone()
+    ));
+    collect!(Upgrades, upgrades, |item| Some(item.item_id.oid.clone()));
+    collect!(Recipes, recipes, |item| None);
+    collect!(PendingRecipes, pending_recipes, |item| Some(
+        item.item_id.oid.clone()
+    ));
 
     items
 }

@@ -4802,6 +4802,7 @@ dependencies = [
  "ashpd",
  "base64",
  "chrono",
+ "derive_more",
  "dirs",
  "enum_dispatch",
  "futures-util",

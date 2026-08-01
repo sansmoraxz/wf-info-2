@@ -111,12 +111,20 @@ pub trait Prime: Item {
     ///
     /// This provides a cleaner API than checking individual fields.
     fn vault_status(&self) -> VaultStatus {
-        VaultStatus::from_fields(
-            self.is_prime(),
-            self.vaulted(),
-            self.vault_date(),
-            self.estimated_vault_date(),
-        )
+        if !self.is_prime() {
+            return VaultStatus::NotPrime;
+        }
+        if self.vaulted().unwrap_or(false) {
+            return VaultStatus::Vaulted {
+                date: self.vault_date().map(str::to_string),
+            };
+        }
+        match self.estimated_vault_date() {
+            Some(estimated_date) => VaultStatus::EstimatedVault {
+                estimated_date: estimated_date.to_string(),
+            },
+            None => VaultStatus::Active,
+        }
     }
 
     /// Check if item is currently accessible (not vaulted or not a Prime)

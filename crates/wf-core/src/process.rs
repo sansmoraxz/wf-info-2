@@ -252,11 +252,21 @@ const CHUNK_OVERLAP: usize = 256;
 /// immediately follow the ID and contain at least one ASCII digit.
 #[cfg(feature = "memory")]
 fn auth_candidates_in_allocation(allocation: &[u8]) -> HashSet<AuthQuery> {
-    auth_candidates_in_bytes(allocation, true)
+    auth_candidates_in_bytes(allocation, NonceBoundary::EndOfBytesTerminates)
+}
+
+/// Whether a nonce running up to the end of the byte slice counts as
+/// terminated. A whole allocation is a natural boundary; a read chunk is not,
+/// since the nonce may continue in the next chunk.
+#[cfg(feature = "memory")]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NonceBoundary {
+    EndOfBytesTerminates,
+    RequireTerminator,
 }
 
 #[cfg(feature = "memory")]
-fn auth_candidates_in_bytes(allocation: &[u8], allow_nonce_at_end: bool) -> HashSet<AuthQuery> {
+fn auth_candidates_in_bytes(allocation: &[u8], boundary: NonceBoundary) -> HashSet<AuthQuery> {
     let mut candidates = HashSet::new();
     let finder = memmem::Finder::new(AUTH_PREFIX);
     let mut search_from = 0;
@@ -278,7 +288,8 @@ fn auth_candidates_in_bytes(allocation: &[u8], allow_nonce_at_end: bool) -> Hash
                     .position(|byte| !byte.is_ascii_digit())
                     .map_or(allocation.len(), |offset| nonce_start + offset);
 
-                let nonce_is_terminated = nonce_end < allocation.len() || allow_nonce_at_end;
+                let nonce_is_terminated = nonce_end < allocation.len()
+                    || boundary == NonceBoundary::EndOfBytesTerminates;
                 if nonce_end > nonce_start && nonce_is_terminated {
                     // Both slices have been validated as ASCII above.
                     let account_id = String::from_utf8_lossy(account_id).into_owned();
@@ -333,7 +344,10 @@ fn add_chunk_candidates(
     searchable.extend_from_slice(chunk);
     // A digit at the end of a read chunk may be only part of the nonce. It is
     // retained in `previous_tail` and accepted after a terminator is observed.
-    allocation_candidates.extend(auth_candidates_in_bytes(&searchable, false));
+    allocation_candidates.extend(auth_candidates_in_bytes(
+        &searchable,
+        NonceBoundary::RequireTerminator,
+    ));
 
     let tail_start = searchable.len().saturating_sub(CHUNK_OVERLAP);
     previous_tail.clear();

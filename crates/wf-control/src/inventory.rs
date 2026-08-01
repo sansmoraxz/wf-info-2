@@ -292,7 +292,7 @@ pub(crate) async fn handle_inventory_filter(
     let include_market = params.include_market.unwrap_or(false);
     if include_market {
         for envelope in &mut filtered_items {
-            if let Some(market) = fetch_market_summary(state, envelope.item_type()).await {
+            if let Some(market) = fetch_market_summary(state, &envelope.item_type().into()).await {
                 envelope.set_market(market);
             }
         }
@@ -414,14 +414,12 @@ pub(crate) fn handle_inventory_stale_update(
         Utc::now()
     };
 
-    let reason = params.reason.clone();
-    let meta = storage::mark_inventory_stale_at(timestamp, reason.clone())?;
+    let meta = storage::mark_inventory_stale_at(timestamp, params.reason.clone())?;
 
-    // Emit inventory stale event
     state.emit(DaemonEvent::InventoryStale(InventoryStaleEvent {
         timestamp: Utc::now(),
         stale_since: timestamp,
-        reason,
+        reason: params.reason,
     }));
 
     Ok(meta)
