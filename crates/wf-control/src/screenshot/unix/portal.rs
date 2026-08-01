@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, anyhow, bail};
 use ashpd::desktop::{
     PersistMode,
-    screencast::{CursorMode, Screencast, SourceType, Stream},
+    screencast::{CursorMode, Screencast, SelectSourcesOptions, SourceType, Stream},
 };
 use gstreamer as gst;
 use gstreamer::prelude::*;
@@ -57,24 +57,25 @@ async fn open_portal_stream(restore_token: Option<&str>) -> Result<PortalStream>
         .await
         .context("Failed to connect to xdg-desktop-portal ScreenCast interface")?;
     let session = proxy
-        .create_session()
+        .create_session(Default::default())
         .await
         .context("Failed to create Wayland ScreenCast portal session")?;
 
     proxy
         .select_sources(
             &session,
-            CursorMode::Hidden,
-            SourceType::Window.into(),
-            false,
-            restore_token,
-            PersistMode::ExplicitlyRevoked,
+            SelectSourcesOptions::default()
+                .set_cursor_mode(CursorMode::Hidden)
+                .set_sources(ashpd::enumflags2::BitFlags::from(SourceType::Window))
+                .set_multiple(false)
+                .set_restore_token(restore_token)
+                .set_persist_mode(PersistMode::ExplicitlyRevoked),
         )
         .await
         .context("Failed to select Wayland ScreenCast portal window source; ensure your xdg-desktop-portal backend supports WINDOW capture")?;
 
     let response = proxy
-        .start(&session, None)
+        .start(&session, None, Default::default())
         .await
         .context("Failed to start Wayland ScreenCast portal session")?
         .response()
@@ -90,7 +91,7 @@ async fn open_portal_stream(restore_token: Option<&str>) -> Result<PortalStream>
         .cloned()
         .ok_or_else(|| anyhow!("Wayland ScreenCast portal returned no PipeWire stream; your portal backend may not support window capture"))?;
     let fd = proxy
-        .open_pipe_wire_remote(&session)
+        .open_pipe_wire_remote(&session, Default::default())
         .await
         .context("Failed to open Wayland ScreenCast PipeWire remote")?;
 
@@ -155,12 +156,11 @@ fn capture_pipewire_frame(portal_stream: PortalStream) -> Result<Vec<u8>> {
             FRAME_TIMEOUT.as_nanos().min(u64::MAX as u128) as u64,
         ))
         .ok_or_else(|| anyhow!("Timed out waiting for a Wayland ScreenCast frame"))
-        .map(|sample| {
+        .inspect(|_| {
             log::trace!(
                 "Screenshot Wayland portal frame sample pulled in {:?}",
                 sample_start.elapsed()
             );
-            sample
         })
         .and_then(sample_to_bmp);
 

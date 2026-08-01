@@ -52,7 +52,7 @@ native-wayland-screenshot = [
 scopeguard.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-ashpd = { version = "0.13", features = ["tokio"], optional = true }
+ashpd = { version = "0.13", features = ["tokio", "screencast"], optional = true }
 gstreamer = { version = "0.25", optional = true }
 gstreamer-app = { version = "0.25", optional = true }
 gstreamer-video = { version = "0.25", optional = true }
