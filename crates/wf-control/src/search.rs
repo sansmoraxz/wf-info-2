@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -29,10 +31,53 @@ pub(crate) struct InventorySearchIndex {
     pub raw_json: Field,
 }
 
-#[derive(Clone)]
-pub(crate) struct CachedInventoryIndex {
-    meta_last_updated: Option<DateTime<Utc>>,
-    index: InventorySearchIndex,
+/// An inventory snapshot together with the search index built from it. The
+/// two are only ever created (and cached) as a unit, so an index can never
+/// be paired with a different inventory than the one it was built over.
+pub(crate) struct IndexedInventory {
+    pub inventory: Inventory,
+    pub index: InventorySearchIndex,
+    /// `InventoryMeta::last_updated` at build time; the cache key.
+    last_updated: Option<DateTime<Utc>>,
+}
+
+impl IndexedInventory {
+    pub(crate) fn build(
+        inventory: Inventory,
+        last_updated: Option<DateTime<Utc>>,
+    ) -> Result<Self> {
+        let items = collect_inventory_items(&inventory, None);
+        let index = build_tantivy_index(&items)?;
+        Ok(Self {
+            inventory,
+            index,
+            last_updated,
+        })
+    }
+}
+
+/// Return the cached inventory+index pair if it matches `meta.last_updated`,
+/// otherwise load the stored inventory and build a fresh pair.
+pub(crate) fn get_or_build_indexed_inventory(
+    state: &AppState,
+    meta: &storage::InventoryMeta,
+) -> Result<Arc<IndexedInventory>> {
+    if let Ok(guard) = state.inventory_index.read()
+        && let Some(cached) = guard.as_ref()
+        && cached.last_updated == meta.last_updated
+    {
+        return Ok(Arc::clone(cached));
+    }
+
+    let inventory = storage::read_inventory()?;
+    let indexed = Arc::new(IndexedInventory::build(inventory, meta.last_updated)?);
+
+    // Update cache (best effort; ignore lock poisoning)
+    if let Ok(mut guard) = state.inventory_index.write() {
+        *guard = Some(Arc::clone(&indexed));
+    }
+
+    Ok(indexed)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -369,33 +414,6 @@ pub(crate) fn collect_inventory_items(
     }
 
     items
-}
-
-pub(crate) fn get_or_build_inventory_index(
-    state: &AppState,
-    inventory: &Inventory,
-    meta: &storage::InventoryMeta,
-) -> Result<InventorySearchIndex> {
-    // Fast path: reuse cached index if metadata matches last update timestamp
-    if let Ok(guard) = state.inventory_index.read()
-        && let Some(cached) = guard.as_ref()
-            && cached.meta_last_updated == meta.last_updated {
-                return Ok(cached.index.clone());
-            }
-
-    // Build fresh index over the entire inventory
-    let items = collect_inventory_items(inventory, None);
-    let index = build_tantivy_index(&items)?;
-
-    // Update cache (best effort; ignore lock poisoning)
-    if let Ok(mut guard) = state.inventory_index.write() {
-        *guard = Some(CachedInventoryIndex {
-            meta_last_updated: meta.last_updated,
-            index: index.clone(),
-        });
-    }
-
-    Ok(index)
 }
 
 pub(crate) fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchIndex> {

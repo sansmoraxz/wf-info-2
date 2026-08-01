@@ -5,7 +5,7 @@ use tokio::sync::broadcast;
 use crate::events::DaemonEvent;
 use crate::market::WfmCache;
 use crate::screenshot::ScreenshotConfig;
-use crate::search::CachedInventoryIndex;
+use crate::search::IndexedInventory;
 use crate::wfm_auth::WfmState;
 
 const CHANNEL_CAPACITY: usize = 256;
@@ -16,7 +16,7 @@ pub struct AppState {
     broadcaster: broadcast::Sender<DaemonEvent>,
     pub(crate) wfm: tokio::sync::RwLock<WfmState>,
     pub(crate) market_cache: std::sync::RwLock<Option<WfmCache>>,
-    pub(crate) inventory_index: std::sync::RwLock<Option<CachedInventoryIndex>>,
+    pub(crate) inventory_index: std::sync::RwLock<Option<Arc<IndexedInventory>>>,
     pub(crate) screenshot: ScreenshotState,
 }
 

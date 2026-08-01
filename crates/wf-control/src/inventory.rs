@@ -1,3 +1,4 @@
+use std::sync::Arc;
 #[cfg(feature = "memory")]
 use std::time::Duration;
 
@@ -18,8 +19,8 @@ use super::events::{
 };
 use super::market::fetch_market_summary;
 use super::search::{
-    Category, EnvelopeAccess, InventoryItemEnvelope, build_tantivy_index, collect_inventory_items,
-    get_or_build_inventory_index, search_inventory,
+    Category, EnvelopeAccess, IndexedInventory, InventoryItemEnvelope, collect_inventory_items,
+    get_or_build_indexed_inventory, search_inventory,
 };
 use wf_itemdata::item_data::lookup_item_info;
 use wf_itemdata::traits::Item as _;
@@ -191,11 +192,6 @@ pub(crate) async fn handle_inventory_filter(
         path,
         encrypted: params.encrypted.unwrap_or(false),
     });
-    let used_custom_path = custom_path.is_some();
-    let inventory = match custom_path {
-        Some(input) => input.load().await?,
-        None => storage::read_inventory()?,
-    };
 
     let category = match params.category.as_deref() {
         None => None,
@@ -209,17 +205,16 @@ pub(crate) async fn handle_inventory_filter(
 
     let meta = storage::read_inventory_meta().unwrap_or_default();
 
-    // Count items in selected category for reporting; index uses full inventory for reuse
-    let items_for_counts = collect_inventory_items(&inventory, category);
-    let total = items_for_counts.len();
-
-    // Build or reuse cached index unless a custom inventory path was provided
-    let search_index = if used_custom_path {
-        let all_items = collect_inventory_items(&inventory, None);
-        build_tantivy_index(&all_items)?
-    } else {
-        get_or_build_inventory_index(state, &inventory, &meta)?
+    // Inventory and its index travel together: a custom path gets a fresh
+    // uncached pair; the stored inventory reuses the cached pair.
+    let indexed = match custom_path {
+        Some(input) => Arc::new(IndexedInventory::build(input.load().await?, None)?),
+        None => get_or_build_indexed_inventory(state, &meta)?,
     };
+    let search_index = &indexed.index;
+
+    // Count items in selected category for reporting
+    let total = collect_inventory_items(&indexed.inventory, category).len();
 
     let mut clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
 
@@ -252,7 +247,7 @@ pub(crate) async fn handle_inventory_filter(
         clauses.push((Occur::Must, query));
     }
 
-    let (_total_matches, mut envelopes) = search_inventory(&search_index, clauses)?;
+    let (_total_matches, mut envelopes) = search_inventory(search_index, clauses)?;
     let offset = params.offset.unwrap_or(0);
     let limit = params.limit.unwrap_or(usize::MAX);
 
