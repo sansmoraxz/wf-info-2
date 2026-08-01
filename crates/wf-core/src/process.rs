@@ -121,26 +121,6 @@ fn find_new_warframe_pid(
         .or_else(|| candidates.first().copied())
 }
 
-pub async fn wait_for_new_warframe_start(existing_pids: &HashSet<u32>, launcher_pid: u32) -> u32 {
-    log::info!(
-        "Waiting for launched Warframe game process under launcher PID {}; excluding existing PIDs: {:?}",
-        launcher_pid,
-        existing_pids
-    );
-    let mut system = System::new();
-
-    loop {
-        refresh_all_process_commands(&mut system);
-
-        if let Some(pid) = find_new_warframe_pid(&system, existing_pids, launcher_pid) {
-            log::info!("Launched Warframe game process detected (PID: {}).", pid);
-            return pid;
-        }
-
-        sleep(Duration::from_secs(1)).await;
-    }
-}
-
 const DEFAULT_HANDOFF_GRACE: Duration = Duration::from_secs(10);
 
 /// How long to keep scanning for a successor Warframe process after the
@@ -156,36 +136,115 @@ pub fn handoff_grace() -> Duration {
         .unwrap_or(DEFAULT_HANDOFF_GRACE)
 }
 
-pub async fn wait_for_warframe_exit(pid: u32, launcher_pid: u32, existing_pids: &HashSet<u32>) {
-    let mut tracked = pid;
-    loop {
-        while is_warframe_pid(tracked) {
+/// The Warframe launcher has been spawned; the game process is not up yet.
+///
+/// Transitions: `Launcher -> RunningGame` via [`Self::game_started`], or
+/// stop (drop this) when the launcher exits without producing a game process.
+#[derive(Debug)]
+pub struct Launcher {
+    pid: u32,
+    existing_pids: HashSet<u32>,
+}
+
+impl Launcher {
+    pub fn new(pid: u32, existing_pids: HashSet<u32>) -> Self {
+        Self { pid, existing_pids }
+    }
+
+    /// Resolves once a newly launched Warframe game process appears.
+    ///
+    /// Never resolves if none does — race this against launcher exit and
+    /// drop the `Launcher` to take the stop transition.
+    pub async fn game_started(self) -> RunningGame {
+        log::info!(
+            "Waiting for launched Warframe game process under launcher PID {}; excluding existing PIDs: {:?}",
+            self.pid,
+            self.existing_pids
+        );
+        let mut system = System::new();
+
+        loop {
+            refresh_all_process_commands(&mut system);
+
+            if let Some(pid) = find_new_warframe_pid(&system, &self.existing_pids, self.pid) {
+                log::info!("Launched Warframe game process detected (PID: {}).", pid);
+                return RunningGame {
+                    pid,
+                    launcher_pid: self.pid,
+                    existing_pids: self.existing_pids,
+                };
+            }
+
             sleep(Duration::from_secs(1)).await;
         }
+    }
+}
 
+/// A live Warframe game process being tracked for exit.
+///
+/// Transitions: stop via [`Self::pid_exited`] (possibly looping through a
+/// bootstrap handoff successor first).
+#[derive(Debug)]
+pub struct RunningGame {
+    pid: u32,
+    launcher_pid: u32,
+    existing_pids: HashSet<u32>,
+}
+
+impl RunningGame {
+    pub fn pid(&self) -> u32 {
+        self.pid
+    }
+
+    /// Resolves once the tracked PID is no longer a Warframe game process.
+    pub async fn pid_exited(&self) -> PidExited {
+        while is_warframe_pid(self.pid) {
+            sleep(Duration::from_secs(1)).await;
+        }
+        PidExited {
+            exited_pid: self.pid,
+            launcher_pid: self.launcher_pid,
+            existing_pids: self.existing_pids.clone(),
+        }
+    }
+}
+
+/// The tracked PID has died. Either drop this (the game exited for good) or
+/// scan for a bootstrap-to-game handoff successor with [`Self::into_successor`].
+#[derive(Debug)]
+#[must_use = "decide whether the game exited or a handoff successor should be awaited"]
+pub struct PidExited {
+    exited_pid: u32,
+    launcher_pid: u32,
+    existing_pids: HashSet<u32>,
+}
+
+impl PidExited {
+    /// Scans for a successor game process within the handoff grace window.
+    /// Returns the successor to keep tracking, or `None` if the game exited.
+    pub async fn into_successor(self) -> Option<RunningGame> {
         let deadline = tokio::time::Instant::now() + handoff_grace();
-        let successor = loop {
+        loop {
             let mut system = System::new();
             refresh_all_process_commands(&mut system);
-            if let Some(next) = find_new_warframe_pid(&system, existing_pids, launcher_pid) {
-                break Some(next);
-            }
-            if tokio::time::Instant::now() >= deadline {
-                break None;
-            }
-            sleep(Duration::from_secs(1)).await;
-        };
-
-        match successor {
-            Some(next) => {
+            if let Some(next) =
+                find_new_warframe_pid(&system, &self.existing_pids, self.launcher_pid)
+            {
                 log::info!(
                     "Tracked Warframe PID {} exited; continuing with successor PID {}",
-                    tracked,
+                    self.exited_pid,
                     next
                 );
-                tracked = next;
+                return Some(RunningGame {
+                    pid: next,
+                    launcher_pid: self.launcher_pid,
+                    existing_pids: self.existing_pids,
+                });
             }
-            None => return,
+            if tokio::time::Instant::now() >= deadline {
+                return None;
+            }
+            sleep(Duration::from_secs(1)).await;
         }
     }
 }

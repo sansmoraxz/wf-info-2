@@ -31,6 +31,10 @@ impl GameLifecycleTracker {
         self.quit_requested.store(true, Ordering::SeqCst);
     }
 
+    pub fn is_quit_requested(&self) -> bool {
+        self.quit_requested.load(Ordering::SeqCst)
+    }
+
     pub fn exit_reason(&self) -> SystemQuitReason {
         if self.quit_requested.load(Ordering::SeqCst) {
             SystemQuitReason::Requested

@@ -115,6 +115,21 @@ fn emit_game_start(events: &EventBus) {
     }));
 }
 
+async fn wait_for_game_exit(mut game: process::RunningGame, lifecycle: &GameLifecycleTracker) {
+    loop {
+        let exited = game.pid_exited().await;
+        // A requested quit means no bootstrap-handoff successor is coming,
+        // so skip the grace-window scan instead of idling through it.
+        if lifecycle.is_quit_requested() {
+            return;
+        }
+        match exited.into_successor().await {
+            Some(next) => game = next,
+            None => return,
+        }
+    }
+}
+
 async fn handle_game_exit(
     events: &EventBus,
     wfm: &WfmHandle,
@@ -167,20 +182,19 @@ fn merged_winedebug_value(existing: Option<OsString>) -> OsString {
 }
 
 #[cfg(windows)]
-async fn wait_for_new_game_pid_or_launcher_exit(
-    existing_pids: &std::collections::HashSet<u32>,
-    launcher_pid: u32,
+async fn wait_for_game_start_or_launcher_exit(
+    launcher: process::Launcher,
     child_handle: &mut JoinHandle<Result<std::process::ExitStatus, std::io::Error>>,
-) -> u32 {
-    let wait_for_pid = process::wait_for_new_warframe_start(existing_pids, launcher_pid);
-    tokio::pin!(wait_for_pid);
+) -> process::RunningGame {
+    let game_started = launcher.game_started();
+    tokio::pin!(game_started);
 
     let mut timeout: Option<Pin<Box<Sleep>>> = None;
 
     loop {
         tokio::select! {
-            pid = &mut wait_for_pid => {
-                return pid;
+            game = &mut game_started => {
+                return game;
             }
             result = &mut *child_handle, if timeout.is_none() => {
                 match result {
@@ -284,38 +298,33 @@ async fn main() {
 
     let mut child_handle = tokio::spawn(async move { child.wait().await });
 
+    let launcher = process::Launcher::new(launcher_pid, existing_warframe_pids);
     #[cfg(unix)]
-    let warframe_pid = {
-        let wait_for_pid =
-            process::wait_for_new_warframe_start(&existing_warframe_pids, launcher_pid);
-        tokio::pin!(wait_for_pid);
+    let game = {
+        let game_started = launcher.game_started();
+        tokio::pin!(game_started);
 
         tokio::select! {
-            pid = &mut wait_for_pid => pid,
+            game = &mut game_started => game,
             result = &mut child_handle => exit_from_child_result(result),
         }
     };
     #[cfg(windows)]
-    let warframe_pid = wait_for_new_game_pid_or_launcher_exit(
-        &existing_warframe_pids,
-        launcher_pid,
-        &mut child_handle,
-    )
-    .await;
+    let game = wait_for_game_start_or_launcher_exit(launcher, &mut child_handle).await;
 
     #[cfg(windows)]
     {
         log::info!(
             "Using Warframe game PID for DBWIN filtering: {}",
-            warframe_pid
+            game.pid()
         );
-        log_source.set_pid_filter(warframe_pid);
+        log_source.set_pid_filter(game.pid());
     }
 
     #[cfg(unix)]
     log::info!(
         "Using Wine debugstr stderr transport with Warframe game PID: {}",
-        warframe_pid
+        game.pid()
     );
 
     emit_game_start(&cx.events);
@@ -356,12 +365,13 @@ async fn main() {
     let watcher_lifecycle = lifecycle.clone();
     let watcher_events = cx.events.clone();
     let watcher_screenshot = Arc::clone(&cx.screenshot);
+    let game_pid = game.pid();
     let mut log_watcher = tokio::spawn(async move {
         if let Err(e) = wf_control::watcher::observe_warframe_activity_with_lifecycle(
             watcher_events,
             watcher_screenshot,
             log_source,
-            Some(warframe_pid),
+            Some(game_pid),
             auto_callbacks,
             watcher_lifecycle,
         )
@@ -371,8 +381,7 @@ async fn main() {
         }
     });
 
-    let game_exit =
-        process::wait_for_warframe_exit(warframe_pid, launcher_pid, &existing_warframe_pids);
+    let game_exit = wait_for_game_exit(game, &lifecycle);
     tokio::pin!(game_exit);
 
     let game_exited = tokio::select! {
