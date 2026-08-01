@@ -13,14 +13,14 @@ use tantivy::schema::IndexRecordOption;
 use wf_core::storage;
 use wf_inventory::Inventory;
 
-use super::state::AppState;
 use super::events::{
-    DaemonEvent, InventoryFetchedEvent, InventoryStaleEvent, InventorySummary, Source,
+    DaemonEvent, EventBus, InventoryFetchedEvent, InventoryStaleEvent, InventorySummary, Source,
 };
-use super::market::fetch_market_summary;
+use super::market::{MarketCache, fetch_market_summary};
+use super::requests::{HandleOp, Handles};
 use super::search::{
-    Category, EnvelopeAccess, IndexedInventory, InventoryItemEnvelope, collect_inventory_items,
-    get_or_build_indexed_inventory, search_inventory,
+    Category, EnvelopeAccess, IndexedInventory, InventoryIndexCache, InventoryItemEnvelope,
+    collect_inventory_items, search_inventory,
 };
 use wf_itemdata::item_data::lookup_item_info;
 use wf_itemdata::traits::Item as _;
@@ -120,8 +120,16 @@ pub(crate) struct InventoryFilterResponse {
     pub meta: storage::InventoryMeta,
 }
 
+impl HandleOp for LoadInventoryParams {
+    type Response = InventoryLoadResponse;
+
+    async fn handle(self, cx: &Handles) -> Result<Self::Response> {
+        handle_inventory_load(&cx.events, self).await
+    }
+}
+
 pub(crate) async fn handle_inventory_load(
-    state: &AppState,
+    events: &EventBus,
     params: LoadInventoryParams,
 ) -> Result<InventoryLoadResponse> {
     let LoadInventoryRequest {
@@ -136,7 +144,7 @@ pub(crate) async fn handle_inventory_load(
         let _ = storage::touch_inventory_updated(Some(&source.to_string()));
 
         // Emit inventory fetched event
-        state.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
+        events.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
             timestamp: Utc::now(),
             source,
             summary: inventory_summary(&inventory),
@@ -184,8 +192,17 @@ pub(crate) struct CountFilter {
     pub value: i64,
 }
 
+impl HandleOp for FilterParams {
+    type Response = InventoryFilterResponse;
+
+    async fn handle(self, cx: &Handles) -> Result<Self::Response> {
+        handle_inventory_filter(&cx.inventory_index, &cx.market, self).await
+    }
+}
+
 pub(crate) async fn handle_inventory_filter(
-    state: &AppState,
+    index: &InventoryIndexCache,
+    market: &MarketCache,
     mut params: FilterParams,
 ) -> Result<InventoryFilterResponse> {
     let custom_path = params.path.take().map(|path| InventoryInput::Path {
@@ -209,7 +226,7 @@ pub(crate) async fn handle_inventory_filter(
     // uncached pair; the stored inventory reuses the cached pair.
     let indexed = match custom_path {
         Some(input) => Arc::new(IndexedInventory::build(input.load().await?, None)?),
-        None => get_or_build_indexed_inventory(state, &meta)?,
+        None => index.get_or_build(&meta)?,
     };
     let search_index = &indexed.index;
 
@@ -255,7 +272,8 @@ pub(crate) async fn handle_inventory_filter(
     let mut filtered_items = Vec::new();
     for mut envelope in envelopes.drain(..) {
         if let Some(tradable) = params.tradable {
-            let details = lookup_item_info(envelope.item_type(), Some(envelope.category().as_ref()));
+            let details =
+                lookup_item_info(envelope.item_type(), Some(envelope.category().as_ref()));
             let detail_tradable = details.as_ref().map(|d| d.details.tradable());
             if detail_tradable != Some(tradable) {
                 continue;
@@ -292,8 +310,9 @@ pub(crate) async fn handle_inventory_filter(
     let include_market = params.include_market.unwrap_or(false);
     if include_market {
         for envelope in &mut filtered_items {
-            if let Some(market) = fetch_market_summary(state, &envelope.item_type().into()).await {
-                envelope.set_market(market);
+            if let Some(summary) = fetch_market_summary(market, &envelope.item_type().into()).await
+            {
+                envelope.set_market(summary);
             }
         }
     }
@@ -319,8 +338,8 @@ pub(crate) fn handle_inventory_meta_get() -> Result<storage::InventoryMeta> {
     Ok(storage::read_inventory_meta().unwrap_or_default())
 }
 
-#[cfg(feature = "memory")]
 #[derive(Debug, Deserialize, Default)]
+#[cfg_attr(not(feature = "memory"), allow(dead_code))]
 pub(crate) struct RefreshParams {
     pub scan_retries: Option<u32>,
     pub scan_delay_ms: Option<u64>,
@@ -328,9 +347,23 @@ pub(crate) struct RefreshParams {
     pub source: Option<Source>,
 }
 
+impl HandleOp for RefreshParams {
+    type Response = InventoryLoadResponse;
+
+    #[cfg(feature = "memory")]
+    async fn handle(self, cx: &Handles) -> Result<Self::Response> {
+        handle_inventory_refresh(&cx.events, self).await
+    }
+
+    #[cfg(not(feature = "memory"))]
+    async fn handle(self, _cx: &Handles) -> Result<Self::Response> {
+        anyhow::bail!("inventory.refresh requires the 'memory' feature to be enabled")
+    }
+}
+
 #[cfg(feature = "memory")]
 pub(crate) async fn handle_inventory_refresh(
-    state: &AppState,
+    events: &EventBus,
     params: RefreshParams,
 ) -> Result<InventoryLoadResponse> {
     let pid = process::get_warframe_pid()
@@ -351,7 +384,7 @@ pub(crate) async fn handle_inventory_refresh(
         let _ = storage::touch_inventory_updated(Some(&source.to_string()));
 
         // Emit inventory fetched event
-        state.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
+        events.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
             timestamp: Utc::now(),
             source,
             summary: inventory_summary(&inventory),
@@ -365,11 +398,6 @@ pub(crate) async fn handle_inventory_refresh(
         summary: inventory_summary(&inventory),
         meta,
     })
-}
-
-#[cfg(not(feature = "memory"))]
-pub(crate) async fn handle_inventory_refresh(_state: &AppState) -> Result<InventoryLoadResponse> {
-    anyhow::bail!("inventory.refresh requires the 'memory' feature to be enabled")
 }
 
 /// Timestamp accepted as a numeric epoch (seconds or milliseconds) or a
@@ -404,8 +432,16 @@ pub(crate) struct StaleParams {
     pub reason: Option<String>,
 }
 
+impl HandleOp for StaleParams {
+    type Response = storage::InventoryMeta;
+
+    async fn handle(self, cx: &Handles) -> Result<Self::Response> {
+        handle_inventory_stale_update(&cx.events, self)
+    }
+}
+
 pub(crate) fn handle_inventory_stale_update(
-    state: &AppState,
+    events: &EventBus,
     params: StaleParams,
 ) -> Result<storage::InventoryMeta> {
     let timestamp = if let Some(value) = params.timestamp {
@@ -416,7 +452,7 @@ pub(crate) fn handle_inventory_stale_update(
 
     let meta = storage::mark_inventory_stale_at(timestamp, params.reason.clone())?;
 
-    state.emit(DaemonEvent::InventoryStale(InventoryStaleEvent {
+    events.emit(DaemonEvent::InventoryStale(InventoryStaleEvent {
         timestamp: Utc::now(),
         stale_since: timestamp,
         reason: params.reason,
@@ -481,7 +517,10 @@ mod tests {
         .unwrap();
         assert!(matches!(
             one.input,
-            InventoryInput::Path { encrypted: true, .. }
+            InventoryInput::Path {
+                encrypted: true,
+                ..
+            }
         ));
     }
 

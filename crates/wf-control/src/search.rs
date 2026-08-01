@@ -18,8 +18,6 @@ use wf_inventory::Inventory;
 
 use wf_itemdata::item_data::lookup_item_info;
 
-use super::state::AppState;
-
 #[derive(Clone)]
 pub(crate) struct InventorySearchIndex {
     pub index: Index,
@@ -42,10 +40,7 @@ pub(crate) struct IndexedInventory {
 }
 
 impl IndexedInventory {
-    pub(crate) fn build(
-        inventory: Inventory,
-        last_updated: Option<DateTime<Utc>>,
-    ) -> Result<Self> {
+    pub(crate) fn build(inventory: Inventory, last_updated: Option<DateTime<Utc>>) -> Result<Self> {
         let items = collect_inventory_items(&inventory, None);
         let index = build_tantivy_index(&items)?;
         Ok(Self {
@@ -56,28 +51,32 @@ impl IndexedInventory {
     }
 }
 
-/// Return the cached inventory+index pair if it matches `meta.last_updated`,
-/// otherwise load the stored inventory and build a fresh pair.
-pub(crate) fn get_or_build_indexed_inventory(
-    state: &AppState,
-    meta: &storage::InventoryMeta,
-) -> Result<Arc<IndexedInventory>> {
-    if let Ok(guard) = state.inventory_index.read()
-        && let Some(cached) = guard.as_ref()
-        && cached.last_updated == meta.last_updated
-    {
-        return Ok(Arc::clone(cached));
+/// Shared cache of the current [`IndexedInventory`] pair, keyed by
+/// `InventoryMeta::last_updated`. Owned by the composition root as
+/// `Arc<InventoryIndexCache>`.
+#[derive(Default)]
+pub(crate) struct InventoryIndexCache(arc_swap::ArcSwapOption<IndexedInventory>);
+
+impl InventoryIndexCache {
+    /// Return the cached inventory+index pair if it matches
+    /// `meta.last_updated`, otherwise load the stored inventory and build a
+    /// fresh pair.
+    pub(crate) fn get_or_build(
+        &self,
+        meta: &storage::InventoryMeta,
+    ) -> Result<Arc<IndexedInventory>> {
+        if let Some(cached) = self.0.load().as_ref()
+            && cached.last_updated == meta.last_updated
+        {
+            return Ok(Arc::clone(cached));
+        }
+
+        let inventory = storage::read_inventory()?;
+        let indexed = Arc::new(IndexedInventory::build(inventory, meta.last_updated)?);
+        self.0.store(Some(Arc::clone(&indexed)));
+
+        Ok(indexed)
     }
-
-    let inventory = storage::read_inventory()?;
-    let indexed = Arc::new(IndexedInventory::build(inventory, meta.last_updated)?);
-
-    // Update cache (best effort; ignore lock poisoning)
-    if let Ok(mut guard) = state.inventory_index.write() {
-        *guard = Some(Arc::clone(&indexed));
-    }
-
-    Ok(indexed)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,10 +104,17 @@ const RESERVED_ENVELOPE_KEYS: [&str; 5] = ["category", "item_type", "item_id", "
 /// An inventory category. `Display` emits the wire names used as serde tags
 /// on [`InventoryItemEnvelope`]; `FromStr` additionally accepts the user-facing
 /// aliases previously handled by `normalize_category`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr,
+)]
 #[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 pub(crate) enum Category {
-    #[strum(to_string = "suits", serialize = "suit", serialize = "warframe", serialize = "warframes")]
+    #[strum(
+        to_string = "suits",
+        serialize = "suit",
+        serialize = "warframe",
+        serialize = "warframes"
+    )]
     Suits,
     #[strum(
         to_string = "long_guns",
@@ -118,12 +124,26 @@ pub(crate) enum Category {
         serialize = "rifles"
     )]
     LongGuns,
-    #[strum(to_string = "pistols", serialize = "pistol", serialize = "secondary", serialize = "secondaries")]
+    #[strum(
+        to_string = "pistols",
+        serialize = "pistol",
+        serialize = "secondary",
+        serialize = "secondaries"
+    )]
     Pistols,
     Melee,
-    #[strum(to_string = "space_suits", serialize = "space_suit", serialize = "archwing")]
+    #[strum(
+        to_string = "space_suits",
+        serialize = "space_suit",
+        serialize = "archwing"
+    )]
     SpaceSuits,
-    #[strum(to_string = "space_guns", serialize = "space_gun", serialize = "archgun", serialize = "arch_gun")]
+    #[strum(
+        to_string = "space_guns",
+        serialize = "space_gun",
+        serialize = "archgun",
+        serialize = "arch_gun"
+    )]
     SpaceGuns,
     #[strum(
         to_string = "space_melee",
@@ -132,7 +152,11 @@ pub(crate) enum Category {
         serialize = "arch_melee"
     )]
     SpaceMelee,
-    #[strum(to_string = "raw_upgrades", serialize = "rawmods", serialize = "raw_mods")]
+    #[strum(
+        to_string = "raw_upgrades",
+        serialize = "rawmods",
+        serialize = "raw_mods"
+    )]
     RawUpgrades,
     #[strum(to_string = "upgrades", serialize = "mods", serialize = "arcanes")]
     Upgrades,

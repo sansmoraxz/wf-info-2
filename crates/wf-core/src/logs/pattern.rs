@@ -44,10 +44,9 @@ fn transformers() -> Result<Vec<Transformer>, Error> {
             r"(?Rum)^\d+\.\d+ Sys \[Info\]: Player name changed to ([\w\.\-]+)(.) Clan: ([\w -]+)#(\d+)(?: AccountId: \w+)?$",
             transform_login,
         ),
-        (
-            r"(?Rm)^\d+\.\d+ Sys \[Info\]: Logout confirmed$",
-            |_| Some(LogEvent::Logout),
-        ),
+        (r"(?Rm)^\d+\.\d+ Sys \[Info\]: Logout confirmed$", |_| {
+            Some(LogEvent::Logout)
+        }),
         (
             r"(?Rm)^\d+\.\d+ Sys \[Info\]: Executing command: /EE/Editor/ToolMenus/Commands/CmdQuit$",
             |_| Some(LogEvent::QuitRequested),
@@ -114,7 +113,10 @@ fn transform_login(c: &Captures) -> Option<LogEvent> {
 fn transform_dm_tab(c: &Captures) -> Option<LogEvent> {
     let username = c.get(1)?.as_str().to_string();
     let platform = Platform::from_glyph(c.get(2)?.as_str());
-    Some(LogEvent::DmTabOpened(DirectMessageInfo { username, platform }))
+    Some(LogEvent::DmTabOpened(DirectMessageInfo {
+        username,
+        platform,
+    }))
 }
 
 pub struct LogProcessingEngine {
@@ -166,10 +168,11 @@ fn trade_confirm_item_filter(a: &str) -> Option<(String, u32)> {
     }
     if let Some(csplit) = a.rfind(" x ")
         && let Some(r) = a.get(csplit + 3..)
-            && let Ok(count) = r.trim().parse::<u32>() {
-                let l = a.get(..csplit)?;
-                return Some((l.trim().to_string(), count));
-            }
+        && let Ok(count) = r.trim().parse::<u32>()
+    {
+        let l = a.get(..csplit)?;
+        return Some((l.trim().to_string(), count));
+    }
     Some((a.to_string(), 1))
 }
 

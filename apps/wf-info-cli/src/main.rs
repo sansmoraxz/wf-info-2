@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use std::path::PathBuf;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
-use wf_control::control_ops::ControlOp;
+use wf_control::control_ops::{ControlOp, InventoryOp, ScreenshotOp, WfmOp};
 use wf_control::{ControlConfig, ControlEndpoint};
 
 #[cfg(unix)]
@@ -367,43 +367,42 @@ impl ConnectionArgs {
             }
         };
 
-        if should_load_defaults
-            && let Some(default_cfg) = ControlConfig::from_env() {
-                for endpoint in default_cfg.endpoints {
-                    match endpoint {
-                        ControlEndpoint::Tcp(addr) if cfg.tcp_addr.is_none() => {
-                            cfg.tcp_addr = Some(addr);
-                        }
-                        #[cfg(unix)]
-                        ControlEndpoint::Unix(path) if cfg.unix_path.is_none() => {
-                            cfg.unix_path = Some(path);
-                        }
-                        #[cfg(windows)]
-                        ControlEndpoint::Npipe(pipe) if cfg.npipe.is_none() => {
-                            cfg.npipe = Some(pipe);
-                        }
-                        _ => {}
-                    }
-                    #[cfg(windows)]
-                    {
-                        if cfg.tcp_addr.is_some() && cfg.npipe.is_some() {
-                            break;
-                        }
+        if should_load_defaults && let Some(default_cfg) = ControlConfig::from_env() {
+            for endpoint in default_cfg.endpoints {
+                match endpoint {
+                    ControlEndpoint::Tcp(addr) if cfg.tcp_addr.is_none() => {
+                        cfg.tcp_addr = Some(addr);
                     }
                     #[cfg(unix)]
-                    {
-                        if cfg.tcp_addr.is_some() && cfg.unix_path.is_some() {
-                            break;
-                        }
+                    ControlEndpoint::Unix(path) if cfg.unix_path.is_none() => {
+                        cfg.unix_path = Some(path);
                     }
-                    #[cfg(all(not(unix), not(windows)))]
-                    {
-                        if cfg.tcp_addr.is_some() {
-                            break;
-                        }
+                    #[cfg(windows)]
+                    ControlEndpoint::Npipe(pipe) if cfg.npipe.is_none() => {
+                        cfg.npipe = Some(pipe);
+                    }
+                    _ => {}
+                }
+                #[cfg(windows)]
+                {
+                    if cfg.tcp_addr.is_some() && cfg.npipe.is_some() {
+                        break;
+                    }
+                }
+                #[cfg(unix)]
+                {
+                    if cfg.tcp_addr.is_some() && cfg.unix_path.is_some() {
+                        break;
+                    }
+                }
+                #[cfg(all(not(unix), not(windows)))]
+                {
+                    if cfg.tcp_addr.is_some() {
+                        break;
                     }
                 }
             }
+        }
 
         let missing_target = {
             #[cfg(windows)]
@@ -448,35 +447,35 @@ impl Commands {
                 params: None,
             },
             Commands::InventoryLoad(args) => Command {
-                op: CliOp::Known(ControlOp::InventoryLoad),
+                op: CliOp::Known(ControlOp::Inventory(InventoryOp::Load)),
                 params: Some(args.into_params()),
             },
             Commands::InventoryFilter(args) => Command {
-                op: CliOp::Known(ControlOp::InventoryFilter),
+                op: CliOp::Known(ControlOp::Inventory(InventoryOp::Filter)),
                 params: Some(args.into_params()),
             },
             Commands::InventoryMeta => Command {
-                op: CliOp::Known(ControlOp::InventoryMetaGet),
+                op: CliOp::Known(ControlOp::Inventory(InventoryOp::MetaGet)),
                 params: None,
             },
             Commands::InventoryStale(args) => Command {
-                op: CliOp::Known(ControlOp::InventoryStaleUpdate),
+                op: CliOp::Known(ControlOp::Inventory(InventoryOp::StaleUpdate)),
                 params: Some(args.into_params()),
             },
             Commands::InventoryRefresh(args) => Command {
-                op: CliOp::Known(ControlOp::InventoryRefresh),
+                op: CliOp::Known(ControlOp::Inventory(InventoryOp::Refresh)),
                 params: Some(args.into_params()),
             },
             Commands::Screenshot(args) => Command {
-                op: CliOp::Known(ControlOp::ScreenshotTrigger),
+                op: CliOp::Known(ControlOp::Screenshot(ScreenshotOp::Trigger)),
                 params: Some(args.into_params()),
             },
             Commands::WFMarketPrice(args) => Command {
-                op: CliOp::Known(ControlOp::WFMarketPrice),
+                op: CliOp::Known(ControlOp::Wfm(WfmOp::Price)),
                 params: Some(args.into_params()),
             },
             Commands::WFMarketRefresh => Command {
-                op: CliOp::Known(ControlOp::WFMarketRefresh),
+                op: CliOp::Known(ControlOp::Wfm(WfmOp::Refresh)),
                 params: None,
             },
             Commands::WfmSignin(args) => {
@@ -489,12 +488,12 @@ impl Commands {
                     params["device_name"] = Value::String(name);
                 }
                 Command {
-                    op: CliOp::Known(ControlOp::WfmSignin),
+                    op: CliOp::Known(ControlOp::Wfm(WfmOp::Signin)),
                     params: Some(params),
                 }
             }
             Commands::WfmSignout => Command {
-                op: CliOp::Known(ControlOp::WfmSignout),
+                op: CliOp::Known(ControlOp::Wfm(WfmOp::Signout)),
                 params: None,
             },
             Commands::WfmStatus(args) => {
@@ -506,7 +505,7 @@ impl Commands {
                     params["duration"] = d;
                 }
                 Command {
-                    op: CliOp::Known(ControlOp::WfmSignstatus),
+                    op: CliOp::Known(ControlOp::Wfm(WfmOp::Signstatus)),
                     params: Some(params),
                 }
             }

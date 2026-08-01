@@ -288,8 +288,8 @@ fn auth_candidates_in_bytes(allocation: &[u8], boundary: NonceBoundary) -> HashS
                     .position(|byte| !byte.is_ascii_digit())
                     .map_or(allocation.len(), |offset| nonce_start + offset);
 
-                let nonce_is_terminated = nonce_end < allocation.len()
-                    || boundary == NonceBoundary::EndOfBytesTerminates;
+                let nonce_is_terminated =
+                    nonce_end < allocation.len() || boundary == NonceBoundary::EndOfBytesTerminates;
                 if nonce_end > nonce_start && nonce_is_terminated {
                     // Both slices have been validated as ASCII above.
                     let account_id = String::from_utf8_lossy(account_id).into_owned();

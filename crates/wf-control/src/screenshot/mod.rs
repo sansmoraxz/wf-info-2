@@ -12,12 +12,32 @@ use serde_json::Value;
 
 use wf_core::storage;
 
-use super::events::{DaemonEvent, ScreenshotTriggeredEvent};
-use super::state::AppState;
+use super::events::{DaemonEvent, EventBus, ScreenshotTriggeredEvent};
+use super::requests::{HandleOp, Handles};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ScreenshotConfig {
     pub native_wayland_capture: bool,
+}
+
+#[derive(Default)]
+#[allow(dead_code)]
+pub struct ScreenshotState {
+    pub(crate) config: ScreenshotConfig,
+    #[cfg(unix)]
+    pub(crate) backend_cache: arc_swap::ArcSwapOption<BackendCacheEntry>,
+    #[cfg(windows)]
+    pub(crate) window_cache: arc_swap::ArcSwapOption<WindowCacheEntry>,
+    pub(crate) warframe_pid: arc_swap::ArcSwapOption<u32>,
+}
+
+impl From<ScreenshotConfig> for ScreenshotState {
+    fn from(config: ScreenshotConfig) -> Self {
+        Self {
+            config,
+            ..Self::default()
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -57,14 +77,23 @@ struct ScreenshotEventLogEntry<'a> {
     content_len: usize,
 }
 
+impl HandleOp for ScreenshotParams {
+    type Response = ScreenshotEvent;
+
+    async fn handle(self, cx: &Handles) -> Result<Self::Response> {
+        handle_screenshot_trigger(&cx.screenshot, &cx.events, self).await
+    }
+}
+
 pub(crate) async fn handle_screenshot_trigger(
-    state: &AppState,
+    shots: &ScreenshotState,
+    events: &EventBus,
     params: ScreenshotParams,
 ) -> Result<ScreenshotEvent> {
     let total_start = Instant::now();
 
     let capture_start = Instant::now();
-    let (bytes, content_type) = capture_screen(&state.screenshot).await?;
+    let (bytes, content_type) = capture_screen(shots).await?;
     log::trace!(
         "Screenshot capture returned {} bytes ({}) in {:?}",
         bytes.len(),
@@ -87,7 +116,7 @@ pub(crate) async fn handle_screenshot_trigger(
         record_start.elapsed()
     );
 
-    state.emit(DaemonEvent::ScreenshotTriggered(ScreenshotTriggeredEvent {
+    events.emit(DaemonEvent::ScreenshotTriggered(ScreenshotTriggeredEvent {
         timestamp: event.timestamp,
         event_id: event.id.clone(),
     }));

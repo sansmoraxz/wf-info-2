@@ -1,7 +1,39 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast;
 use wf_core::{account::Platform, logs::TradeItem};
 use wf_inventory::FractionSyndicates;
+
+const CHANNEL_CAPACITY: usize = 256;
+
+/// Cheaply-cloneable handle to the daemon event broadcast channel. Every
+/// module that emits or subscribes to [`DaemonEvent`]s holds one of these
+/// instead of the whole application state.
+#[derive(Clone)]
+pub struct EventBus(broadcast::Sender<DaemonEvent>);
+
+impl Default for EventBus {
+    fn default() -> Self {
+        let (sender, _) = broadcast::channel(CHANNEL_CAPACITY);
+        Self(sender)
+    }
+}
+
+impl EventBus {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Broadcast an event to all subscribers. A send error only means there
+    /// are currently no subscribers, which is fine.
+    pub fn emit(&self, event: DaemonEvent) {
+        let _ = self.0.send(event);
+    }
+
+    pub fn subscribe(&self) -> broadcast::Receiver<DaemonEvent> {
+        self.0.subscribe()
+    }
+}
 
 /// All daemon events that can be emitted and subscribed to.
 ///

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::{Context, Result, anyhow, bail};
 use wf_core::process;
 
@@ -5,7 +7,7 @@ use winapi::shared::minwindef::DWORD;
 use winapi::shared::windef::HWND;
 use winapi::um::winuser::GetWindowThreadProcessId;
 
-use crate::state::ScreenshotState;
+use super::ScreenshotState;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct WindowCacheEntry {
@@ -40,8 +42,8 @@ pub(crate) async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, 
             );
             clear_cached_window(state);
             clear_cached_warframe_pid(state);
-            let warframe_pid =
-                cached_warframe_pid(state).ok_or_else(|| anyhow!("Warframe process not detected"))?;
+            let warframe_pid = cached_warframe_pid(state)
+                .ok_or_else(|| anyhow!("Warframe process not detected"))?;
             let refreshed = resolve_warframe_window(state, warframe_pid)?;
             match capture_window(refreshed.hwnd) {
                 Ok(buf) => buf,
@@ -81,7 +83,7 @@ pub(crate) async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, 
 }
 
 fn cached_warframe_pid(state: &ScreenshotState) -> Option<u32> {
-    if let Some(pid) = state.warframe_pid.lock().ok().and_then(|cache| *cache) {
+    if let Some(pid) = state.warframe_pid.load().as_deref().copied() {
         if process::is_warframe_pid(pid) {
             return Some(pid);
         }
@@ -89,39 +91,33 @@ fn cached_warframe_pid(state: &ScreenshotState) -> Option<u32> {
     }
 
     let pid = process::get_warframe_pid()?;
-    if let Ok(mut cache) = state.warframe_pid.lock() {
-        *cache = Some(pid);
-    }
+    state.warframe_pid.store(Some(Arc::new(pid)));
     Some(pid)
 }
 
 fn clear_cached_warframe_pid(state: &ScreenshotState) {
-    if let Ok(mut cache) = state.warframe_pid.lock() {
-        *cache = None;
-    }
+    state.warframe_pid.store(None);
 }
 
-fn cached_window(state: &ScreenshotState, warframe_pid: u32) -> Option<WindowCacheEntry> {
+fn cached_window(state: &ScreenshotState, warframe_pid: u32) -> Option<Arc<WindowCacheEntry>> {
     state
         .window_cache
-        .lock()
-        .ok()
-        .and_then(|cache| cache.as_ref().cloned())
+        .load()
+        .as_ref()
         .filter(|entry| {
             entry.warframe_pid == warframe_pid && window_process_id(entry.hwnd) == warframe_pid
         })
+        .cloned()
 }
 
 fn clear_cached_window(state: &ScreenshotState) {
-    if let Ok(mut cache) = state.window_cache.lock() {
-        *cache = None;
-    }
+    state.window_cache.store(None);
 }
 
 fn resolve_warframe_window(
     state: &ScreenshotState,
     warframe_pid: u32,
-) -> Result<WindowCacheEntry> {
+) -> Result<Arc<WindowCacheEntry>> {
     let candidates: Vec<_> = win_screenshot::utils::window_list()
         .map_err(|e| anyhow!("Failed to enumerate windows: {:?}", e))?
         .into_iter()
@@ -144,15 +140,12 @@ fn resolve_warframe_window(
         selected.window_name
     );
 
-    let entry = WindowCacheEntry {
+    let entry = Arc::new(WindowCacheEntry {
         warframe_pid,
         hwnd: selected.hwnd,
         window_name: selected.window_name.clone(),
-    };
-
-    if let Ok(mut cache) = state.window_cache.lock() {
-        *cache = Some(entry.clone());
-    }
+    });
+    state.window_cache.store(Some(Arc::clone(&entry)));
 
     Ok(entry)
 }

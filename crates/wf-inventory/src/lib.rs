@@ -147,13 +147,14 @@ where
     }
 
     if let Value::Number(n) = &v
-        && let Some(ms) = n.as_i64() {
-            if let Some(dt) = ms_to_dt(ms) {
-                return Ok(Some(dt));
-            } else {
-                return Err(serde::de::Error::custom("invalid timestamp"));
-            }
+        && let Some(ms) = n.as_i64()
+    {
+        if let Some(dt) = ms_to_dt(ms) {
+            return Ok(Some(dt));
+        } else {
+            return Err(serde::de::Error::custom("invalid timestamp"));
         }
+    }
 
     if let Value::String(s) = &v {
         if let Ok(ms) = s.parse::<i64>() {
@@ -170,21 +171,23 @@ where
 
     if let Value::Object(map) = &v {
         if let Some(Value::String(num_s)) = map.get("$numberLong")
-            && let Ok(ms) = num_s.parse::<i64>() {
-                if let Some(dt) = ms_to_dt(ms) {
-                    return Ok(Some(dt));
-                } else {
-                    return Err(serde::de::Error::custom("invalid timestamp"));
-                }
+            && let Ok(ms) = num_s.parse::<i64>()
+        {
+            if let Some(dt) = ms_to_dt(ms) {
+                return Ok(Some(dt));
+            } else {
+                return Err(serde::de::Error::custom("invalid timestamp"));
             }
+        }
         if let Some(Value::Number(num)) = map.get("$numberLong")
-            && let Some(ms) = num.as_i64() {
-                if let Some(dt) = ms_to_dt(ms) {
-                    return Ok(Some(dt));
-                } else {
-                    return Err(serde::de::Error::custom("invalid timestamp"));
-                }
+            && let Some(ms) = num.as_i64()
+        {
+            if let Some(dt) = ms_to_dt(ms) {
+                return Ok(Some(dt));
+            } else {
+                return Err(serde::de::Error::custom("invalid timestamp"));
             }
+        }
         if let Some(Value::String(s)) = map.get("$date") {
             if let Ok(ms) = s.parse::<i64>() {
                 if let Some(dt) = ms_to_dt(ms) {

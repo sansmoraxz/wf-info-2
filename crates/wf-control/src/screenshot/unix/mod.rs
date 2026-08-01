@@ -3,6 +3,7 @@ mod common;
 mod portal;
 mod x11;
 
+use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::{Result, anyhow, bail};
@@ -10,7 +11,7 @@ use anyhow::{Result, anyhow, bail};
 use wf_core::process;
 
 use self::common::{EnvironmentKind, detect_unix_environment};
-use crate::state::ScreenshotState;
+use super::ScreenshotState;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum CaptureBackend {
@@ -237,14 +238,13 @@ fn cached_resolution(
 ) -> Option<BackendResolution> {
     state
         .backend_cache
-        .lock()
-        .ok()
-        .and_then(|cache| cache.as_ref().cloned())
+        .load()
+        .as_ref()
         .filter(|entry| {
             entry.warframe_pid == warframe_pid
                 && entry.native_wayland_capture == native_wayland_capture
         })
-        .map(|entry| entry.resolution)
+        .map(|entry| entry.resolution.clone())
 }
 
 fn store_resolution(
@@ -253,23 +253,19 @@ fn store_resolution(
     native_wayland_capture: bool,
     resolution: &BackendResolution,
 ) {
-    if let Ok(mut cache) = state.backend_cache.lock() {
-        *cache = Some(BackendCacheEntry {
-            warframe_pid,
-            native_wayland_capture,
-            resolution: resolution.clone(),
-        });
-    }
+    state.backend_cache.store(Some(Arc::new(BackendCacheEntry {
+        warframe_pid,
+        native_wayland_capture,
+        resolution: resolution.clone(),
+    })));
 }
 
 fn clear_cached_resolution(state: &ScreenshotState) {
-    if let Ok(mut cache) = state.backend_cache.lock() {
-        *cache = None;
-    }
+    state.backend_cache.store(None);
 }
 
 fn cached_warframe_pid(state: &ScreenshotState) -> Option<(u32, &'static str)> {
-    if let Some(pid) = state.warframe_pid.lock().ok().and_then(|cache| *cache) {
+    if let Some(pid) = state.warframe_pid.load().as_deref().copied() {
         if !process::is_warframe_pid(pid) {
             clear_cached_warframe_pid(state);
         } else {
@@ -278,16 +274,12 @@ fn cached_warframe_pid(state: &ScreenshotState) -> Option<(u32, &'static str)> {
     }
 
     let pid = process::get_warframe_pid()?;
-    if let Ok(mut cache) = state.warframe_pid.lock() {
-        *cache = Some(pid);
-    }
+    state.warframe_pid.store(Some(Arc::new(pid)));
     Some((pid, "fresh"))
 }
 
 fn clear_cached_warframe_pid(state: &ScreenshotState) {
-    if let Ok(mut cache) = state.warframe_pid.lock() {
-        *cache = None;
-    }
+    state.warframe_pid.store(None);
 }
 
 #[cfg(test)]

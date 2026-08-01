@@ -63,7 +63,11 @@ impl RelicRecognizer {
                 src_w.min(img.width().saturating_sub(src_x)),
                 src_h.min(img.height().saturating_sub(src_y)),
             )
-            .resize_exact(self.box_w, self.box_h, image::imageops::FilterType::Lanczos3);
+            .resize_exact(
+                self.box_w,
+                self.box_h,
+                image::imageops::FilterType::Lanczos3,
+            );
         let res = self.ocr_engine.recognize(&scaled_and_cropped_img)?;
 
         // Group horizontally overlapping texts, merging into the first

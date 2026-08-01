@@ -7,8 +7,8 @@ use std::sync::{
 use std::time::Duration;
 use wf_ocr::{RelicRecognizer, load_image};
 
-use crate::screenshot::capture_screen;
-use crate::state::AppState;
+use crate::events::EventBus;
+use crate::screenshot::{ScreenshotState, capture_screen};
 use crate::{
     AccountLoginEvent, AccountLogoutEvent, DaemonEvent, DmTabOpenedEvent, SystemQuitReason,
 };
@@ -127,7 +127,8 @@ impl TradeState {
 }
 
 struct WatchState {
-    app: Arc<AppState>,
+    events: EventBus,
+    screenshot: Arc<ScreenshotState>,
     #[cfg_attr(not(feature = "memory"), allow(dead_code))]
     warframe_pid: Option<u32>,
     #[cfg_attr(not(feature = "memory"), allow(dead_code))]
@@ -141,9 +142,15 @@ struct WatchState {
 }
 
 impl WatchState {
-    fn new(app: Arc<AppState>, warframe_pid: Option<u32>, auto_callbacks: AutoCallbacks) -> Self {
+    fn new(
+        events: EventBus,
+        screenshot: Arc<ScreenshotState>,
+        warframe_pid: Option<u32>,
+        auto_callbacks: AutoCallbacks,
+    ) -> Self {
         Self {
-            app,
+            events,
+            screenshot,
             warframe_pid,
             auto_callbacks,
             session: SessionState::default(),
@@ -167,13 +174,15 @@ fn event_emitter_fn(
                     continue;
                 }
                 log::info!("User logged in: username={}", username);
-                state.app.emit(DaemonEvent::AccountLogin(AccountLoginEvent {
-                    timestamp: Utc::now(),
-                    username: username.clone(),
-                }));
+                state
+                    .events
+                    .emit(DaemonEvent::AccountLogin(AccountLoginEvent {
+                        timestamp: Utc::now(),
+                        username: username.clone(),
+                    }));
                 #[cfg(feature = "memory")]
                 tokio::spawn(handle_login_event(
-                    Arc::clone(&state.app),
+                    state.events.clone(),
                     username,
                     state.warframe_pid,
                     state.auto_callbacks,
@@ -182,9 +191,11 @@ fn event_emitter_fn(
             LogEvent::Logout => {
                 state.session.logout();
                 log::info!("User logged out");
-                state.app.emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
-                    timestamp: Utc::now(),
-                }));
+                state
+                    .events
+                    .emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
+                        timestamp: Utc::now(),
+                    }));
             }
             LogEvent::QuitRequested => {
                 log::info!("Warframe quit command observed");
@@ -203,11 +214,13 @@ fn event_emitter_fn(
                         info.username,
                         info.platform
                     );
-                    state.app.emit(DaemonEvent::DmTabOpened(DmTabOpenedEvent {
-                        timestamp: Utc::now(),
-                        username: info.username,
-                        platform: info.platform,
-                    }));
+                    state
+                        .events
+                        .emit(DaemonEvent::DmTabOpened(DmTabOpenedEvent {
+                            timestamp: Utc::now(),
+                            username: info.username,
+                            platform: info.platform,
+                        }));
                 }
             }
             LogEvent::TradeSuccess => {
@@ -220,7 +233,7 @@ fn event_emitter_fn(
                         platform: trades.platform,
                     };
                     state
-                        .app
+                        .events
                         .emit(DaemonEvent::TradeSuccess(crate::events::TradeSuccessEvent(
                             popup,
                         )));
@@ -238,7 +251,7 @@ fn event_emitter_fn(
                         platform: trades.platform,
                     };
                     state
-                        .app
+                        .events
                         .emit(DaemonEvent::TradeFailed(crate::events::TradeFailedEvent(
                             popup, reason,
                         )));
@@ -256,7 +269,10 @@ fn event_emitter_fn(
                     continue;
                 }
                 log::info!("Relic selection window opened");
-                tokio::spawn(handle_relic_selection_popup(Arc::clone(&state.app)));
+                tokio::spawn(handle_relic_selection_popup(
+                    state.events.clone(),
+                    Arc::clone(&state.screenshot),
+                ));
             }
             LogEvent::RelicClose => {
                 if !state.relic.close() {
@@ -264,7 +280,7 @@ fn event_emitter_fn(
                     continue;
                 }
                 log::info!("Relic selection window closed");
-                state.app.emit(DaemonEvent::RelicSelectionClosed);
+                state.events.emit(DaemonEvent::RelicSelectionClosed);
             }
         }
     }
@@ -273,7 +289,7 @@ fn event_emitter_fn(
 
 #[cfg(feature = "memory")]
 async fn handle_login_event(
-    app: Arc<AppState>,
+    events: EventBus,
     user_name: String,
     known_pid: Option<u32>,
     auto_callbacks: AutoCallbacks,
@@ -309,7 +325,7 @@ async fn handle_login_event(
             if let Err(e) = storage::save_encrypted_profile(&profile) {
                 log::error!("Failed to save profile for {}: {}", user_name, e);
             } else {
-                app.emit(DaemonEvent::ProfileUpdated(ProfileUpdatedEvent {
+                events.emit(DaemonEvent::ProfileUpdated(ProfileUpdatedEvent {
                     timestamp: Utc::now(),
                     account_id: auth.account_id.clone(),
                 }));
@@ -343,7 +359,7 @@ async fn handle_login_event(
                 {
                     log::warn!("Failed to update inventory metadata: {}", e);
                 }
-                app.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
+                events.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
                     timestamp: Utc::now(),
                     source: crate::events::Source::Auto,
                     summary: crate::inventory::inventory_summary(&result.inventory),
@@ -361,9 +377,13 @@ async fn handle_login_event(
 }
 
 static RELIC_RECOG_ENGINE: LazyLock<Result<wf_ocr::RelicRecognizer, &'static anyhow::Error>> =
-    LazyLock::new(|| wf_ocr::DEFAULT_OCR_ENGINE.as_ref().map(RelicRecognizer::new));
+    LazyLock::new(|| {
+        wf_ocr::DEFAULT_OCR_ENGINE
+            .as_ref()
+            .map(RelicRecognizer::new)
+    });
 
-async fn handle_relic_selection_popup(app: Arc<AppState>) {
+async fn handle_relic_selection_popup(events: EventBus, shots: Arc<ScreenshotState>) {
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     let recognizer = match RELIC_RECOG_ENGINE.as_ref() {
@@ -374,7 +394,7 @@ async fn handle_relic_selection_popup(app: Arc<AppState>) {
         }
     };
 
-    let res = capture_screen(&app.screenshot).await;
+    let res = capture_screen(&shots).await;
     match res {
         Ok((image_bytes, _)) => match load_image(&image_bytes) {
             Ok(img) => match recognizer.recognize_and_list(&img) {
@@ -382,7 +402,7 @@ async fn handle_relic_selection_popup(app: Arc<AppState>) {
                     log::info!("Got relic items: {:?}", v);
                     let filtered: Vec<String> = v.drain(..).map(|e| e.text).collect();
                     let popup = crate::events::RelicSelectionPopup { items: filtered };
-                    app.emit(DaemonEvent::RelicSelectionOpen(popup));
+                    events.emit(DaemonEvent::RelicSelectionOpen(popup));
                 }
                 Err(e) => log::error!("OCR failed on screenshot image {}", e),
             },
@@ -393,13 +413,15 @@ async fn handle_relic_selection_popup(app: Arc<AppState>) {
 }
 
 pub async fn observe_warframe_activity<S: LogSource>(
-    app: Arc<AppState>,
+    events: EventBus,
+    screenshot: Arc<ScreenshotState>,
     source: S,
     warframe_pid: Option<u32>,
     auto_callbacks: AutoCallbacks,
 ) -> Result<(), Box<dyn std::error::Error>> {
     observe_warframe_activity_with_lifecycle(
-        app,
+        events,
+        screenshot,
         source,
         warframe_pid,
         auto_callbacks,
@@ -409,7 +431,8 @@ pub async fn observe_warframe_activity<S: LogSource>(
 }
 
 pub async fn observe_warframe_activity_with_lifecycle<S: LogSource>(
-    app: Arc<AppState>,
+    events: EventBus,
+    screenshot: Arc<ScreenshotState>,
     mut source: S,
     warframe_pid: Option<u32>,
     auto_callbacks: AutoCallbacks,
@@ -417,7 +440,7 @@ pub async fn observe_warframe_activity_with_lifecycle<S: LogSource>(
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Watching for Warframe activity...");
     let log_processor = LogProcessingEngine::new()?;
-    let mut state = WatchState::new(app, warframe_pid, auto_callbacks);
+    let mut state = WatchState::new(events, screenshot, warframe_pid, auto_callbacks);
     let mut assembler = LineAssembler::default();
 
     loop {
@@ -600,7 +623,12 @@ mod tests {
         assert_eq!(lifecycle.exit_reason(), SystemQuitReason::Unexpected);
 
         event_emitter_fn(
-            WatchState::new(Arc::new(AppState::default()), None, AutoCallbacks::Skip),
+            WatchState::new(
+                EventBus::new(),
+                Arc::new(ScreenshotState::default()),
+                None,
+                AutoCallbacks::Skip,
+            ),
             vec![LogEvent::QuitRequested],
             &lifecycle,
         );
@@ -851,7 +879,8 @@ mod tests {
         };
 
         observe_warframe_activity(
-            Arc::new(AppState::default()),
+            EventBus::new(),
+            Arc::new(ScreenshotState::default()),
             source,
             Some(1234),
             AutoCallbacks::Skip,

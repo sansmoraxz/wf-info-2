@@ -19,9 +19,10 @@ use tokio::task::JoinHandle;
 use tokio::time::{Sleep, sleep};
 
 use wf_control::watcher::{AutoCallbacks, GameLifecycleTracker};
+use wf_control::wfm_auth::WfmHandle;
 use wf_control::{
-    self, AppState, ControlConfig, ControlEndpoint, DaemonEvent, GameStartEvent, ScreenshotConfig,
-    SystemQuitEvent,
+    self, ControlConfig, ControlEndpoint, DaemonEvent, EventBus, GameStartEvent, Handles,
+    ScreenshotConfig, SystemQuitEvent,
 };
 #[cfg(windows)]
 use wf_core::logs::DbwinLogSource;
@@ -108,26 +109,27 @@ fn auto_callbacks_from_env() -> AutoCallbacks {
     }
 }
 
-fn emit_game_start(state: &AppState) {
-    state.emit(DaemonEvent::GameStart(GameStartEvent {
+fn emit_game_start(events: &EventBus) {
+    events.emit(DaemonEvent::GameStart(GameStartEvent {
         timestamp: SystemTime::now().into(),
     }));
 }
 
 async fn handle_game_exit(
-    state: &AppState,
+    events: &EventBus,
+    wfm: &WfmHandle,
     lifecycle: &GameLifecycleTracker,
     auto_callbacks: AutoCallbacks,
 ) {
     let reason = lifecycle.exit_reason();
     log::info!("Warframe game process exited: reason={:?}", reason);
-    state.emit(DaemonEvent::SystemQuit(SystemQuitEvent {
+    events.emit(DaemonEvent::SystemQuit(SystemQuitEvent {
         timestamp: SystemTime::now().into(),
         reason,
     }));
 
     if auto_callbacks == AutoCallbacks::Enabled {
-        wf_control::wfm_auth::set_status_if_connected(state, wf_control::wfm_auth::Status::Invisible)
+        wf_control::wfm_auth::set_status_if_connected(wfm, wf_control::wfm_auth::Status::Invisible)
             .await;
     }
 }
@@ -216,7 +218,7 @@ async fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     log::info!("Warframe Account Info Scanner started");
 
-    let state = AppState::new(ScreenshotConfig {
+    let cx = Handles::new(ScreenshotConfig {
         native_wayland_capture: cli.screenshot.native_wayland_screenshot,
     });
 
@@ -224,10 +226,10 @@ async fn main() {
         log::warn!("Failed to update item data cache: {}", e);
     }
 
-    wf_control::wfm_auth::try_restore_session(&state).await;
+    wf_control::wfm_auth::try_restore_session(&cx.wfm).await;
 
     let _control_server = match cli.server.into_control_config() {
-        Some(cfg) => match wf_control::start_control_server(cfg, Arc::clone(&state)).await {
+        Some(cfg) => match wf_control::start_control_server(cfg, cx.clone()).await {
             Ok(server) => server,
             Err(e) => {
                 log::error!("Failed to start control API: {}", e);
@@ -316,26 +318,26 @@ async fn main() {
         warframe_pid
     );
 
-    emit_game_start(&state);
+    emit_game_start(&cx.events);
 
     if auto_callbacks == AutoCallbacks::Skip {
         log::info!("Skipping auto set of warframe market status...");
     } else {
-        let state = Arc::clone(&state);
+        let mut rx = cx.events.subscribe();
+        let wfm = cx.wfm.clone();
         tokio::spawn(async move {
-            let mut rx = state.subscribe();
             loop {
                 match rx.recv().await {
                     Ok(DaemonEvent::AccountLogin(_)) => {
                         wf_control::wfm_auth::set_status_if_connected(
-                            &state,
+                            &wfm,
                             wf_control::wfm_auth::Status::Ingame,
                         )
                         .await;
                     }
                     Ok(DaemonEvent::AccountLogout(_)) => {
                         wf_control::wfm_auth::set_status_if_connected(
-                            &state,
+                            &wfm,
                             wf_control::wfm_auth::Status::Invisible,
                         )
                         .await;
@@ -352,10 +354,12 @@ async fn main() {
 
     let lifecycle = GameLifecycleTracker::default();
     let watcher_lifecycle = lifecycle.clone();
-    let watcher_state = Arc::clone(&state);
+    let watcher_events = cx.events.clone();
+    let watcher_screenshot = Arc::clone(&cx.screenshot);
     let mut log_watcher = tokio::spawn(async move {
         if let Err(e) = wf_control::watcher::observe_warframe_activity_with_lifecycle(
-            watcher_state,
+            watcher_events,
+            watcher_screenshot,
             log_source,
             Some(warframe_pid),
             auto_callbacks,
@@ -394,7 +398,7 @@ async fn main() {
     };
 
     if game_exited {
-        handle_game_exit(&state, &lifecycle, auto_callbacks).await;
+        handle_game_exit(&cx.events, &cx.wfm, &lifecycle, auto_callbacks).await;
     }
 }
 
@@ -424,16 +428,23 @@ mod tests {
 
     #[tokio::test]
     async fn lifecycle_helpers_emit_start_and_unexpected_quit() {
-        let state = AppState::default();
-        let mut events = state.subscribe();
+        let bus = EventBus::new();
+        let wfm = WfmHandle::spawn();
+        let mut events = bus.subscribe();
 
-        emit_game_start(&state);
+        emit_game_start(&bus);
         assert!(matches!(
             events.recv().await.unwrap(),
             DaemonEvent::GameStart(_)
         ));
 
-        handle_game_exit(&state, &GameLifecycleTracker::default(), AutoCallbacks::Skip).await;
+        handle_game_exit(
+            &bus,
+            &wfm,
+            &GameLifecycleTracker::default(),
+            AutoCallbacks::Skip,
+        )
+        .await;
         assert!(matches!(
             events.recv().await.unwrap(),
             DaemonEvent::SystemQuit(SystemQuitEvent {
