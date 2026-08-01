@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
-use std::sync::OnceLock;
+use std::sync::LazyLock;
 
 use serde::Serialize;
 
@@ -48,11 +48,10 @@ impl ItemInfo {
 }
 
 // Maps uniqueName/item_type -> all matching ItemInfo variants (multiple productCategory variants may exist)
-static ITEM_INDEX: OnceLock<HashMap<String, Vec<ItemInfo>>> = OnceLock::new();
+static ITEM_INDEX: LazyLock<HashMap<String, Vec<ItemInfo>>> = LazyLock::new(build_item_index);
 
 pub fn lookup_item_info(item_type: &str, category: Option<&str>) -> Option<ItemInfo> {
-    let index = ITEM_INDEX.get_or_init(build_item_index);
-    let entries = index.get(item_type)?;
+    let entries = ITEM_INDEX.get(item_type)?;
     if let Some(cat) = category.and_then(category_to_product_category)
         && let Some(found) = entries
             .iter()

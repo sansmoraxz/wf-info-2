@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::{OnceLock, RwLock};
 use std::time::Duration;
 
 use anyhow::{Result, anyhow};
@@ -9,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use wf_core::storage;
 use wf_inventory::Inventory;
 
+use super::state::AppState;
 use super::utils::WFM_API_BASE;
 use wf_itemdata::item_data::lookup_item_info;
 
@@ -79,7 +79,7 @@ pub(crate) struct WfmItem {
     pub ducats: Option<i64>,
 }
 
-struct WfmCache {
+pub(crate) struct WfmCache {
     // Positions into `items`; the cache is only ever replaced wholesale,
     // so indices stay valid for its lifetime.
     game_ref_index: HashMap<String, usize>,
@@ -90,15 +90,11 @@ struct WfmCache {
     item_count: usize,
 }
 
-static WFM_CACHE: OnceLock<RwLock<Option<WfmCache>>> = OnceLock::new();
-
-fn get_cache_lock() -> &'static RwLock<Option<WfmCache>> {
-    WFM_CACHE.get_or_init(|| RwLock::new(None))
-}
-
-fn is_cache_stale() -> bool {
-    let lock = get_cache_lock();
-    let guard = lock.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+fn is_cache_stale(state: &AppState) -> bool {
+    let guard = state
+        .market_cache
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     match guard.as_ref() {
         None => true,
         Some(cache) => {
@@ -108,9 +104,11 @@ fn is_cache_stale() -> bool {
     }
 }
 
-fn cache_age_secs() -> Option<i64> {
-    let lock = get_cache_lock();
-    let guard = lock.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+fn cache_age_secs(state: &AppState) -> Option<i64> {
+    let guard = state
+        .market_cache
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     guard.as_ref().map(|c| {
         Utc::now()
             .signed_duration_since(c.last_refreshed_at)
@@ -118,14 +116,14 @@ fn cache_age_secs() -> Option<i64> {
     })
 }
 
-async fn ensure_cache() -> Result<()> {
-    if is_cache_stale() {
-        refresh_cache().await?;
+async fn ensure_cache(state: &AppState) -> Result<()> {
+    if is_cache_stale(state) {
+        refresh_cache(state).await?;
     }
     Ok(())
 }
 
-async fn refresh_cache() -> Result<(usize, DateTime<Utc>)> {
+async fn refresh_cache(state: &AppState) -> Result<(usize, DateTime<Utc>)> {
     let url = format!("{}/items", WFM_API_BASE);
     let client = reqwest::Client::new();
     let resp: WfmItemsResponse = client.get(&url).send().await?.json().await?;
@@ -162,9 +160,9 @@ async fn refresh_cache() -> Result<(usize, DateTime<Utc>)> {
     let now = Utc::now();
     let count = items.len();
 
-    let lock = get_cache_lock();
     // Poisoning is recoverable: the cache is only ever replaced wholesale.
-    let mut guard = lock
+    let mut guard = state
+        .market_cache
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     *guard = Some(WfmCache {
@@ -180,25 +178,31 @@ async fn refresh_cache() -> Result<(usize, DateTime<Utc>)> {
 
 // ── Cache lookups ──
 
-fn lookup_by_game_ref(game_ref: &str) -> Option<WfmItem> {
-    let lock = get_cache_lock();
-    let guard = lock.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+fn lookup_by_game_ref(state: &AppState, game_ref: &str) -> Option<WfmItem> {
+    let guard = state
+        .market_cache
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     guard
         .as_ref()
         .and_then(|c| Some(c.items[*c.game_ref_index.get(game_ref)?].clone()))
 }
 
-fn lookup_by_id(id: &str) -> Option<WfmItem> {
-    let lock = get_cache_lock();
-    let guard = lock.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+fn lookup_by_id(state: &AppState, id: &str) -> Option<WfmItem> {
+    let guard = state
+        .market_cache
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     guard
         .as_ref()
         .and_then(|c| Some(c.items[*c.id_index.get(id)?].clone()))
 }
 
-fn search_items(query: &str) -> Vec<WfmItem> {
-    let lock = get_cache_lock();
-    let guard = lock.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+fn search_items(state: &AppState, query: &str) -> Vec<WfmItem> {
+    let guard = state
+        .market_cache
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let Some(cache) = guard.as_ref() else {
         return Vec::new();
     };
@@ -471,27 +475,30 @@ pub(crate) struct MarketRefreshResponse {
     pub refreshed_at: String,
 }
 
-pub(crate) async fn handle_market_price(params: MarketPriceParams) -> Result<MarketPriceResponse> {
+pub(crate) async fn handle_market_price(
+    state: &AppState,
+    params: MarketPriceParams,
+) -> Result<MarketPriceResponse> {
     if params.item_type.is_none() && params.search.is_none() {
         return Err(anyhow!(
             "wfm.price requires 'item_type' or 'search' parameter"
         ));
     }
 
-    ensure_cache().await?;
+    ensure_cache(state).await?;
 
     // Resolve the WFM item
     let wfm_item = if let Some(ref item_type) = params.item_type {
         // Try direct gameRef lookup
-        let direct = lookup_by_game_ref(item_type);
+        let direct = lookup_by_game_ref(state, item_type);
         if direct.is_some() {
             direct
         } else {
             // Fallback: search by name
-            search_items(item_type).into_iter().next()
+            search_items(state, item_type).into_iter().next()
         }
     } else if let Some(ref query) = params.search {
-        search_items(query).into_iter().next()
+        search_items(state, query).into_iter().next()
     } else {
         None
     };
@@ -531,7 +538,7 @@ pub(crate) async fn handle_market_price(params: MarketPriceParams) -> Result<Mar
                         if *part_id == wfm_item.id {
                             continue;
                         }
-                        if let Some(part) = lookup_by_id(part_id) {
+                        if let Some(part) = lookup_by_id(state, part_id) {
                             let part_orders = fetch_orders(&part.slug).await?;
                             let part_prices = summarize_orders(&part_orders);
 
@@ -571,14 +578,14 @@ pub(crate) async fn handle_market_price(params: MarketPriceParams) -> Result<Mar
         },
         prices,
         inventory: OwnedCount { owned },
-        cache_age_secs: cache_age_secs(),
+        cache_age_secs: cache_age_secs(state),
         details,
         set_parts,
     })
 }
 
-pub(crate) async fn handle_market_refresh() -> Result<MarketRefreshResponse> {
-    let (count, refreshed_at) = refresh_cache().await?;
+pub(crate) async fn handle_market_refresh(state: &AppState) -> Result<MarketRefreshResponse> {
+    let (count, refreshed_at) = refresh_cache(state).await?;
 
     Ok(MarketRefreshResponse {
         items_count: count,
@@ -588,12 +595,12 @@ pub(crate) async fn handle_market_refresh() -> Result<MarketRefreshResponse> {
 
 /// Fetch market price summary for a single item by game_ref.
 /// Used by inventory-filter enrichment.
-pub(crate) async fn fetch_market_summary(game_ref: &str) -> Option<MarketSummary> {
-    if ensure_cache().await.is_err() {
+pub(crate) async fn fetch_market_summary(state: &AppState, game_ref: &str) -> Option<MarketSummary> {
+    if ensure_cache(state).await.is_err() {
         return None;
     }
 
-    let wfm_item = lookup_by_game_ref(game_ref)?;
+    let wfm_item = lookup_by_game_ref(state, game_ref)?;
     let orders = fetch_orders(&wfm_item.slug).await.ok()?;
     let prices = summarize_orders(&orders);
 
@@ -601,7 +608,7 @@ pub(crate) async fn fetch_market_summary(game_ref: &str) -> Option<MarketSummary
         slug: wfm_item.slug,
         ducats: wfm_item.ducats,
         prices,
-        cache_age_secs: cache_age_secs(),
+        cache_age_secs: cache_age_secs(state),
     })
 }
 

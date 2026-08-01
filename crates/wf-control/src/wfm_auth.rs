@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
 use chrono::Utc;
@@ -7,11 +7,12 @@ use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::net::TcpStream;
-use tokio::sync::{Mutex, RwLock, oneshot};
+use tokio::sync::{Mutex, oneshot};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite};
 
+use crate::state::AppState;
 use crate::utils::{WFM_AUTH_BASE, WFM_SUB_PROTOCOL, WFM_WS_URL};
 use wf_core::storage::{self, AuthTokenData};
 
@@ -125,17 +126,53 @@ struct WsConnection {
     pending: PendingMap,
 }
 
-struct WfmSession {
+pub(crate) struct WfmSession {
     conn: WsConnection,
     #[allow(dead_code)]
     tokens: AuthTokenData,
     current_status: Option<Status>,
 }
 
-static SESSION: OnceLock<RwLock<Option<WfmSession>>> = OnceLock::new();
+/// WFM sign-in state machine, stored in [`AppState::wfm`]. The only
+/// transition into `SignedIn` is via [`WfmState::sign_in`] with a
+/// [`WfmSession`], which itself can only be produced by
+/// [`WsConnection::authenticate`].
+#[derive(Default)]
+pub(crate) enum WfmState {
+    #[default]
+    SignedOut,
+    SignedIn(Box<WfmSession>),
+}
 
-fn session_lock() -> &'static RwLock<Option<WfmSession>> {
-    SESSION.get_or_init(|| RwLock::new(None))
+impl WfmState {
+    fn sign_in(&mut self, session: WfmSession) {
+        *self = Self::SignedIn(Box::new(session));
+    }
+
+    fn sign_out(&mut self) {
+        *self = Self::SignedOut;
+    }
+
+    fn session(&self) -> Option<&WfmSession> {
+        match self {
+            Self::SignedIn(session) => Some(session),
+            Self::SignedOut => None,
+        }
+    }
+
+    fn session_mut(&mut self) -> Option<&mut WfmSession> {
+        match self {
+            Self::SignedIn(session) => Some(session),
+            Self::SignedOut => None,
+        }
+    }
+
+    /// Record the server-confirmed status; no-op when signed out.
+    fn record_status(&mut self, status: Status) {
+        if let Self::SignedIn(session) = self {
+            session.current_status = Some(status);
+        }
+    }
 }
 
 // ── REST auth calls (v1 API) ──
@@ -189,7 +226,7 @@ async fn rest_signin(email: &str, password: &str, device_id: &str) -> Result<Str
 impl WsConnection {
     /// Open the WFM WebSocket and spawn its recv loop. The connection is not
     /// authenticated yet — call [`Self::authenticate`] to obtain a session.
-    async fn connect() -> Result<Self> {
+    async fn connect(state: Arc<AppState>) -> Result<Self> {
         let mut request = WFM_WS_URL.into_client_request()?;
         request
             .headers_mut()
@@ -200,7 +237,7 @@ impl WsConnection {
         let pending: PendingMap = Arc::new(Mutex::new(HashMap::new()));
         let (ws_tx, ws_rx) = ws_stream.split();
 
-        tokio::spawn(ws_recv_loop(ws_rx, pending.clone()));
+        tokio::spawn(ws_recv_loop(state, ws_rx, pending.clone()));
 
         Ok(Self { ws_tx, pending })
     }
@@ -259,13 +296,17 @@ async fn await_reply(rx: oneshot::Receiver<WsReply>) -> Result<WsReply> {
         .map_err(|_| anyhow!("WFM response channel closed"))
 }
 
-async fn connect_and_auth(tokens: AuthTokenData) -> Result<()> {
-    let session = WsConnection::connect().await?.authenticate(tokens).await?;
-    *session_lock().write().await = Some(session);
+async fn connect_and_auth(state: &Arc<AppState>, tokens: AuthTokenData) -> Result<()> {
+    let session = WsConnection::connect(Arc::clone(state))
+        .await?
+        .authenticate(tokens)
+        .await?;
+    state.wfm.write().await.sign_in(session);
     Ok(())
 }
 
 async fn ws_recv_loop(
+    state: Arc<AppState>,
     mut ws_rx: futures_util::stream::SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     pending: PendingMap,
 ) {
@@ -320,10 +361,7 @@ async fn ws_recv_loop(
                     .map(serde_json::from_value::<StatusEventPayload>);
                 match payload {
                     Some(Ok(StatusEventPayload { status })) => {
-                        let mut guard = session_lock().write().await;
-                        if let Some(ref mut session) = *guard {
-                            session.current_status = Some(status);
-                        }
+                        state.wfm.write().await.record_status(status);
                     }
                     Some(Err(e)) => log::debug!("Ignoring unparseable WFM status event: {}", e),
                     None => {}
@@ -331,26 +369,24 @@ async fn ws_recv_loop(
             }
             IncomingRoute::Event(WsEvent::AuthRevoked) => {
                 log::warn!("WFM auth token revoked by server");
-                let mut guard = session_lock().write().await;
-                *guard = None;
+                state.wfm.write().await.sign_out();
             }
             IncomingRoute::Other => {}
         }
     }
 
     // Connection dropped — clear session
-    let mut guard = session_lock().write().await;
-    *guard = None;
+    state.wfm.write().await.sign_out();
     log::info!("WFM WebSocket disconnected");
 }
 
-/// Send a command on the globally stored (authenticated) session and wait for
-/// the reply. The session lock is released while waiting.
-async fn ws_command(route: WsRoute, payload: Value) -> Result<WsReply> {
+/// Send a command on the stored (authenticated) session and wait for the
+/// reply. The session lock is released while waiting.
+async fn ws_command(state: &AppState, route: WsRoute, payload: Value) -> Result<WsReply> {
     let rx = {
-        let mut guard = session_lock().write().await;
+        let mut guard = state.wfm.write().await;
         let session = guard
-            .as_mut()
+            .session_mut()
             .ok_or_else(|| anyhow!("Not connected to WFM"))?;
         session.conn.send_command(route, payload).await?
     };
@@ -389,11 +425,14 @@ pub(crate) enum SignstatusResponse {
     },
 }
 
-pub(crate) async fn handle_wfm_signstatus(p: SignstatusParams) -> Result<SignstatusResponse> {
+pub(crate) async fn handle_wfm_signstatus(
+    state: &AppState,
+    p: SignstatusParams,
+) -> Result<SignstatusResponse> {
     // If no status provided, return current state
     let Some(raw_status) = p.status else {
-        let guard = session_lock().read().await;
-        return match guard.as_ref() {
+        let guard = state.wfm.read().await;
+        return match guard.session() {
             Some(session) => {
                 let expires_at = session.tokens.expires_at;
                 let expired = expires_at < Utc::now();
@@ -420,7 +459,7 @@ pub(crate) async fn handle_wfm_signstatus(p: SignstatusParams) -> Result<Signsta
         duration: p.duration,
     })?;
 
-    let reply = ws_command(WsRoute::StatusSet, payload).await?;
+    let reply = ws_command(state, WsRoute::StatusSet, payload).await?;
 
     if reply.outcome == ReplyOutcome::Error {
         let err_msg = reply
@@ -431,13 +470,7 @@ pub(crate) async fn handle_wfm_signstatus(p: SignstatusParams) -> Result<Signsta
         return Err(anyhow!("Status update failed: {}", err_msg));
     }
 
-    // Update local state
-    {
-        let mut guard = session_lock().write().await;
-        if let Some(ref mut session) = *guard {
-            session.current_status = Some(status);
-        }
-    }
+    state.wfm.write().await.record_status(status);
 
     Ok(SignstatusResponse::Set { status })
 }
@@ -471,7 +504,7 @@ pub(crate) fn parse_signin_params(params: Option<Value>) -> Result<SigninParams>
     }
 }
 
-pub(crate) async fn handle_wfm_signin(p: SigninParams) -> Result<()> {
+pub(crate) async fn handle_wfm_signin(state: &Arc<AppState>, p: SigninParams) -> Result<()> {
     // Load existing device_id or generate a new stable one
     let device_id = match storage::read_auth_token() {
         Ok(existing) => existing.device_id,
@@ -492,19 +525,15 @@ pub(crate) async fn handle_wfm_signin(p: SigninParams) -> Result<()> {
     storage::save_auth_token(&token_data)?;
 
     // Connect WebSocket and authenticate
-    connect_and_auth(token_data).await?;
+    connect_and_auth(state, token_data).await?;
 
     Ok(())
 }
 
 // ── Sign out handler ──
 
-pub(crate) async fn handle_wfm_signout() -> Result<()> {
-    // Clear WS session
-    {
-        let mut guard = session_lock().write().await;
-        *guard = None;
-    }
+pub(crate) async fn handle_wfm_signout(state: &AppState) -> Result<()> {
+    state.wfm.write().await.sign_out();
 
     // Delete stored tokens
     storage::delete_auth_token()?;
@@ -515,7 +544,7 @@ pub(crate) async fn handle_wfm_signout() -> Result<()> {
 
 // ── Session restore (called on daemon start) ──
 
-pub async fn try_restore_session() {
+pub async fn try_restore_session(state: &Arc<AppState>) {
     let token_data = match storage::read_auth_token() {
         Ok(t) => t,
         Err(_) => return, // No cached token, nothing to restore
@@ -527,29 +556,21 @@ pub async fn try_restore_session() {
         return;
     }
 
-    match connect_and_auth(token_data).await {
+    match connect_and_auth(state, token_data).await {
         Ok(()) => log::info!("WFM session restored from cached token"),
         Err(e) => log::warn!("Failed to restore WFM session: {}", e),
     }
 }
 
 /// Set the WFM profile status if authenticated. Used by daemon for auto-status.
-pub async fn set_status_if_connected(status: Status) {
-    let is_connected = {
-        let guard = session_lock().read().await;
-        guard.is_some()
-    };
-
-    if !is_connected {
+pub async fn set_status_if_connected(state: &AppState, status: Status) {
+    if state.wfm.read().await.session().is_none() {
         return;
     }
 
-    match ws_command(WsRoute::StatusSet, json!({ "status": status })).await {
+    match ws_command(state, WsRoute::StatusSet, json!({ "status": status })).await {
         Ok(_) => {
-            let mut guard = session_lock().write().await;
-            if let Some(ref mut session) = *guard {
-                session.current_status = Some(status);
-            }
+            state.wfm.write().await.record_status(status);
             log::info!("WFM status set to '{}'", status);
         }
         Err(e) => log::warn!("Failed to set WFM status: {}", e),

@@ -1,5 +1,3 @@
-use std::sync::{OnceLock, RwLock};
-
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -18,6 +16,8 @@ use wf_inventory::Inventory;
 
 use wf_itemdata::item_data::lookup_item_info;
 
+use super::state::AppState;
+
 #[derive(Clone)]
 pub(crate) struct InventorySearchIndex {
     pub index: Index,
@@ -30,15 +30,9 @@ pub(crate) struct InventorySearchIndex {
 }
 
 #[derive(Clone)]
-struct CachedInventoryIndex {
+pub(crate) struct CachedInventoryIndex {
     meta_last_updated: Option<DateTime<Utc>>,
     index: InventorySearchIndex,
-}
-
-static INVENTORY_INDEX_CACHE: OnceLock<RwLock<Option<CachedInventoryIndex>>> = OnceLock::new();
-
-fn inventory_index_cache() -> &'static RwLock<Option<CachedInventoryIndex>> {
-    INVENTORY_INDEX_CACHE.get_or_init(|| RwLock::new(None))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -378,11 +372,12 @@ pub(crate) fn collect_inventory_items(
 }
 
 pub(crate) fn get_or_build_inventory_index(
+    state: &AppState,
     inventory: &Inventory,
     meta: &storage::InventoryMeta,
 ) -> Result<InventorySearchIndex> {
     // Fast path: reuse cached index if metadata matches last update timestamp
-    if let Ok(guard) = inventory_index_cache().read()
+    if let Ok(guard) = state.inventory_index.read()
         && let Some(cached) = guard.as_ref()
             && cached.meta_last_updated == meta.last_updated {
                 return Ok(cached.index.clone());
@@ -393,7 +388,7 @@ pub(crate) fn get_or_build_inventory_index(
     let index = build_tantivy_index(&items)?;
 
     // Update cache (best effort; ignore lock poisoning)
-    if let Ok(mut guard) = inventory_index_cache().write() {
+    if let Ok(mut guard) = state.inventory_index.write() {
         *guard = Some(CachedInventoryIndex {
             meta_last_updated: meta.last_updated,
             index: index.clone(),

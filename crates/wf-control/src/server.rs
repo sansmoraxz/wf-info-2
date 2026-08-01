@@ -2,6 +2,7 @@
 use std::fs;
 #[cfg(unix)]
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
@@ -13,9 +14,9 @@ use tokio::net::UnixListener;
 #[cfg(windows)]
 use tokio::net::windows::named_pipe::ServerOptions;
 
-use super::broadcaster;
 use super::events::EventMessage;
 use super::requests;
+use super::state::AppState;
 use super::subscription::EventFilter;
 
 #[derive(Debug, Clone)]
@@ -84,14 +85,14 @@ impl ControlServer {
     }
 }
 
-pub async fn start_control_server_from_env() -> Result<ControlServer> {
+pub async fn start_control_server_from_env(state: Arc<AppState>) -> Result<ControlServer> {
     let Some(cfg) = ControlConfig::from_env() else {
         return Ok(ControlServer::empty());
     };
-    start_control_server(cfg).await
+    start_control_server(cfg, state).await
 }
 
-pub async fn start_control_server(cfg: ControlConfig) -> Result<ControlServer> {
+pub async fn start_control_server(cfg: ControlConfig, state: Arc<AppState>) -> Result<ControlServer> {
     let mut handles = Vec::new();
     #[cfg(unix)]
     let mut unix_guards = Vec::new();
@@ -99,17 +100,17 @@ pub async fn start_control_server(cfg: ControlConfig) -> Result<ControlServer> {
     for endpoint in cfg.endpoints {
         match endpoint {
             ControlEndpoint::Tcp(addr) => {
-                handles.push(spawn_tcp_server(addr).await?);
+                handles.push(spawn_tcp_server(addr, Arc::clone(&state)).await?);
             }
             #[cfg(unix)]
             ControlEndpoint::Unix(path) => {
-                let (handle, guard) = spawn_unix_server(path).await?;
+                let (handle, guard) = spawn_unix_server(path, Arc::clone(&state)).await?;
                 handles.push(handle);
                 unix_guards.push(guard);
             }
             #[cfg(windows)]
             ControlEndpoint::Npipe(path) => {
-                handles.push(spawn_npipe_server(path).await?);
+                handles.push(spawn_npipe_server(path, Arc::clone(&state)).await?);
             }
         }
     }
@@ -121,7 +122,7 @@ pub async fn start_control_server(cfg: ControlConfig) -> Result<ControlServer> {
     })
 }
 
-async fn spawn_tcp_server(addr: String) -> Result<JoinHandle<()>> {
+async fn spawn_tcp_server(addr: String, state: Arc<AppState>) -> Result<JoinHandle<()>> {
     let listener = TcpListener::bind(&addr)
         .await
         .with_context(|| format!("Failed to bind TCP control socket at {}", addr))?;
@@ -131,8 +132,9 @@ async fn spawn_tcp_server(addr: String) -> Result<JoinHandle<()>> {
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
+                    let state = Arc::clone(&state);
                     tokio::spawn(async move {
-                        if let Err(e) = handle_stream(stream).await {
+                        if let Err(e) = handle_stream(stream, state).await {
                             log::warn!("Control connection error: {}", e);
                         }
                     });
@@ -147,7 +149,7 @@ async fn spawn_tcp_server(addr: String) -> Result<JoinHandle<()>> {
 }
 
 #[cfg(windows)]
-async fn spawn_npipe_server(path: String) -> Result<JoinHandle<()>> {
+async fn spawn_npipe_server(path: String, state: Arc<AppState>) -> Result<JoinHandle<()>> {
     let pipe_path = normalize_npipe_path(path);
     log::info!("Control API listening on npipe {}", pipe_path);
 
@@ -171,8 +173,9 @@ async fn spawn_npipe_server(path: String) -> Result<JoinHandle<()>> {
 
             match server.connect().await {
                 Ok(()) => {
+                    let state = Arc::clone(&state);
                     tokio::spawn(async move {
-                        if let Err(e) = handle_stream(server).await {
+                        if let Err(e) = handle_stream(server, state).await {
                             log::warn!("Control connection error: {}", e);
                         }
                     });
@@ -187,7 +190,10 @@ async fn spawn_npipe_server(path: String) -> Result<JoinHandle<()>> {
 }
 
 #[cfg(unix)]
-async fn spawn_unix_server(path: PathBuf) -> Result<(JoinHandle<()>, UnixSocketGuard)> {
+async fn spawn_unix_server(
+    path: PathBuf,
+    state: Arc<AppState>,
+) -> Result<(JoinHandle<()>, UnixSocketGuard)> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create unix socket dir {}", parent.display()))?;
@@ -206,8 +212,9 @@ async fn spawn_unix_server(path: PathBuf) -> Result<(JoinHandle<()>, UnixSocketG
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
+                    let state = Arc::clone(&state);
                     tokio::spawn(async move {
-                        if let Err(e) = handle_stream(stream).await {
+                        if let Err(e) = handle_stream(stream, state).await {
                             log::warn!("Control connection error: {}", e);
                         }
                     });
@@ -223,7 +230,7 @@ async fn spawn_unix_server(path: PathBuf) -> Result<(JoinHandle<()>, UnixSocketG
     Ok((handle, guard))
 }
 
-async fn handle_stream<T>(stream: T) -> Result<()>
+async fn handle_stream<T>(stream: T, state: Arc<AppState>) -> Result<()>
 where
     T: AsyncRead + AsyncWrite + Unpin,
 {
@@ -236,7 +243,7 @@ where
             continue;
         }
 
-        let outcome = requests::handle_line(line).await;
+        let outcome = requests::handle_line(&state, line).await;
 
         let payload =
             serde_json::to_string(outcome.response()).context("Failed to serialize response")?;
@@ -244,7 +251,7 @@ where
         writer.write_all(b"\n").await?;
 
         if let requests::HandleOutcome::EnterSubscription { filter, .. } = outcome {
-            handle_subscription_mode(&mut lines, &mut writer, filter).await?;
+            handle_subscription_mode(&state, &mut lines, &mut writer, filter).await?;
             return Ok(());
         }
     }
@@ -266,6 +273,7 @@ where
 }
 
 async fn handle_subscription_mode<R, W>(
+    state: &Arc<AppState>,
     lines: &mut tokio::io::Lines<BufReader<R>>,
     writer: &mut W,
     filter: EventFilter,
@@ -274,7 +282,7 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let mut receiver = broadcaster::subscribe();
+    let mut receiver = state.subscribe();
 
     loop {
         tokio::select! {
@@ -307,7 +315,7 @@ where
                         }
 
                         // Handle regular requests while subscribed (e.g., ping)
-                        let outcome = requests::handle_line(line).await;
+                        let outcome = requests::handle_line(state, line).await;
                         let payload = serde_json::to_string(outcome.response())
                             .context("Failed to serialize response")?;
                         writer.write_all(payload.as_bytes()).await?;

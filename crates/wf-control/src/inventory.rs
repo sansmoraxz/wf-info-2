@@ -12,7 +12,7 @@ use tantivy::schema::IndexRecordOption;
 use wf_core::storage;
 use wf_inventory::Inventory;
 
-use super::broadcaster;
+use super::state::AppState;
 use super::events::{
     DaemonEvent, InventoryFetchedEvent, InventoryStaleEvent, InventorySummary, Source,
 };
@@ -120,6 +120,7 @@ pub(crate) struct InventoryFilterResponse {
 }
 
 pub(crate) async fn handle_inventory_load(
+    state: &AppState,
     params: LoadInventoryParams,
 ) -> Result<InventoryLoadResponse> {
     let LoadInventoryRequest {
@@ -134,7 +135,7 @@ pub(crate) async fn handle_inventory_load(
         let _ = storage::touch_inventory_updated(Some(&source.to_string()));
 
         // Emit inventory fetched event
-        broadcaster::emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
+        state.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
             timestamp: Utc::now(),
             source,
             summary: inventory_summary(&inventory),
@@ -183,6 +184,7 @@ pub(crate) struct CountFilter {
 }
 
 pub(crate) async fn handle_inventory_filter(
+    state: &AppState,
     mut params: FilterParams,
 ) -> Result<InventoryFilterResponse> {
     let custom_path = params.path.take().map(|path| InventoryInput::Path {
@@ -216,7 +218,7 @@ pub(crate) async fn handle_inventory_filter(
         let all_items = collect_inventory_items(&inventory, None);
         build_tantivy_index(&all_items)?
     } else {
-        get_or_build_inventory_index(&inventory, &meta)?
+        get_or_build_inventory_index(state, &inventory, &meta)?
     };
 
     let mut clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
@@ -295,7 +297,7 @@ pub(crate) async fn handle_inventory_filter(
     let include_market = params.include_market.unwrap_or(false);
     if include_market {
         for envelope in &mut filtered_items {
-            if let Some(market) = fetch_market_summary(envelope.item_type()).await {
+            if let Some(market) = fetch_market_summary(state, envelope.item_type()).await {
                 envelope.set_market(market);
             }
         }
@@ -333,6 +335,7 @@ pub(crate) struct RefreshParams {
 
 #[cfg(feature = "memory")]
 pub(crate) async fn handle_inventory_refresh(
+    state: &AppState,
     params: RefreshParams,
 ) -> Result<InventoryLoadResponse> {
     let pid = process::get_warframe_pid()
@@ -353,7 +356,7 @@ pub(crate) async fn handle_inventory_refresh(
         let _ = storage::touch_inventory_updated(Some(&source.to_string()));
 
         // Emit inventory fetched event
-        broadcaster::emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
+        state.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
             timestamp: Utc::now(),
             source,
             summary: inventory_summary(&inventory),
@@ -370,7 +373,7 @@ pub(crate) async fn handle_inventory_refresh(
 }
 
 #[cfg(not(feature = "memory"))]
-pub(crate) async fn handle_inventory_refresh() -> Result<InventoryLoadResponse> {
+pub(crate) async fn handle_inventory_refresh(_state: &AppState) -> Result<InventoryLoadResponse> {
     anyhow::bail!("inventory.refresh requires the 'memory' feature to be enabled")
 }
 
@@ -406,7 +409,10 @@ pub(crate) struct StaleParams {
     pub reason: Option<String>,
 }
 
-pub(crate) fn handle_inventory_stale_update(params: StaleParams) -> Result<storage::InventoryMeta> {
+pub(crate) fn handle_inventory_stale_update(
+    state: &AppState,
+    params: StaleParams,
+) -> Result<storage::InventoryMeta> {
     let timestamp = if let Some(value) = params.timestamp {
         value.to_datetime()?
     } else {
@@ -417,7 +423,7 @@ pub(crate) fn handle_inventory_stale_update(params: StaleParams) -> Result<stora
     let meta = storage::mark_inventory_stale_at(timestamp, reason.clone())?;
 
     // Emit inventory stale event
-    broadcaster::emit(DaemonEvent::InventoryStale(InventoryStaleEvent {
+    state.emit(DaemonEvent::InventoryStale(InventoryStaleEvent {
         timestamp: Utc::now(),
         stale_since: timestamp,
         reason,

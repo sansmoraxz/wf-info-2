@@ -3,7 +3,6 @@ mod common;
 mod portal;
 mod x11;
 
-use std::sync::{LazyLock, Mutex};
 use std::time::Instant;
 
 use anyhow::{Result, anyhow, bail};
@@ -11,11 +10,7 @@ use anyhow::{Result, anyhow, bail};
 use wf_core::process;
 
 use self::common::{EnvironmentKind, detect_unix_environment};
-use super::screenshot_config;
-
-static BACKEND_CACHE: LazyLock<Mutex<Option<BackendCacheEntry>>> =
-    LazyLock::new(|| Mutex::new(None));
-static WARFRAME_PID_CACHE: LazyLock<Mutex<Option<u32>>> = LazyLock::new(|| Mutex::new(None));
+use crate::state::ScreenshotState;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum CaptureBackend {
@@ -36,16 +31,16 @@ struct BackendResolution {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct BackendCacheEntry {
+pub(crate) struct BackendCacheEntry {
     warframe_pid: u32,
     native_wayland_capture: bool,
     resolution: BackendResolution,
 }
 
-pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
+pub(crate) async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, String)> {
     let total_start = Instant::now();
     let pid_start = Instant::now();
-    let (warframe_pid, pid_cache_status) = cached_warframe_pid()
+    let (warframe_pid, pid_cache_status) = cached_warframe_pid(state)
         .ok_or_else(|| anyhow!("Warframe process not detected; relaunch the game and try again"))?;
     log::trace!(
         "Screenshot Warframe PID lookup ({}) found {} in {:?}",
@@ -55,11 +50,11 @@ pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
     );
 
     let resolution_start = Instant::now();
-    let native_wayland_capture = screenshot_config().native_wayland_capture;
-    let cached = cached_resolution(warframe_pid, native_wayland_capture);
+    let native_wayland_capture = state.config.native_wayland_capture;
+    let cached = cached_resolution(state, warframe_pid, native_wayland_capture);
     let resolution = cached.clone().unwrap_or_else(|| {
         let resolution = resolve_backend(warframe_pid, native_wayland_capture);
-        store_resolution(warframe_pid, native_wayland_capture, &resolution);
+        store_resolution(state, warframe_pid, native_wayland_capture, &resolution);
         resolution
     });
     log::trace!(
@@ -76,10 +71,10 @@ pub(crate) async fn capture_screen() -> Result<(Vec<u8>, String)> {
                 "Cached X11/XWayland capture backend failed; resolving screenshot backend again: {}",
                 err
             );
-            clear_cached_resolution();
-            clear_cached_warframe_pid();
+            clear_cached_resolution(state);
+            clear_cached_warframe_pid(state);
             let refreshed = resolve_backend(warframe_pid, native_wayland_capture);
-            store_resolution(warframe_pid, native_wayland_capture, &refreshed);
+            store_resolution(state, warframe_pid, native_wayland_capture, &refreshed);
             if refreshed == resolution {
                 Err(err)
             } else {
@@ -235,8 +230,13 @@ impl BackendResolution {
     }
 }
 
-fn cached_resolution(warframe_pid: u32, native_wayland_capture: bool) -> Option<BackendResolution> {
-    BACKEND_CACHE
+fn cached_resolution(
+    state: &ScreenshotState,
+    warframe_pid: u32,
+    native_wayland_capture: bool,
+) -> Option<BackendResolution> {
+    state
+        .backend_cache
         .lock()
         .ok()
         .and_then(|cache| cache.as_ref().cloned())
@@ -248,11 +248,12 @@ fn cached_resolution(warframe_pid: u32, native_wayland_capture: bool) -> Option<
 }
 
 fn store_resolution(
+    state: &ScreenshotState,
     warframe_pid: u32,
     native_wayland_capture: bool,
     resolution: &BackendResolution,
 ) {
-    if let Ok(mut cache) = BACKEND_CACHE.lock() {
+    if let Ok(mut cache) = state.backend_cache.lock() {
         *cache = Some(BackendCacheEntry {
             warframe_pid,
             native_wayland_capture,
@@ -261,30 +262,30 @@ fn store_resolution(
     }
 }
 
-fn clear_cached_resolution() {
-    if let Ok(mut cache) = BACKEND_CACHE.lock() {
+fn clear_cached_resolution(state: &ScreenshotState) {
+    if let Ok(mut cache) = state.backend_cache.lock() {
         *cache = None;
     }
 }
 
-fn cached_warframe_pid() -> Option<(u32, &'static str)> {
-    if let Some(pid) = WARFRAME_PID_CACHE.lock().ok().and_then(|cache| *cache) {
+fn cached_warframe_pid(state: &ScreenshotState) -> Option<(u32, &'static str)> {
+    if let Some(pid) = state.warframe_pid.lock().ok().and_then(|cache| *cache) {
         if !process::is_warframe_pid(pid) {
-            clear_cached_warframe_pid();
+            clear_cached_warframe_pid(state);
         } else {
             return Some((pid, "cached"));
         }
     }
 
     let pid = process::get_warframe_pid()?;
-    if let Ok(mut cache) = WARFRAME_PID_CACHE.lock() {
+    if let Ok(mut cache) = state.warframe_pid.lock() {
         *cache = Some(pid);
     }
     Some((pid, "fresh"))
 }
 
-fn clear_cached_warframe_pid() {
-    if let Ok(mut cache) = WARFRAME_PID_CACHE.lock() {
+fn clear_cached_warframe_pid(state: &ScreenshotState) {
+    if let Ok(mut cache) = state.warframe_pid.lock() {
         *cache = None;
     }
 }

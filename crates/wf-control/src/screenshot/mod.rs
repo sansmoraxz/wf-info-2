@@ -1,6 +1,5 @@
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::sync::{LazyLock, Mutex};
 use std::time::Instant;
 
 use anyhow::{Context, Result};
@@ -13,29 +12,12 @@ use serde_json::Value;
 
 use wf_core::storage;
 
-use super::broadcaster;
 use super::events::{DaemonEvent, ScreenshotTriggeredEvent};
-
-static SCREENSHOT_CONFIG: LazyLock<Mutex<ScreenshotConfig>> =
-    LazyLock::new(|| Mutex::new(ScreenshotConfig::default()));
+use super::state::AppState;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ScreenshotConfig {
     pub native_wayland_capture: bool,
-}
-
-pub fn set_screenshot_config(config: ScreenshotConfig) {
-    if let Ok(mut current) = SCREENSHOT_CONFIG.lock() {
-        *current = config;
-    }
-}
-
-#[allow(dead_code)]
-pub(crate) fn screenshot_config() -> ScreenshotConfig {
-    SCREENSHOT_CONFIG
-        .lock()
-        .map(|config| *config)
-        .unwrap_or_default()
 }
 
 #[cfg(unix)]
@@ -44,7 +26,11 @@ mod unix;
 mod windows;
 
 #[cfg(unix)]
+pub(crate) use unix::BackendCacheEntry;
+#[cfg(unix)]
 pub(crate) use unix::capture_screen;
+#[cfg(windows)]
+pub(crate) use windows::WindowCacheEntry;
 #[cfg(windows)]
 pub(crate) use windows::capture_screen;
 
@@ -71,11 +57,14 @@ struct ScreenshotEventLogEntry<'a> {
     content_len: usize,
 }
 
-pub(crate) async fn handle_screenshot_trigger(params: ScreenshotParams) -> Result<ScreenshotEvent> {
+pub(crate) async fn handle_screenshot_trigger(
+    state: &AppState,
+    params: ScreenshotParams,
+) -> Result<ScreenshotEvent> {
     let total_start = Instant::now();
 
     let capture_start = Instant::now();
-    let (bytes, content_type) = capture_screen().await?;
+    let (bytes, content_type) = capture_screen(&state.screenshot).await?;
     log::trace!(
         "Screenshot capture returned {} bytes ({}) in {:?}",
         bytes.len(),
@@ -98,7 +87,7 @@ pub(crate) async fn handle_screenshot_trigger(params: ScreenshotParams) -> Resul
         record_start.elapsed()
     );
 
-    broadcaster::emit(DaemonEvent::ScreenshotTriggered(ScreenshotTriggeredEvent {
+    state.emit(DaemonEvent::ScreenshotTriggered(ScreenshotTriggeredEvent {
         timestamp: event.timestamp,
         event_id: event.id.clone(),
     }));

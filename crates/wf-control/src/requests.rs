@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::Arc;
 
 use crate::control_ops::ControlOp;
+use crate::state::AppState;
 
 use super::inventory::{
     InventoryFilterResponse, InventoryLoadResponse, handle_inventory_filter, handle_inventory_load,
@@ -115,14 +117,14 @@ impl HandleOutcome {
     }
 }
 
-pub(crate) async fn handle_line(line: &str) -> HandleOutcome {
+pub(crate) async fn handle_line(state: &Arc<AppState>, line: &str) -> HandleOutcome {
     match serde_json::from_str::<Request>(line) {
-        Ok(req) => handle_request(req).await,
+        Ok(req) => handle_request(state, req).await,
         Err(e) => HandleOutcome::Reply(Response::error(None, format!("Invalid request: {}", e))),
     }
 }
 
-async fn handle_request(req: Request) -> HandleOutcome {
+async fn handle_request(state: &Arc<AppState>, req: Request) -> HandleOutcome {
     let id = req.id.clone();
 
     // Handle subscribe separately since it needs to return the filter
@@ -138,51 +140,55 @@ async fn handle_request(req: Request) -> HandleOutcome {
         };
     }
 
-    HandleOutcome::Reply(match dispatch(&req.op, req.params).await {
+    HandleOutcome::Reply(match dispatch(state, &req.op, req.params).await {
         Ok(data) => Response::ok(id, data),
         Err(e) => Response::error(id, e.to_string()),
     })
 }
 
-async fn dispatch(op: &str, params: Option<Value>) -> anyhow::Result<ResponseData> {
+async fn dispatch(
+    state: &Arc<AppState>,
+    op: &str,
+    params: Option<Value>,
+) -> anyhow::Result<ResponseData> {
     let op: ControlOp = op
         .parse()
         .map_err(|_| anyhow::anyhow!("Unknown operation '{}'", op))?;
     Ok(match op {
         ControlOp::Ping => ResponseData::Ping(Box::new(PingResponse { pong: true })),
         ControlOp::InventoryLoad => ResponseData::InventoryLoad(Box::new(
-            handle_inventory_load(parse_params(params)?).await?,
+            handle_inventory_load(state, parse_params(params)?).await?,
         )),
         ControlOp::InventoryFilter => ResponseData::InventoryFilter(Box::new(
-            handle_inventory_filter(parse_params(params)?).await?,
+            handle_inventory_filter(state, parse_params(params)?).await?,
         )),
         ControlOp::InventoryMetaGet => {
             ResponseData::InventoryMeta(Box::new(handle_inventory_meta_get()?))
         }
         ControlOp::InventoryStaleUpdate => ResponseData::InventoryMeta(Box::new(
-            handle_inventory_stale_update(parse_params(params)?)?,
+            handle_inventory_stale_update(state, parse_params(params)?)?,
         )),
         ControlOp::ScreenshotTrigger => ResponseData::Screenshot(Box::new(
-            handle_screenshot_trigger(parse_params(params)?).await?,
+            handle_screenshot_trigger(state, parse_params(params)?).await?,
         )),
         ControlOp::InventoryRefresh => {
-            ResponseData::InventoryLoad(Box::new(dispatch_refresh(params).await?))
+            ResponseData::InventoryLoad(Box::new(dispatch_refresh(state, params).await?))
         }
-        ControlOp::WFMarketPrice => {
-            ResponseData::MarketPrice(Box::new(handle_market_price(parse_params(params)?).await?))
-        }
+        ControlOp::WFMarketPrice => ResponseData::MarketPrice(Box::new(
+            handle_market_price(state, parse_params(params)?).await?,
+        )),
         ControlOp::WFMarketRefresh => {
-            ResponseData::MarketRefresh(Box::new(handle_market_refresh().await?))
+            ResponseData::MarketRefresh(Box::new(handle_market_refresh(state).await?))
         }
         ControlOp::WfmSignstatus => ResponseData::Signstatus(Box::new(
-            handle_wfm_signstatus(parse_params(params)?).await?,
+            handle_wfm_signstatus(state, parse_params(params)?).await?,
         )),
         ControlOp::WfmSignin => {
-            handle_wfm_signin(parse_signin_params(params)?).await?;
+            handle_wfm_signin(state, parse_signin_params(params)?).await?;
             ResponseData::Empty(Box::new(EmptyResponse {}))
         }
         ControlOp::WfmSignout => {
-            handle_wfm_signout().await?;
+            handle_wfm_signout(state).await?;
             ResponseData::Empty(Box::new(EmptyResponse {}))
         }
         ControlOp::Subscribe => return Err(anyhow::anyhow!("Unexpected subscribe operation")),
@@ -190,13 +196,19 @@ async fn dispatch(op: &str, params: Option<Value>) -> anyhow::Result<ResponseDat
 }
 
 #[cfg(feature = "memory")]
-async fn dispatch_refresh(params: Option<Value>) -> anyhow::Result<InventoryLoadResponse> {
-    handle_inventory_refresh(parse_params(params)?).await
+async fn dispatch_refresh(
+    state: &AppState,
+    params: Option<Value>,
+) -> anyhow::Result<InventoryLoadResponse> {
+    handle_inventory_refresh(state, parse_params(params)?).await
 }
 
 #[cfg(not(feature = "memory"))]
-async fn dispatch_refresh(_params: Option<Value>) -> anyhow::Result<InventoryLoadResponse> {
-    handle_inventory_refresh().await
+async fn dispatch_refresh(
+    state: &AppState,
+    _params: Option<Value>,
+) -> anyhow::Result<InventoryLoadResponse> {
+    handle_inventory_refresh(state).await
 }
 
 #[cfg(test)]
@@ -206,7 +218,8 @@ mod tests {
 
     #[tokio::test]
     async fn ping_response_matches_legacy_wire_shape() {
-        let outcome = handle_line(r#"{"id":"1","op":"ping"}"#).await;
+        let state = Arc::new(AppState::default());
+        let outcome = handle_line(&state, r#"{"id":"1","op":"ping"}"#).await;
         let value = serde_json::to_value(outcome.response()).unwrap();
         assert_eq!(
             value,
@@ -217,7 +230,8 @@ mod tests {
 
     #[tokio::test]
     async fn malformed_request_returns_error_shape() {
-        let outcome = handle_line("not json").await;
+        let state = Arc::new(AppState::default());
+        let outcome = handle_line(&state, "not json").await;
         let value = serde_json::to_value(outcome.response()).unwrap();
         assert_eq!(value["ok"], json!(false));
         assert!(
@@ -232,7 +246,8 @@ mod tests {
 
     #[tokio::test]
     async fn unknown_op_returns_error() {
-        let outcome = handle_line(r#"{"id":"2","op":"nope"}"#).await;
+        let state = Arc::new(AppState::default());
+        let outcome = handle_line(&state, r#"{"id":"2","op":"nope"}"#).await;
         let value = serde_json::to_value(outcome.response()).unwrap();
         assert_eq!(value["ok"], json!(false));
         assert_eq!(value["error"], json!("Unknown operation 'nope'"));
@@ -240,8 +255,12 @@ mod tests {
 
     #[tokio::test]
     async fn subscribe_returns_filter_and_typed_response() {
-        let outcome =
-            handle_line(r#"{"id":"3","op":"subscribe","params":{"events":["game_start"]}}"#).await;
+        let state = Arc::new(AppState::default());
+        let outcome = handle_line(
+            &state,
+            r#"{"id":"3","op":"subscribe","params":{"events":["game_start"]}}"#,
+        )
+        .await;
         let value = serde_json::to_value(outcome.response()).unwrap();
         assert_eq!(value["ok"], json!(true));
         assert_eq!(value["data"]["subscribed"], json!(true));
