@@ -296,6 +296,31 @@ pub struct ItemView<'a> {
     pub envelope: InventoryItemEnvelope,
 }
 
+/// Count items in the selected category without building envelopes.
+pub fn count_inventory_items(inventory: &Inventory, category: Option<Category>) -> usize {
+    macro_rules! count {
+        ($($cat:ident => $field:ident),+ $(,)?) => {
+            match category {
+                None => 0 $(+ inventory.$field.len())+,
+                $(Some(Category::$cat) => inventory.$field.len(),)+
+            }
+        };
+    }
+    count!(
+        Suits => suits,
+        LongGuns => long_guns,
+        Pistols => pistols,
+        Melee => melee,
+        SpaceSuits => space_suits,
+        SpaceGuns => space_guns,
+        SpaceMelee => space_melee,
+        RawUpgrades => raw_upgrades,
+        Upgrades => upgrades,
+        Recipes => recipes,
+        PendingRecipes => pending_recipes,
+    )
+}
+
 pub fn collect_inventory_items<'a>(
     inventory: &Inventory,
     category: Option<Category>,

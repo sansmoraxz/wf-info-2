@@ -20,7 +20,7 @@ use super::market::{MarketCache, fetch_market_summary};
 use super::requests::{HandleOp, Handles};
 use super::search::{
     Category, EnvelopeAccess, IndexedInventory, InventoryIndexCache, InventoryItemEnvelope,
-    collect_inventory_items, search_inventory,
+    count_inventory_items, search_inventory,
 };
 use wf_itemdata::traits::Item as _;
 
@@ -235,7 +235,7 @@ pub async fn handle_inventory_filter(
     let search_index = &indexed.index;
 
     // Count items in selected category for reporting
-    let total = collect_inventory_items(&indexed.inventory, category, item_index).len();
+    let total = count_inventory_items(&indexed.inventory, category);
 
     let mut clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
 

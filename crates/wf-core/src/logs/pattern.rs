@@ -177,12 +177,13 @@ fn trade_confirm_item_filter(a: &str) -> Option<(String, u32)> {
 }
 
 fn extract_trade_items(s: &str) -> Vec<TradeItem> {
-    let d: Vec<_> = s.lines().filter_map(trade_confirm_item_filter).collect();
-    let mut m: HashMap<String, u32> = HashMap::new();
-    for e in d {
-        m.entry(e.0).and_modify(|c| *c += e.1).or_insert(e.1);
-    }
-    m.drain()
+    s.lines()
+        .filter_map(trade_confirm_item_filter)
+        .fold(HashMap::<String, u32>::new(), |mut m, (name, count)| {
+            *m.entry(name).or_default() += count;
+            m
+        })
+        .into_iter()
         .map(|(name, count)| TradeItem { name, count })
         .collect()
 }
