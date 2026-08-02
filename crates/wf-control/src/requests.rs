@@ -52,14 +52,45 @@ impl Handles {
     }
 }
 
+/// Any error a control operation can produce. Stringified via `Display` at
+/// the wire boundary in [`handle_request`], so each variant's message (or its
+/// transparent inner message) IS the wire error string.
+#[derive(Debug, thiserror::Error)]
+pub enum ControlError {
+    #[error("Unknown operation '{0}'")]
+    UnknownOperation(String),
+    #[error("Unexpected subscribe operation")]
+    UnexpectedSubscribe,
+    #[error(transparent)]
+    Params(#[from] super::utils::ParamsError),
+    #[error(transparent)]
+    Inventory(#[from] super::inventory::InventoryError),
+    #[error(transparent)]
+    Search(#[from] super::search::SearchError),
+    #[error(transparent)]
+    Tantivy(#[from] tantivy::TantivyError),
+    #[error(transparent)]
+    QueryParser(#[from] tantivy::query::QueryParserError),
+    #[error(transparent)]
+    Market(#[from] super::market::MarketError),
+    #[error(transparent)]
+    Wfm(#[from] super::wfm_auth::WfmError),
+    #[error(transparent)]
+    Screenshot(#[from] super::screenshot::ScreenshotError),
+    #[error(transparent)]
+    Storage(#[from] wf_core::storage::StorageError),
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+}
+
 /// A control operation's params type: handling consumes the params and yields
 /// a typed response that converts into [`ResponseData`].
 pub trait HandleOp {
     type Response: Into<ResponseData>;
-    async fn handle(self, cx: &Handles) -> anyhow::Result<Self::Response>;
+    async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError>;
 }
 
-async fn run<P: HandleOp>(params: P, cx: &Handles) -> anyhow::Result<ResponseData> {
+async fn run<P: HandleOp>(params: P, cx: &Handles) -> Result<ResponseData, ControlError> {
     Ok(params.handle(cx).await?.into())
 }
 
@@ -199,10 +230,14 @@ async fn handle_request(cx: &Handles, req: Request) -> HandleOutcome {
     })
 }
 
-async fn dispatch(cx: &Handles, op: &str, params: Option<Value>) -> anyhow::Result<ResponseData> {
+async fn dispatch(
+    cx: &Handles,
+    op: &str,
+    params: Option<Value>,
+) -> Result<ResponseData, ControlError> {
     let op: ControlOp = op
         .parse()
-        .map_err(|_| anyhow::anyhow!("Unknown operation '{op}'"))?;
+        .map_err(|_| ControlError::UnknownOperation(op.to_string()))?;
     Ok(match op {
         ControlOp::Ping => PingResponse { pong: true }.into(),
         ControlOp::Inventory(InventoryOp::Load) => {
@@ -231,7 +266,7 @@ async fn dispatch(cx: &Handles, op: &str, params: Option<Value>) -> anyhow::Resu
             handle_wfm_signout(&cx.wfm).await?;
             EmptyResponse {}.into()
         }
-        ControlOp::Subscribe => return Err(anyhow::anyhow!("Unexpected subscribe operation")),
+        ControlOp::Subscribe => return Err(ControlError::UnexpectedSubscribe),
     })
 }
 

@@ -1,4 +1,3 @@
-use anyhow::Error;
 use regex::{Captures, Regex, RegexSet};
 
 use crate::{
@@ -17,7 +16,7 @@ struct Transformer {
 
 /// Pattern table: (regex, capture-group transform). Group meanings are noted
 /// per entry.
-fn transformers() -> Result<Vec<Transformer>, Error> {
+fn transformers() -> Result<Vec<Transformer>, regex::Error> {
     let table: [(&str, Transform); 10] = [
         // G1: name
         (
@@ -131,7 +130,7 @@ struct LogRecords {
 }
 
 impl LogProcessingEngine {
-    pub fn new() -> Result<Self, Error> {
+    pub fn new() -> Result<Self, regex::Error> {
         let transformers = transformers()?;
         let reset = RegexSet::new(transformers.iter().map(|t| t.pattern.as_str()))?;
         Ok(Self {

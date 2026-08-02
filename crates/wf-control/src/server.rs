@@ -3,7 +3,6 @@ use std::fs;
 #[cfg(unix)]
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
@@ -16,6 +15,43 @@ use tokio::net::windows::named_pipe::ServerOptions;
 use super::events::EventMessage;
 use super::requests::{self, Handles};
 use super::subscription::EventFilter;
+
+#[derive(Debug, thiserror::Error)]
+pub enum ServerError {
+    #[error("Failed to bind TCP control socket at {addr}")]
+    BindTcp {
+        addr: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[cfg(unix)]
+    #[error("Failed to create unix socket dir {path}")]
+    CreateSocketDir {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[cfg(unix)]
+    #[error("Failed to remove existing unix socket {path}")]
+    RemoveStaleSocket {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[cfg(unix)]
+    #[error("Failed to bind unix control socket {path}")]
+    BindUnix {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("Failed to serialize response")]
+    SerializeResponse(#[source] serde_json::Error),
+    #[error("Failed to serialize event")]
+    SerializeEvent(#[source] serde_json::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+}
 
 #[derive(Debug, Clone)]
 pub enum ControlEndpoint {
@@ -83,14 +119,17 @@ impl ControlServer {
     }
 }
 
-pub async fn start_control_server_from_env(cx: Handles) -> Result<ControlServer> {
+pub async fn start_control_server_from_env(cx: Handles) -> Result<ControlServer, ServerError> {
     let Some(cfg) = ControlConfig::from_env() else {
         return Ok(ControlServer::empty());
     };
     start_control_server(cfg, cx).await
 }
 
-pub async fn start_control_server(cfg: ControlConfig, cx: Handles) -> Result<ControlServer> {
+pub async fn start_control_server(
+    cfg: ControlConfig,
+    cx: Handles,
+) -> Result<ControlServer, ServerError> {
     let mut handles = Vec::new();
     #[cfg(unix)]
     let mut unix_guards = Vec::new();
@@ -120,10 +159,13 @@ pub async fn start_control_server(cfg: ControlConfig, cx: Handles) -> Result<Con
     })
 }
 
-async fn spawn_tcp_server(addr: &str, cx: Handles) -> Result<JoinHandle<()>> {
+async fn spawn_tcp_server(addr: &str, cx: Handles) -> Result<JoinHandle<()>, ServerError> {
     let listener = TcpListener::bind(addr)
         .await
-        .with_context(|| format!("Failed to bind TCP control socket at {addr}"))?;
+        .map_err(|source| ServerError::BindTcp {
+            addr: addr.to_string(),
+            source,
+        })?;
     log::info!("Control API listening on tcp {addr}");
 
     Ok(tokio::spawn(async move {
@@ -147,7 +189,7 @@ async fn spawn_tcp_server(addr: &str, cx: Handles) -> Result<JoinHandle<()>> {
 }
 
 #[cfg(windows)]
-async fn spawn_npipe_server(path: &str, cx: Handles) -> Result<JoinHandle<()>> {
+async fn spawn_npipe_server(path: &str, cx: Handles) -> Result<JoinHandle<()>, ServerError> {
     let pipe_path = normalize_npipe_path(path);
     log::info!("Control API listening on npipe {}", pipe_path);
 
@@ -188,18 +230,27 @@ async fn spawn_npipe_server(path: &str, cx: Handles) -> Result<JoinHandle<()>> {
 }
 
 #[cfg(unix)]
-fn spawn_unix_server(path: PathBuf, cx: Handles) -> Result<(JoinHandle<()>, UnixSocketGuard)> {
+fn spawn_unix_server(
+    path: PathBuf,
+    cx: Handles,
+) -> Result<(JoinHandle<()>, UnixSocketGuard), ServerError> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create unix socket dir {}", parent.display()))?;
+        fs::create_dir_all(parent).map_err(|source| ServerError::CreateSocketDir {
+            path: parent.display().to_string(),
+            source,
+        })?;
     }
     if path.exists() {
-        fs::remove_file(&path)
-            .with_context(|| format!("Failed to remove existing unix socket {}", path.display()))?;
+        fs::remove_file(&path).map_err(|source| ServerError::RemoveStaleSocket {
+            path: path.display().to_string(),
+            source,
+        })?;
     }
 
-    let listener = UnixListener::bind(&path)
-        .with_context(|| format!("Failed to bind unix control socket {}", path.display()))?;
+    let listener = UnixListener::bind(&path).map_err(|source| ServerError::BindUnix {
+        path: path.display().to_string(),
+        source,
+    })?;
     log::info!("Control API listening on unix {}", path.display());
     let guard = UnixSocketGuard { path };
 
@@ -225,7 +276,7 @@ fn spawn_unix_server(path: PathBuf, cx: Handles) -> Result<(JoinHandle<()>, Unix
     Ok((handle, guard))
 }
 
-async fn handle_stream<T>(stream: T, cx: Handles) -> Result<()>
+async fn handle_stream<T>(stream: T, cx: Handles) -> Result<(), ServerError>
 where
     T: AsyncRead + AsyncWrite + Unpin,
 {
@@ -240,8 +291,8 @@ where
 
         let outcome = requests::handle_line(&cx, line).await;
 
-        let payload =
-            serde_json::to_string(outcome.response()).context("Failed to serialize response")?;
+        let payload = serde_json::to_string(outcome.response())
+            .map_err(ServerError::SerializeResponse)?;
         writer.write_all(payload.as_bytes()).await?;
         writer.write_all(b"\n").await?;
 
@@ -254,13 +305,12 @@ where
     Ok(())
 }
 
-async fn event_writer<W>(event: crate::DaemonEvent, writer: &mut W) -> Result<()>
+async fn event_writer<W>(event: crate::DaemonEvent, writer: &mut W) -> Result<(), ServerError>
 where
     W: AsyncWrite + Unpin,
 {
     let msg = EventMessage::from(event);
-    let payload =
-        serde_json::to_string(&msg).context(format!("Failed to serialize event {msg:?}"))?;
+    let payload = serde_json::to_string(&msg).map_err(ServerError::SerializeEvent)?;
     writer.write_all(payload.as_bytes()).await?;
     writer.write_all(b"\n").await?;
 
@@ -272,7 +322,7 @@ async fn handle_subscription_mode<R, W>(
     lines: &mut tokio::io::Lines<BufReader<R>>,
     writer: &mut W,
     filter: EventFilter,
-) -> Result<()>
+) -> Result<(), ServerError>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
@@ -312,7 +362,7 @@ where
                         // Handle regular requests while subscribed (e.g., ping)
                         let outcome = requests::handle_line(cx, line).await;
                         let payload = serde_json::to_string(outcome.response())
-                            .context("Failed to serialize response")?;
+                            .map_err(ServerError::SerializeResponse)?;
                         writer.write_all(payload.as_bytes()).await?;
                         writer.write_all(b"\n").await?;
                     }

@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -13,9 +12,54 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite};
 
-use crate::requests::{EmptyResponse, HandleOp, Handles};
+use crate::requests::{ControlError, EmptyResponse, HandleOp, Handles};
 use crate::utils::{WFM_AUTH_BASE, WFM_SUB_PROTOCOL, WFM_WS_URL};
 use wf_core::storage::{self, AuthTokenData};
+
+#[derive(Debug, thiserror::Error)]
+pub enum WfmError {
+    #[error("WFM actor unavailable")]
+    ActorUnavailable,
+    #[error("Not connected to WFM")]
+    NotConnected,
+    #[error("WFM command timed out")]
+    Timeout,
+    #[error("WFM response channel closed")]
+    ChannelClosed,
+    /// Error message reported by the WFM server in a `:error` reply.
+    #[error("{0}")]
+    Server(String),
+    #[error("WS auth failed: {0}")]
+    WsAuthFailed(String),
+    #[error("WS send failed: {0}")]
+    WsSend(String),
+    // tungstenite::Error is 136 bytes; store its message to keep this enum small.
+    #[error("{0}")]
+    Ws(String),
+    #[error("WFM signin failed ({status}): {body}")]
+    SigninFailed {
+        status: reqwest::StatusCode,
+        body: String,
+    },
+    #[error("No Authorization header in signin response")]
+    NoAuthHeader,
+    #[error("Invalid Authorization header encoding")]
+    AuthHeaderEncoding,
+    #[error("Unexpected Authorization header format: {0}")]
+    AuthHeaderFormat(String),
+    #[error("Invalid status '{0}'. Must be: online, invisible, ingame")]
+    InvalidStatus(String),
+    #[error("Status update failed: {0}")]
+    StatusUpdateFailed(String),
+    #[error(transparent)]
+    Header(#[from] tungstenite::http::header::InvalidHeaderValue),
+    #[error(transparent)]
+    Http(#[from] reqwest::Error),
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+    #[error(transparent)]
+    Storage(#[from] storage::StorageError),
+}
 
 // ── WS message types ──
 
@@ -91,7 +135,7 @@ struct WsReply {
 
 impl WsReply {
     /// The payload on success, or the server's error message on failure.
-    fn into_result(self) -> Result<Option<Value>> {
+    fn into_result(self) -> Result<Option<Value>, WfmError> {
         match self.outcome {
             ReplyOutcome::Ok => Ok(self.payload),
             ReplyOutcome::Error => {
@@ -100,7 +144,7 @@ impl WsReply {
                         Value::String(s) => s,
                         other => other.to_string(),
                     });
-                Err(anyhow!(msg))
+                Err(WfmError::Server(msg))
             }
         }
     }
@@ -209,12 +253,12 @@ pub(crate) struct SessionInfo {
 enum WfmCmd {
     SignIn {
         tokens: AuthTokenData,
-        reply: oneshot::Sender<Result<()>>,
+        reply: oneshot::Sender<Result<(), WfmError>>,
     },
     SignOut,
     SetStatus {
         payload: Value,
-        reply: oneshot::Sender<Result<oneshot::Receiver<WsReply>>>,
+        reply: oneshot::Sender<Result<oneshot::Receiver<WsReply>, WfmError>>,
     },
     GetSession {
         reply: oneshot::Sender<Option<SessionInfo>>,
@@ -239,21 +283,21 @@ impl WfmHandle {
         handle
     }
 
-    async fn send(&self, cmd: WfmCmd) -> Result<()> {
+    async fn send(&self, cmd: WfmCmd) -> Result<(), WfmError> {
         self.0
             .send(cmd)
             .await
-            .map_err(|_| anyhow!("WFM actor unavailable"))
+            .map_err(|_| WfmError::ActorUnavailable)
     }
 
     /// Connect the WS, authenticate, and store the session.
-    async fn sign_in(&self, tokens: AuthTokenData) -> Result<()> {
+    async fn sign_in(&self, tokens: AuthTokenData) -> Result<(), WfmError> {
         let (tx, rx) = oneshot::channel();
         self.send(WfmCmd::SignIn { tokens, reply: tx }).await?;
-        rx.await.map_err(|_| anyhow!("WFM actor unavailable"))?
+        rx.await.map_err(|_| WfmError::ActorUnavailable)?
     }
 
-    async fn sign_out(&self) -> Result<()> {
+    async fn sign_out(&self) -> Result<(), WfmError> {
         self.send(WfmCmd::SignOut).await
     }
 
@@ -265,10 +309,10 @@ impl WfmHandle {
 
     /// Send a status/set command and wait for the server reply. The actor
     /// only performs the (fast) WS write; this method awaits the reply.
-    async fn set_status(&self, payload: Value) -> Result<WsReply> {
+    async fn set_status(&self, payload: Value) -> Result<WsReply, WfmError> {
         let (tx, rx) = oneshot::channel();
         self.send(WfmCmd::SetStatus { payload, reply: tx }).await?;
-        let reply_rx = rx.await.map_err(|_| anyhow!("WFM actor unavailable"))??;
+        let reply_rx = rx.await.map_err(|_| WfmError::ActorUnavailable)??;
         await_reply(reply_rx).await
     }
 
@@ -297,7 +341,7 @@ async fn actor_loop(handle: WfmHandle, mut rx: mpsc::Receiver<WfmCmd>) {
             WfmCmd::SetStatus { payload, reply } => {
                 let result = match state.session_mut() {
                     Some(session) => session.conn.send_command(WsRoute::StatusSet, payload).await,
-                    None => Err(anyhow!("Not connected to WFM")),
+                    None => Err(WfmError::NotConnected),
                 };
                 let _ = reply.send(result);
             }
@@ -324,7 +368,7 @@ async fn rest_signin(
     email: &str,
     password: &str,
     device_id: &str,
-) -> Result<String> {
+) -> Result<String, WfmError> {
     let raw_resp = client
         .post(format!("{WFM_AUTH_BASE}/auth/signin"))
         .header("Authorization", "JWT")
@@ -340,22 +384,20 @@ async fn rest_signin(
     let status = raw_resp.status();
     if !status.is_success() {
         let body = raw_resp.text().await.unwrap_or_default();
-        return Err(anyhow!("WFM signin failed ({status}): {body}"));
+        return Err(WfmError::SigninFailed { status, body });
     }
 
     // Extract JWT from Authorization header ("JWT <token>")
     let auth_header = raw_resp
         .headers()
         .get("Authorization")
-        .ok_or_else(|| anyhow!("No Authorization header in signin response"))?
+        .ok_or(WfmError::NoAuthHeader)?
         .to_str()
-        .map_err(|_| anyhow!("Invalid Authorization header encoding"))?
+        .map_err(|_| WfmError::AuthHeaderEncoding)?
         .to_string();
 
     if !auth_header.starts_with("JWT ") {
-        return Err(anyhow!(
-            "Unexpected Authorization header format: {auth_header}"
-        ));
+        return Err(WfmError::AuthHeaderFormat(auth_header));
     }
 
     let jwt = auth_header[4..].to_string();
@@ -367,13 +409,17 @@ async fn rest_signin(
 impl WsConnection {
     /// Open the WFM WebSocket and spawn its recv loop. The connection is not
     /// authenticated yet — call [`Self::authenticate`] to obtain a session.
-    async fn connect(wfm: WfmHandle) -> Result<Self> {
-        let mut request = WFM_WS_URL.into_client_request()?;
+    async fn connect(wfm: WfmHandle) -> Result<Self, WfmError> {
+        let mut request = WFM_WS_URL
+            .into_client_request()
+            .map_err(|e| WfmError::Ws(e.to_string()))?;
         request
             .headers_mut()
             .insert(header::SEC_WEBSOCKET_PROTOCOL, WFM_SUB_PROTOCOL.parse()?);
 
-        let (ws_stream, _response) = tokio_tungstenite::connect_async(request).await?;
+        let (ws_stream, _response) = tokio_tungstenite::connect_async(request)
+            .await
+            .map_err(|e| WfmError::Ws(e.to_string()))?;
 
         let pending: PendingMap = Arc::new(Mutex::new(HashMap::new()));
         let (ws_tx, ws_rx) = ws_stream.split();
@@ -385,14 +431,14 @@ impl WsConnection {
 
     /// Authenticate on the socket, consuming the connection. On failure the
     /// connection is dropped — an unauthenticated session can never leak out.
-    async fn authenticate(mut self, tokens: AuthTokenData) -> Result<WfmSession> {
+    async fn authenticate(mut self, tokens: AuthTokenData) -> Result<WfmSession, WfmError> {
         let rx = self
             .send_command(WsRoute::AuthSignIn, json!({ "token": tokens.access_token }))
             .await?;
         await_reply(rx)
             .await?
             .into_result()
-            .map_err(|e| anyhow!("WS auth failed: {e}"))?;
+            .map_err(|e| WfmError::WsAuthFailed(e.to_string()))?;
 
         log::info!("WFM WebSocket authenticated");
         Ok(WfmSession {
@@ -408,7 +454,7 @@ impl WsConnection {
         &mut self,
         route: WsRoute,
         payload: Value,
-    ) -> Result<oneshot::Receiver<WsReply>> {
+    ) -> Result<oneshot::Receiver<WsReply>, WfmError> {
         let (tx, rx) = oneshot::channel();
         let json_msg = json!({
             "route": route.to_string(),
@@ -419,16 +465,16 @@ impl WsConnection {
         self.ws_tx
             .send(tungstenite::Message::Text(json_msg.to_string().into()))
             .await
-            .map_err(|e| anyhow!("WS send failed: {e}"))?;
+            .map_err(|e| WfmError::WsSend(e.to_string()))?;
         Ok(rx)
     }
 }
 
-async fn await_reply(rx: oneshot::Receiver<WsReply>) -> Result<WsReply> {
+async fn await_reply(rx: oneshot::Receiver<WsReply>) -> Result<WsReply, WfmError> {
     tokio::time::timeout(std::time::Duration::from_secs(15), rx)
         .await
-        .map_err(|_| anyhow!("WFM command timed out"))?
-        .map_err(|_| anyhow!("WFM response channel closed"))
+        .map_err(|_| WfmError::Timeout)?
+        .map_err(|_| WfmError::ChannelClosed)
 }
 
 async fn ws_recv_loop(
@@ -542,15 +588,15 @@ pub(crate) enum SignstatusResponse {
 impl HandleOp for SignstatusParams {
     type Response = SignstatusResponse;
 
-    async fn handle(self, cx: &Handles) -> Result<Self::Response> {
-        handle_wfm_signstatus(&cx.wfm, self).await
+    async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError> {
+        Ok(handle_wfm_signstatus(&cx.wfm, self).await?)
     }
 }
 
 pub(crate) async fn handle_wfm_signstatus(
     wfm: &WfmHandle,
     p: SignstatusParams,
-) -> Result<SignstatusResponse> {
+) -> Result<SignstatusResponse, WfmError> {
     // If no status provided, return current state
     let Some(raw_status) = p.status else {
         return match wfm.session().await {
@@ -565,11 +611,9 @@ pub(crate) async fn handle_wfm_signstatus(
             None => Ok(SignstatusResponse::Unauthenticated),
         };
     };
-    let status = raw_status.parse::<Status>().map_err(|_| {
-        anyhow!(
-            "Invalid status '{raw_status}'. Must be: online, invisible, ingame"
-        )
-    })?;
+    let status = raw_status
+        .parse::<Status>()
+        .map_err(|_| WfmError::InvalidStatus(raw_status))?;
 
     // Build payload with PATCH semantics for duration:
     // None serializes as omitted, Some(None) as null, Some(Some(n)) as n
@@ -581,7 +625,7 @@ pub(crate) async fn handle_wfm_signstatus(
     wfm.set_status(payload)
         .await?
         .into_result()
-        .map_err(|e| anyhow!("Status update failed: {e}"))?;
+        .map_err(|e| WfmError::StatusUpdateFailed(e.to_string()))?;
 
     wfm.record_status(status).await;
 
@@ -607,7 +651,7 @@ fn default_app_name() -> String {
 impl HandleOp for SigninParams {
     type Response = EmptyResponse;
 
-    async fn handle(self, cx: &Handles) -> Result<Self::Response> {
+    async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError> {
         handle_wfm_signin(&cx.http, &cx.wfm, self).await?;
         Ok(EmptyResponse {})
     }
@@ -617,7 +661,7 @@ pub(crate) async fn handle_wfm_signin(
     client: &reqwest::Client,
     wfm: &WfmHandle,
     p: SigninParams,
-) -> Result<()> {
+) -> Result<(), WfmError> {
     // Load existing device_id or generate a new stable one
     let device_id = match storage::read_auth_token() {
         Ok(existing) => existing.device_id,
@@ -645,7 +689,7 @@ pub(crate) async fn handle_wfm_signin(
 
 // ── Sign out handler ──
 
-pub(crate) async fn handle_wfm_signout(wfm: &WfmHandle) -> Result<()> {
+pub(crate) async fn handle_wfm_signout(wfm: &WfmHandle) -> Result<(), WfmError> {
     wfm.sign_out().await?;
 
     // Delete stored tokens

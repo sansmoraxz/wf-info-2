@@ -1,7 +1,6 @@
 use std::num::NonZeroI32;
 use std::time::Instant;
 
-use anyhow::{Context, Result, anyhow, bail};
 use x11rb::connection::Connection;
 use x11rb::properties::WmClass;
 use x11rb::protocol::xproto::{
@@ -10,7 +9,55 @@ use x11rb::protocol::xproto::{
 };
 use x11rb::rust_connection::RustConnection;
 
-use super::common::{BmpRgb24, WARFRAME_CLASS_HINTS, WARFRAME_TITLE_HINTS};
+use super::common::{BmpError, BmpRgb24, WARFRAME_CLASS_HINTS, WARFRAME_TITLE_HINTS};
+
+#[derive(Debug, thiserror::Error)]
+pub enum X11Error {
+    #[error("No X11/XWayland window found for Warframe; PID and title/class lookup both failed")]
+    WindowNotFound,
+    #[error("Invalid X11 window id '{0}'")]
+    InvalidWindowId(String),
+    #[error("Failed to connect to the X11/XWayland server")]
+    Connect(#[source] x11rb::errors::ConnectError),
+    #[error("X11 window {0} has empty geometry")]
+    EmptyGeometry(String),
+    #[error("Failed to read X11 geometry for window {window_id}")]
+    Geometry {
+        window_id: String,
+        #[source]
+        source: x11rb::errors::ReplyError,
+    },
+    #[error("Failed to read X11 image for window {window_id}")]
+    Image {
+        window_id: String,
+        #[source]
+        source: x11rb::errors::ReplyError,
+    },
+    #[error("X11 property returned invalid UTF-8")]
+    InvalidUtf8(#[source] std::string::FromUtf8Error),
+    #[error("Could not find X11 visual {0}")]
+    VisualNotFound(u32),
+    #[error("Unsupported X11 visual class {0:?}")]
+    UnsupportedVisualClass(VisualClass),
+    #[error("No X11 pixmap format for depth {0}")]
+    NoPixmapFormat(u8),
+    #[error("Unsupported X11 bits-per-pixel {0}")]
+    UnsupportedBitsPerPixel(u8),
+    #[error("Invalid X11 image height")]
+    InvalidImageHeight,
+    #[error("X11 image has invalid width or height")]
+    InvalidImageDimension,
+    #[error("X11 image data ended unexpectedly")]
+    ImageDataTruncated,
+    #[error("Unsupported X11 image byte order {0:?}")]
+    UnsupportedByteOrder(ImageOrder),
+    #[error(transparent)]
+    Connection(#[from] x11rb::errors::ConnectionError),
+    #[error(transparent)]
+    Reply(#[from] x11rb::errors::ReplyError),
+    #[error(transparent)]
+    Bmp(#[from] BmpError),
+}
 
 struct X11Context {
     conn: RustConnection,
@@ -24,7 +71,7 @@ struct Atoms {
     utf8_string: Atom,
 }
 
-pub(super) fn find_window(pid: u32) -> Result<String> {
+pub(super) fn find_window(pid: u32) -> Result<String, X11Error> {
     let context = X11Context::connect()?;
 
     let mut heuristic_match = None;
@@ -42,14 +89,14 @@ pub(super) fn find_window(pid: u32) -> Result<String> {
         return Ok(window.to_string());
     }
 
-    bail!("No X11/XWayland window found for Warframe; PID and title/class lookup both failed");
+    Err(X11Error::WindowNotFound)
 }
 
-pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
+pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>, X11Error> {
     let total_start = Instant::now();
     let window = window_id
         .parse::<Window>()
-        .with_context(|| format!("Invalid X11 window id '{window_id}'"))?;
+        .map_err(|_| X11Error::InvalidWindowId(window_id.to_string()))?;
     let connect_start = Instant::now();
     let context = X11Context::connect()?;
     log::trace!(
@@ -59,10 +106,12 @@ pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
     let geometry_start = Instant::now();
     let geometry = context
         .conn
-        .get_geometry(window)
-        .with_context(|| format!("Failed to request X11 geometry for window {window_id}"))?
+        .get_geometry(window)?
         .reply()
-        .with_context(|| format!("Failed to read X11 geometry for window {window_id}"))?;
+        .map_err(|source| X11Error::Geometry {
+            window_id: window_id.to_string(),
+            source,
+        })?;
     log::trace!(
         "Screenshot X11 geometry {}x{} fetched in {:?}",
         geometry.width,
@@ -71,7 +120,7 @@ pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
     );
 
     if geometry.width == 0 || geometry.height == 0 {
-        bail!("X11 window {window_id} has empty geometry");
+        return Err(X11Error::EmptyGeometry(window_id.to_string()));
     }
 
     let get_image_start = Instant::now();
@@ -85,10 +134,12 @@ pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
             geometry.width,
             geometry.height,
             u32::MAX,
-        )
-        .with_context(|| format!("Failed to request X11 image for window {window_id}"))?
+        )?
         .reply()
-        .with_context(|| format!("Failed to read X11 image for window {window_id}"))?;
+        .map_err(|source| X11Error::Image {
+            window_id: window_id.to_string(),
+            source,
+        })?;
     log::trace!(
         "Screenshot X11 GetImage returned {} bytes in {:?}",
         image.data.len(),
@@ -103,8 +154,7 @@ pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
         &visual,
         geometry.width,
         geometry.height,
-    )
-    .with_context(|| format!("Failed to encode X11 window {window_id} capture as BMP"))?;
+    )?;
     log::trace!(
         "Screenshot X11 BMP encode produced {} bytes in {:?}",
         bytes.len(),
@@ -118,9 +168,8 @@ pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
 }
 
 impl X11Context {
-    fn connect() -> Result<Self> {
-        let (conn, screen_num) =
-            x11rb::connect(None).context("Failed to connect to the X11/XWayland server")?;
+    fn connect() -> Result<Self, X11Error> {
+        let (conn, screen_num) = x11rb::connect(None).map_err(X11Error::Connect)?;
         let atoms = Atoms::intern(&conn)?;
         Ok(Self {
             conn,
@@ -129,14 +178,14 @@ impl X11Context {
         })
     }
 
-    fn windows(&self) -> Result<Vec<Window>> {
+    fn windows(&self) -> Result<Vec<Window>, X11Error> {
         let root = self.conn.setup().roots[self.screen_num].root;
         let mut windows = Vec::new();
         self.collect_windows(root, &mut windows)?;
         Ok(windows)
     }
 
-    fn collect_windows(&self, window: Window, windows: &mut Vec<Window>) -> Result<()> {
+    fn collect_windows(&self, window: Window, windows: &mut Vec<Window>) -> Result<(), X11Error> {
         let Ok(tree) = self.conn.query_tree(window)?.reply() else {
             return Ok(());
         };
@@ -149,7 +198,7 @@ impl X11Context {
         Ok(())
     }
 
-    fn window_pid(&self, window: Window) -> Result<Option<u32>> {
+    fn window_pid(&self, window: Window) -> Result<Option<u32>, X11Error> {
         let reply = self
             .conn
             .get_property(
@@ -179,12 +228,12 @@ impl X11Context {
                 })
     }
 
-    fn window_title(&self, window: Window) -> Result<String> {
+    fn window_title(&self, window: Window) -> Result<String, X11Error> {
         self.property_string(window, self.atoms.net_wm_name, self.atoms.utf8_string)
             .or_else(|_| self.property_string(window, AtomEnum::WM_NAME.into(), AtomEnum::STRING))
     }
 
-    fn property_string<T>(&self, window: Window, property: Atom, type_: T) -> Result<String>
+    fn property_string<T>(&self, window: Window, property: Atom, type_: T) -> Result<String, X11Error>
     where
         T: Into<Atom>,
     {
@@ -192,10 +241,10 @@ impl X11Context {
             .conn
             .get_property(false, window, property, type_, 0, 1024)?
             .reply()?;
-        String::from_utf8(reply.value).context("X11 property returned invalid UTF-8")
+        String::from_utf8(reply.value).map_err(X11Error::InvalidUtf8)
     }
 
-    fn window_class(&self, window: Window) -> Result<Vec<String>> {
+    fn window_class(&self, window: Window) -> Result<Vec<String>, X11Error> {
         let Some(wm_class) = WmClass::get(&self.conn, window)?.reply()? else {
             return Ok(Vec::new());
         };
@@ -207,7 +256,7 @@ impl X11Context {
             .collect())
     }
 
-    fn visual_for_window(&self, window: Window) -> Result<Visualtype> {
+    fn visual_for_window(&self, window: Window) -> Result<Visualtype, X11Error> {
         let attributes = self.conn.get_window_attributes(window)?.reply()?;
         self.conn.setup().roots[self.screen_num]
             .allowed_depths
@@ -215,12 +264,12 @@ impl X11Context {
             .flat_map(|depth| depth.visuals.iter())
             .find(|visual| visual.visual_id == attributes.visual)
             .cloned()
-            .ok_or_else(|| anyhow!("Could not find X11 visual {}", attributes.visual))
+            .ok_or(X11Error::VisualNotFound(attributes.visual))
     }
 }
 
 impl Atoms {
-    fn intern(conn: &RustConnection) -> Result<Self> {
+    fn intern(conn: &RustConnection) -> Result<Self, X11Error> {
         Ok(Self {
             net_wm_name: intern_atom(conn, "_NET_WM_NAME")?,
             net_wm_pid: intern_atom(conn, "_NET_WM_PID")?,
@@ -229,7 +278,7 @@ impl Atoms {
     }
 }
 
-fn intern_atom(conn: &RustConnection, name: &str) -> Result<Atom> {
+fn intern_atom(conn: &RustConnection, name: &str) -> Result<Atom, X11Error> {
     Ok(conn.intern_atom(false, name.as_bytes())?.reply()?.atom)
 }
 
@@ -239,9 +288,9 @@ fn encode_x11_image_bmp(
     visual: &Visualtype,
     width: u16,
     height: u16,
-) -> Result<Vec<u8>> {
+) -> Result<Vec<u8>, X11Error> {
     if visual.class != VisualClass::TRUE_COLOR && visual.class != VisualClass::DIRECT_COLOR {
-        bail!("Unsupported X11 visual class {:?}", visual.class);
+        return Err(X11Error::UnsupportedVisualClass(visual.class));
     }
 
     let format = conn
@@ -249,10 +298,10 @@ fn encode_x11_image_bmp(
         .pixmap_formats
         .iter()
         .find(|format| format.depth == image.depth)
-        .ok_or_else(|| anyhow!("No X11 pixmap format for depth {}", image.depth))?;
+        .ok_or(X11Error::NoPixmapFormat(image.depth))?;
     let bytes_per_pixel = usize::from(format.bits_per_pixel / 8);
     if bytes_per_pixel == 0 {
-        bail!("Unsupported X11 bits-per-pixel {}", format.bits_per_pixel);
+        return Err(X11Error::UnsupportedBitsPerPixel(format.bits_per_pixel));
     }
 
     let width_usize = usize::from(width);
@@ -261,12 +310,10 @@ fn encode_x11_image_bmp(
         .data
         .len()
         .checked_div(height_usize)
-        .ok_or_else(|| anyhow!("Invalid X11 image height"))?;
+        .ok_or(X11Error::InvalidImageHeight)?;
     let mut bmp = BmpRgb24::new(
-        NonZeroI32::new(i32::from(width))
-            .ok_or_else(|| anyhow!("X11 image has invalid width"))?,
-        NonZeroI32::new(i32::from(height))
-            .ok_or_else(|| anyhow!("X11 image has invalid height"))?,
+        NonZeroI32::new(i32::from(width)).ok_or(X11Error::InvalidImageDimension)?,
+        NonZeroI32::new(i32::from(height)).ok_or(X11Error::InvalidImageDimension)?,
     )?;
 
     if bytes_per_pixel == 4
@@ -281,7 +328,7 @@ fn encode_x11_image_bmp(
             let source_row = image
                 .data
                 .get(source_start..source_end)
-                .ok_or_else(|| anyhow!("X11 image data ended unexpectedly"))?;
+                .ok_or(X11Error::ImageDataTruncated)?;
             bmp.copy_bgrx_row(y, source_row);
         }
         return Ok(bmp.into_bytes());
@@ -316,10 +363,10 @@ fn read_pixel(
     offset: usize,
     bytes_per_pixel: usize,
     image_byte_order: ImageOrder,
-) -> Result<u32> {
+) -> Result<u32, X11Error> {
     let bytes = data
         .get(offset..offset + bytes_per_pixel)
-        .ok_or_else(|| anyhow!("X11 image data ended unexpectedly"))?;
+        .ok_or(X11Error::ImageDataTruncated)?;
     let mut pixel = 0u32;
     match image_byte_order {
         ImageOrder::LSB_FIRST => {
@@ -332,7 +379,7 @@ fn read_pixel(
                 pixel = (pixel << 8) | u32::from(*byte);
             }
         }
-        _ => bail!("Unsupported X11 image byte order {image_byte_order:?}"),
+        _ => return Err(X11Error::UnsupportedByteOrder(image_byte_order)),
     }
     Ok(pixel)
 }

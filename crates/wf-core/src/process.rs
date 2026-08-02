@@ -1,12 +1,31 @@
-#[cfg(all(feature = "memory", target_os = "linux"))]
-use anyhow::Context;
 use std::collections::HashSet;
 use std::time::Duration;
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 use tokio::time::sleep;
 
 #[cfg(feature = "memory")]
-use {anyhow::Result, memchr::memmem, std::collections::HashMap};
+use {memchr::memmem, std::collections::HashMap};
+
+#[cfg(feature = "memory")]
+#[derive(Debug, thiserror::Error)]
+pub enum ScanError {
+    #[cfg(target_os = "linux")]
+    #[error("Failed to open {path} (try running with sudo)")]
+    OpenProcFile {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[cfg(target_os = "linux")]
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[cfg(target_os = "windows")]
+    #[error("Failed to open process (try running as Administrator)")]
+    OpenProcess,
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    #[error("Memory scanning is not supported on this platform")]
+    Unsupported,
+}
 
 #[cfg(all(feature = "memory", target_os = "linux"))]
 use std::{
@@ -378,8 +397,7 @@ impl AuthCandidateTracker {
             let count = self.allocation_counts.entry(candidate.clone()).or_insert(0);
             *count += 1;
             log::debug!(
-                "Found authorization candidate in {} readable allocation(s)",
-                count
+                "Found authorization candidate in {count} readable allocation(s)"
             );
             if *count >= REQUIRED_AUTH_ALLOCATIONS {
                 return Some(candidate);
@@ -421,19 +439,23 @@ impl AuthQuery {
 /// This reads /proc/{pid}/maps and /proc/{pid}/mem on Linux.
 /// Requires appropriate permissions
 #[cfg(all(feature = "memory", target_os = "linux"))]
-pub fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>> {
-    log::info!("Scanning memory for account authorization (PID: {})", pid);
+pub fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanError> {
+    log::info!("Scanning memory for account authorization (PID: {pid})");
 
     // Read memory mappings
-    let maps_path = format!("/proc/{}/maps", pid);
-    let maps_file =
-        File::open(&maps_path).context("Failed to open /proc/maps (try running with sudo)")?;
+    let maps_path = format!("/proc/{pid}/maps");
+    let maps_file = File::open(&maps_path).map_err(|source| ScanError::OpenProcFile {
+        path: maps_path,
+        source,
+    })?;
     let maps_reader = BufReader::new(maps_file);
 
     // Open process memory
-    let mem_path = format!("/proc/{}/mem", pid);
-    let mut mem_file =
-        File::open(&mem_path).context("Failed to open /proc/mem (try running with sudo)")?;
+    let mem_path = format!("/proc/{pid}/mem");
+    let mut mem_file = File::open(&mem_path).map_err(|source| ScanError::OpenProcFile {
+        path: mem_path,
+        source,
+    })?;
 
     // Track candidates and their occurrence count (like the C++ version)
     let mut tracker = AuthCandidateTracker::default();
@@ -463,7 +485,9 @@ pub fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>> {
 
         let start = u64::from_str_radix(start_hex, 16).unwrap_or(0);
         let end = u64::from_str_radix(end_hex, 16).unwrap_or(0);
-        let region_size = (end - start) as usize;
+        let Ok(region_size) = usize::try_from(end.saturating_sub(start)) else {
+            continue;
+        };
 
         // Skip empty or excessively large regions
         if region_size == 0 || region_size > 500 * 1024 * 1024 {
@@ -496,8 +520,7 @@ pub fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>> {
 
         if let Some(auth) = tracker.observe_allocation(allocation_candidates) {
             log::info!(
-                "Confirmed account authorization in {} readable allocations",
-                REQUIRED_AUTH_ALLOCATIONS
+                "Confirmed account authorization in {REQUIRED_AUTH_ALLOCATIONS} readable allocations"
             );
             return Ok(Some(auth));
         }
@@ -520,7 +543,7 @@ pub fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>> {
 /// Uses Windows API to enumerate and read process memory regions.
 /// Requires appropriate process access rights (PROCESS_VM_READ | PROCESS_QUERY_INFORMATION)
 #[cfg(all(feature = "memory", target_os = "windows"))]
-pub fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>> {
+pub fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanError> {
     use winapi::shared::minwindef::{FALSE, LPVOID};
     use winapi::um::handleapi::CloseHandle;
     use winapi::um::memoryapi::ReadProcessMemory;
@@ -541,7 +564,7 @@ pub fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>> {
         unsafe { OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, FALSE, pid) };
 
     if process_handle.is_null() {
-        anyhow::bail!("Failed to open process (try running as Administrator)");
+        return Err(ScanError::OpenProcess);
     }
 
     // Ensure handle is closed when we exit
@@ -647,8 +670,8 @@ pub fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>> {
     feature = "memory",
     not(any(target_os = "linux", target_os = "windows"))
 ))]
-pub fn scan_memory_for_auth(_pid: u32) -> Result<Option<AuthQuery>> {
-    anyhow::bail!("Memory scanning is not supported on this platform")
+pub fn scan_memory_for_auth(_pid: u32) -> Result<Option<AuthQuery>, ScanError> {
+    Err(ScanError::Unsupported)
 }
 
 /// Attempts to extract auth data with retries, waiting for it to appear in memory
@@ -657,20 +680,20 @@ pub async fn scan_memory_for_auth_with_retry(
     pid: u32,
     max_retries: u32,
     retry_delay: Duration,
-) -> Result<Option<AuthQuery>> {
+) -> Result<Option<AuthQuery>, ScanError> {
     for attempt in 1..=max_retries {
-        log::info!("Memory scan attempt {}/{}", attempt, max_retries);
+        log::info!("Memory scan attempt {attempt}/{max_retries}");
 
         match scan_memory_for_auth(pid) {
             Ok(Some(auth)) => return Ok(Some(auth)),
             Ok(None) => {
                 if attempt < max_retries {
-                    log::info!("Auth not found, retrying in {:?}...", retry_delay);
+                    log::info!("Auth not found, retrying in {retry_delay:?}...");
                     sleep(retry_delay).await;
                 }
             }
             Err(e) => {
-                log::error!("Memory scan error: {}", e);
+                log::error!("Memory scan error: {e}");
                 return Err(e);
             }
         }

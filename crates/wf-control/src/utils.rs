@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
@@ -8,24 +7,35 @@ pub const WFM_SUB_PROTOCOL: &str = "wfm";
 
 pub const WFM_AUTH_BASE: &str = "https://api.warframe.market/v1";
 
-/// GET a v2 WFM API path (relative to [`WFM_API_BASE`]) and parse the JSON body.
-pub async fn wfm_get<T: DeserializeOwned>(client: &reqwest::Client, path: &str) -> Result<T> {
-    let url = format!("{WFM_API_BASE}/{path}");
-    Ok(client.get(&url).send().await?.json().await?)
+#[derive(Debug, thiserror::Error)]
+pub enum ParamsError {
+    #[error("Invalid params")]
+    Invalid(#[source] serde_json::Error),
+    #[error("Missing required params")]
+    Missing,
 }
 
-pub fn parse_params<T>(params: Option<Value>) -> Result<T>
+/// GET a v2 WFM API path (relative to [`WFM_API_BASE`]) and parse the JSON body.
+pub async fn wfm_get<T: DeserializeOwned>(
+    client: &reqwest::Client,
+    path: &str,
+) -> Result<T, reqwest::Error> {
+    let url = format!("{WFM_API_BASE}/{path}");
+    client.get(&url).send().await?.json().await
+}
+
+pub fn parse_params<T>(params: Option<Value>) -> Result<T, ParamsError>
 where
     T: DeserializeOwned + Default,
 {
-    match params {
-        Some(value) => Ok(serde_json::from_value(value).context("Invalid params")?),
-        None => Ok(T::default()),
-    }
+    params.map_or_else(
+        || Ok(T::default()),
+        |value| serde_json::from_value(value).map_err(ParamsError::Invalid),
+    )
 }
 
 /// Like [`parse_params`], but params must be present (no default).
-pub fn parse_required_params<T: DeserializeOwned>(params: Option<Value>) -> Result<T> {
-    let value = params.context("Missing required params")?;
-    serde_json::from_value(value).context("Invalid params")
+pub fn parse_required_params<T: DeserializeOwned>(params: Option<Value>) -> Result<T, ParamsError> {
+    let value = params.ok_or(ParamsError::Missing)?;
+    serde_json::from_value(value).map_err(ParamsError::Invalid)
 }

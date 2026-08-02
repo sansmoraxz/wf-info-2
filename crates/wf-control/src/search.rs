@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tantivy::Index;
@@ -17,6 +16,14 @@ use wf_core::storage;
 use wf_inventory::{Inventory, ItemType};
 
 use wf_itemdata::item_data::ItemIndex;
+
+#[derive(Debug, thiserror::Error)]
+pub enum SearchError {
+    #[error(transparent)]
+    Tantivy(#[from] tantivy::TantivyError),
+    #[error(transparent)]
+    Storage(#[from] storage::StorageError),
+}
 
 #[derive(Clone)]
 pub struct InventorySearchIndex {
@@ -44,7 +51,7 @@ impl IndexedInventory {
         inventory: Inventory,
         last_updated: Option<DateTime<Utc>>,
         item_index: &ItemIndex,
-    ) -> Result<Self> {
+    ) -> Result<Self, tantivy::TantivyError> {
         let items = collect_inventory_items(&inventory, None, item_index);
         let index = build_tantivy_index(&items)?;
         Ok(Self {
@@ -69,7 +76,7 @@ impl InventoryIndexCache {
         &self,
         meta: &storage::InventoryMeta,
         item_index: &ItemIndex,
-    ) -> Result<Arc<IndexedInventory>> {
+    ) -> Result<Arc<IndexedInventory>, SearchError> {
         if let Some(cached) = self.0.load().as_ref()
             && cached.last_updated == meta.last_updated
         {
@@ -388,7 +395,9 @@ pub fn collect_inventory_items<'a>(
     items
 }
 
-pub fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchIndex> {
+pub fn build_tantivy_index(
+    items: &[ItemView],
+) -> Result<InventorySearchIndex, tantivy::TantivyError> {
     let mut schema_builder = SchemaBuilder::default();
 
     let item_type_exact = schema_builder.add_text_field("item_type_exact", STRING | STORED);
@@ -461,7 +470,7 @@ pub fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchIndex> {
 pub fn search_inventory(
     search_index: &InventorySearchIndex,
     clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)>,
-) -> Result<(usize, Vec<InventoryItemEnvelope>)> {
+) -> Result<(usize, Vec<InventoryItemEnvelope>), tantivy::TantivyError> {
     let reader = search_index.index.reader()?;
     let searcher = reader.searcher();
 

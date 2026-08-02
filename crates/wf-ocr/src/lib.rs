@@ -4,12 +4,12 @@ use std::io::Cursor;
 
 mod ocr;
 
-pub use ocr::new_default_ocr_engine;
+pub use ocr::{OcrInitError, new_default_ocr_engine};
 
-pub fn load_image(bytes: &[u8]) -> anyhow::Result<image::DynamicImage> {
-    Ok(ImageReader::new(Cursor::new(bytes))
+pub fn load_image(bytes: &[u8]) -> Result<image::DynamicImage, image::ImageError> {
+    ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()?
-        .decode()?)
+        .decode()
 }
 
 pub struct RelicRecognizer {
@@ -51,7 +51,7 @@ impl RelicRecognizer {
     pub fn recognize_and_list(
         &self,
         img: &DynamicImage,
-    ) -> anyhow::Result<Vec<RelicRecogizeText>> {
+    ) -> Result<Vec<RelicRecogizeText>, ocr_rs::OcrError> {
         let reward_box = self.crop_reward_box(img);
         let hits = self.ocr_engine.recognize(&reward_box)?;
 

@@ -16,13 +16,22 @@ const FILE_NAMES: &[&str] = &[
     "Mods.json",
 ];
 
+#[derive(Debug, thiserror::Error)]
+pub enum CacheError {
+    #[error("Could not find cache directory")]
+    NoCacheDir,
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Http(#[from] reqwest::Error),
+}
+
 fn base_url() -> String {
     std::env::var("WF_ITEM_DATA_BASE_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_string())
 }
 
-pub fn cache_dir() -> anyhow::Result<PathBuf> {
-    let cache_dir =
-        dirs::cache_dir().ok_or_else(|| anyhow::anyhow!("Could not find cache directory"))?;
+pub fn cache_dir() -> Result<PathBuf, CacheError> {
+    let cache_dir = dirs::cache_dir().ok_or(CacheError::NoCacheDir)?;
     let dir = cache_dir.join("wf-info-2").join("itemdata");
     if !dir.exists() {
         fs::create_dir_all(&dir)?;
@@ -30,7 +39,7 @@ pub fn cache_dir() -> anyhow::Result<PathBuf> {
     Ok(dir)
 }
 
-pub fn cached_path(file: &str) -> anyhow::Result<PathBuf> {
+pub fn cached_path(file: &str) -> Result<PathBuf, CacheError> {
     Ok(cache_dir()?.join(file))
 }
 
@@ -39,7 +48,7 @@ pub fn cached_path(file: &str) -> anyhow::Result<PathBuf> {
 /// Uses ETag-based conditional requests: stores ETags in `<file>.etag` sidecar
 /// files and sends `If-None-Match` on subsequent requests. Files that haven't
 /// changed upstream (304) are skipped.
-pub async fn update_cache(client: &reqwest::Client) -> anyhow::Result<()> {
+pub async fn update_cache(client: &reqwest::Client) -> Result<(), CacheError> {
     let dir = cache_dir()?;
     let base = base_url();
 

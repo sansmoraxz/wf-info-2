@@ -1,7 +1,15 @@
 use std::env;
 use std::num::NonZeroI32;
 
-use anyhow::{Result, anyhow};
+#[derive(Debug, thiserror::Error)]
+pub enum BmpError {
+    #[error("BMP width must be positive: {0}")]
+    NegativeWidth(i32),
+    #[error("BMP height must be positive: {0}")]
+    NegativeHeight(i32),
+    #[error("BMP dimensions overflow")]
+    Overflow,
+}
 
 pub(super) const WARFRAME_TITLE_HINTS: &[&str] = &["Warframe"];
 pub(super) const WARFRAME_CLASS_HINTS: &[&str] = &["steam_app_230410", "warframe"];
@@ -38,25 +46,17 @@ impl BmpRgb24 {
     /// BMP headers store signed dimensions, so this takes the header's native
     /// type (nonzero, since an empty image has no valid pixel array); height
     /// is negated in the header for top-down rows.
-    pub(super) fn new(width: NonZeroI32, height: NonZeroI32) -> Result<Self> {
+    pub(super) fn new(width: NonZeroI32, height: NonZeroI32) -> Result<Self, BmpError> {
         let width = width.get();
         let height = height.get();
-        let width_u32 =
-            u32::try_from(width).map_err(|_| anyhow!("BMP width must be positive: {width}"))?;
-        let height_u32 =
-            u32::try_from(height).map_err(|_| anyhow!("BMP height must be positive: {height}"))?;
-        let row_len = width_u32
-            .checked_mul(3)
-            .ok_or_else(|| anyhow!("BMP row dimensions overflow"))?;
+        let width_u32 = u32::try_from(width).map_err(|_| BmpError::NegativeWidth(width))?;
+        let height_u32 = u32::try_from(height).map_err(|_| BmpError::NegativeHeight(height))?;
+        let row_len = width_u32.checked_mul(3).ok_or(BmpError::Overflow)?;
         let stride = row_len
             .checked_next_multiple_of(4)
-            .ok_or_else(|| anyhow!("BMP row stride overflow"))?;
-        let pixel_bytes = stride
-            .checked_mul(height_u32)
-            .ok_or_else(|| anyhow!("BMP pixel data size overflow"))?;
-        let file_size = 54u32
-            .checked_add(pixel_bytes)
-            .ok_or_else(|| anyhow!("BMP file size overflow"))?;
+            .ok_or(BmpError::Overflow)?;
+        let pixel_bytes = stride.checked_mul(height_u32).ok_or(BmpError::Overflow)?;
+        let file_size = 54u32.checked_add(pixel_bytes).ok_or(BmpError::Overflow)?;
 
         let mut bytes = vec![0; file_size as usize];
         bytes[0..2].copy_from_slice(b"BM");

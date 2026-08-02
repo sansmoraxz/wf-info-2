@@ -6,12 +6,23 @@ mod x11;
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::{Result, anyhow, bail};
-
 use wf_core::process;
 
 use self::common::{EnvironmentKind, detect_unix_environment};
 use super::{ScreenshotState, WaylandCapture};
+
+#[derive(Debug, thiserror::Error)]
+pub enum CaptureError {
+    #[error("Warframe process not detected; relaunch the game and try again")]
+    ProcessNotDetected,
+    #[error("{0}")]
+    Unsupported(String),
+    #[error(transparent)]
+    X11(#[from] x11::X11Error),
+    #[cfg(feature = "native-wayland-screenshot")]
+    #[error(transparent)]
+    Portal(#[from] portal::PortalError),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum CaptureBackend {
@@ -38,11 +49,11 @@ pub struct BackendCacheEntry {
     resolution: BackendResolution,
 }
 
-pub async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, String)> {
+pub async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, String), CaptureError> {
     let total_start = Instant::now();
     let pid_start = Instant::now();
-    let (warframe_pid, pid_cache_status) = cached_warframe_pid(state)
-        .ok_or_else(|| anyhow!("Warframe process not detected; relaunch the game and try again"))?;
+    let (warframe_pid, pid_cache_status) =
+        cached_warframe_pid(state).ok_or(CaptureError::ProcessNotDetected)?;
     log::trace!(
         "Screenshot Warframe PID lookup ({}) found {} in {:?}",
         pid_cache_status,
@@ -106,7 +117,7 @@ pub async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, String)
 async fn capture_with_backend(
     _warframe_pid: u32,
     resolution: &BackendResolution,
-) -> Result<(Vec<u8>, String)> {
+) -> Result<(Vec<u8>, String), CaptureError> {
     match &resolution.capture_backend {
         CaptureBackend::X11Window { window_id } => {
             log::info!("Capturing Warframe via X11/XWayland window {window_id}");
@@ -127,7 +138,7 @@ async fn capture_with_backend(
             );
             let start = Instant::now();
             let bytes = portal::capture_window().await.inspect_err(|err| {
-                log::error!("Wayland ScreenCast portal capture failed: {}", err);
+                log::error!("Wayland ScreenCast portal capture failed: {err}");
             })?;
             log::trace!(
                 "Screenshot Wayland portal backend captured {} bytes in {:?}",
@@ -136,7 +147,9 @@ async fn capture_with_backend(
             );
             Ok((bytes, "image/bmp".to_string()))
         }
-        CaptureBackend::Unsupported { reason } => bail!("{reason}"),
+        CaptureBackend::Unsupported { reason } => {
+            Err(CaptureError::Unsupported(reason.clone()))
+        }
     }
 }
 

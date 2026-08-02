@@ -2,7 +2,6 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::time::Instant;
 
-use anyhow::{Context, Result};
 use base64::Engine;
 use chrono::{DateTime, Utc};
 use rand::random;
@@ -13,7 +12,21 @@ use serde_json::Value;
 use wf_core::storage;
 
 use super::events::{DaemonEvent, EventBus, ScreenshotTriggeredEvent};
-use super::requests::{HandleOp, Handles};
+use super::requests::{ControlError, HandleOp, Handles};
+
+#[derive(Debug, thiserror::Error)]
+pub enum ScreenshotError {
+    #[error(transparent)]
+    Capture(#[from] CaptureError),
+    #[error(transparent)]
+    Storage(#[from] storage::StorageError),
+    #[error("Failed to open screenshot events log")]
+    OpenLog(#[source] std::io::Error),
+    #[error("Failed to append screenshot event")]
+    AppendLog(#[source] std::io::Error),
+    #[error("Failed to serialize screenshot event log entry")]
+    SerializeLogEntry(#[source] serde_json::Error),
+}
 
 /// How to capture in Wayland sessions: prefer the XWayland window when one
 /// exists, or always go through the native ScreenCast portal.
@@ -57,11 +70,11 @@ mod windows;
 #[cfg(unix)]
 pub use unix::BackendCacheEntry;
 #[cfg(unix)]
-pub use unix::capture_screen;
+pub use unix::{CaptureError, capture_screen};
 #[cfg(windows)]
 pub(crate) use windows::WindowCacheEntry;
 #[cfg(windows)]
-pub(crate) use windows::capture_screen;
+pub(crate) use windows::{CaptureError, capture_screen};
 
 #[derive(Debug, Deserialize, Default)]
 pub struct ScreenshotParams {
@@ -91,8 +104,8 @@ struct ScreenshotEventLogEntry<'a> {
 impl HandleOp for ScreenshotParams {
     type Response = ScreenshotEvent;
 
-    async fn handle(self, cx: &Handles) -> Result<Self::Response> {
-        handle_screenshot_trigger(&cx.screenshot, &cx.events, self).await
+    async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError> {
+        Ok(handle_screenshot_trigger(&cx.screenshot, &cx.events, self).await?)
     }
 }
 
@@ -100,7 +113,7 @@ pub async fn handle_screenshot_trigger(
     shots: &ScreenshotState,
     events: &EventBus,
     params: ScreenshotParams,
-) -> Result<ScreenshotEvent> {
+) -> Result<ScreenshotEvent, ScreenshotError> {
     let total_start = Instant::now();
 
     let capture_start = Instant::now();
@@ -141,7 +154,7 @@ fn record_screenshot_event(
     metadata: Option<Value>,
     content: String,
     content_type: String,
-) -> Result<ScreenshotEvent> {
+) -> Result<ScreenshotEvent, ScreenshotError> {
     let event = ScreenshotEvent {
         id: format!("{}-{}", Utc::now().timestamp_millis(), random::<u32>()),
         timestamp: Utc::now(),
@@ -156,7 +169,7 @@ fn record_screenshot_event(
         .create(true)
         .append(true)
         .open(&log_path)
-        .context("Failed to open screenshot events log")?;
+        .map_err(ScreenshotError::OpenLog)?;
     let line = serde_json::to_string(&ScreenshotEventLogEntry {
         id: &event.id,
         timestamp: event.timestamp,
@@ -164,8 +177,8 @@ fn record_screenshot_event(
         content_type: &event.content_type,
         content_len: event.content.len(),
     })
-    .context("Failed to serialize screenshot event log entry")?;
-    writeln!(file, "{line}").context("Failed to append screenshot event")?;
+    .map_err(ScreenshotError::SerializeLogEntry)?;
+    writeln!(file, "{line}").map_err(ScreenshotError::AppendLog)?;
 
     Ok(event)
 }

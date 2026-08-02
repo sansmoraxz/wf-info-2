@@ -324,10 +324,7 @@ async fn handle_login_event(
         return;
     };
 
-    log::info!(
-        "Warframe running (PID: {}), attempting to resolve account authorization...",
-        pid
-    );
+    log::info!("Warframe running (PID: {pid}), attempting to resolve account authorization...");
     let auth = match process::scan_memory_for_auth_with_retry(pid, 5, Duration::from_secs(3)).await
     {
         Ok(Some(auth)) => auth,
@@ -337,7 +334,7 @@ async fn handle_login_event(
             return;
         }
         Err(e) => {
-            log::error!("Memory scan error: {}", e);
+            log::error!("Memory scan error: {e}");
             log::info!("Tip: Grant necessary permissions or try running with sudo");
             return;
         }
@@ -346,9 +343,9 @@ async fn handle_login_event(
     log::info!("Resolved account authorization from process memory");
     match api::fetch_player_profile(&http, &auth.account_id).await {
         Ok(profile) => {
-            log::info!("Fetched profile for {}: {:?}", user_name, profile);
+            log::info!("Fetched profile for {user_name}: {profile:?}");
             if let Err(e) = storage::save_encrypted_profile(&profile) {
-                log::error!("Failed to save profile for {}: {}", user_name, e);
+                log::error!("Failed to save profile for {user_name}: {e}");
             } else {
                 events.emit(DaemonEvent::ProfileUpdated(ProfileUpdatedEvent {
                     timestamp: Utc::now(),
@@ -357,7 +354,7 @@ async fn handle_login_event(
             }
         }
         Err(e) => {
-            log::error!("Failed to fetch profile for {}: {}", user_name, e);
+            log::error!("Failed to fetch profile for {user_name}: {e}");
         }
     }
 
@@ -378,12 +375,12 @@ async fn handle_login_event(
         Ok(Some(result)) => {
             log::info!("Successfully fetched live inventory");
             if let Err(e) = storage::save_inventory(&result.inventory) {
-                log::error!("Failed to save inventory: {}", e);
+                log::error!("Failed to save inventory: {e}");
             } else {
                 if let Err(e) =
                     storage::touch_inventory_updated(Some(&crate::events::Source::Auto.to_string()))
                 {
-                    log::warn!("Failed to update inventory metadata: {}", e);
+                    log::warn!("Failed to update inventory metadata: {e}");
                 }
                 events.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
                     timestamp: Utc::now(),
@@ -397,7 +394,7 @@ async fn handle_login_event(
             log::info!("Tip: Make sure you're logged into Warframe");
         }
         Err(e) => {
-            log::error!("Live inventory fetch failed: {}", e);
+            log::error!("Live inventory fetch failed: {e}");
         }
     }
 }

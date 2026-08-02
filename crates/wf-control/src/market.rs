@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -14,6 +13,16 @@ use super::utils::wfm_get;
 use wf_itemdata::item_data::ItemIndex;
 
 const CACHE_TTL: Duration = Duration::from_secs(3600); // 1 hour
+
+#[derive(Debug, thiserror::Error)]
+pub enum MarketError {
+    #[error("wfm.price requires 'item_type' or 'search' parameter")]
+    MissingQuery,
+    #[error("Item not found on warframe.market")]
+    ItemNotFound,
+    #[error(transparent)]
+    Http(#[from] reqwest::Error),
+}
 
 // ── Domain newtypes ──
 
@@ -247,14 +256,14 @@ impl From<reqwest::Client> for MarketCache {
 impl MarketCache {
     /// Return a snapshot of the item cache, refreshing it first if stale or
     /// absent. Callers do all lookups against the returned snapshot.
-    async fn ensure(&self) -> Result<Arc<WfmCache>> {
+    async fn ensure(&self) -> Result<Arc<WfmCache>, reqwest::Error> {
         match self.cache.load().as_ref() {
             Some(cache) if !cache.is_stale() => Ok(Arc::clone(cache)),
             _ => self.refresh().await,
         }
     }
 
-    async fn refresh(&self) -> Result<Arc<WfmCache>> {
+    async fn refresh(&self) -> Result<Arc<WfmCache>, reqwest::Error> {
         let resp: WfmItemsResponse = wfm_get(&self.http, "items").await?;
 
         let mut game_ref_index = HashMap::new();
@@ -313,14 +322,20 @@ struct WfmItemDetail {
     set_parts: Option<Vec<WfmId>>,
 }
 
-async fn fetch_item_detail(client: &reqwest::Client, slug: &Slug) -> Result<WfmItemDetail> {
+async fn fetch_item_detail(
+    client: &reqwest::Client,
+    slug: &Slug,
+) -> Result<WfmItemDetail, reqwest::Error> {
     let resp: WfmItemDetailResponse = wfm_get(client, &format!("items/{slug}")).await?;
     Ok(resp.data)
 }
 
 // ── Order fetching ──
 
-async fn fetch_orders(client: &reqwest::Client, slug: &Slug) -> Result<Vec<WfmOrder>> {
+async fn fetch_orders(
+    client: &reqwest::Client,
+    slug: &Slug,
+) -> Result<Vec<WfmOrder>, reqwest::Error> {
     let resp: WfmOrdersResponse = wfm_get(client, &format!("orders/item/{slug}")).await?;
     Ok(resp.data)
 }
@@ -530,8 +545,8 @@ pub struct MarketRefreshResponse {
 impl HandleOp for MarketPriceParams {
     type Response = MarketPriceResponse;
 
-    async fn handle(self, cx: &Handles) -> Result<Self::Response> {
-        handle_market_price(&cx.market, &cx.item_index, self).await
+    async fn handle(self, cx: &Handles) -> Result<Self::Response, crate::requests::ControlError> {
+        Ok(handle_market_price(&cx.market, &cx.item_index, self).await?)
     }
 }
 
@@ -539,11 +554,9 @@ pub async fn handle_market_price(
     market: &MarketCache,
     item_index: &ItemIndex,
     params: MarketPriceParams,
-) -> Result<MarketPriceResponse> {
+) -> Result<MarketPriceResponse, MarketError> {
     if params.item_type.is_none() && params.search.is_none() {
-        return Err(anyhow!(
-            "wfm.price requires 'item_type' or 'search' parameter"
-        ));
+        return Err(MarketError::MissingQuery);
     }
 
     let cache = market.ensure().await?;
@@ -560,7 +573,7 @@ pub async fn handle_market_price(
         None
     };
 
-    let wfm_item = wfm_item.ok_or_else(|| anyhow!("Item not found on warframe.market"))?;
+    let wfm_item = wfm_item.ok_or(MarketError::ItemNotFound)?;
 
     // Fetch orders
     let orders = fetch_orders(&market.http, &wfm_item.slug).await?;
@@ -643,7 +656,9 @@ pub async fn handle_market_price(
     })
 }
 
-pub async fn handle_market_refresh(market: &MarketCache) -> Result<MarketRefreshResponse> {
+pub async fn handle_market_refresh(
+    market: &MarketCache,
+) -> Result<MarketRefreshResponse, MarketError> {
     let cache = market.refresh().await?;
 
     Ok(MarketRefreshResponse {

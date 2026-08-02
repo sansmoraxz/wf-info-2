@@ -5,14 +5,16 @@ use wf_inventory::Inventory;
 const PLAYER_INFO_URL: &str = "https://api.warframe.com/cdn/getProfileViewingData.php";
 const INVENTORY_URL: &str = "https://api.warframe.com/api/inventory.php";
 
-#[derive(Debug, derive_more::Display, derive_more::Error)]
-#[display("Inventory authorization was rejected with status {_0}")]
-pub struct InventoryAuthorizationRejected(#[error(not(source))] reqwest::StatusCode);
-
-pub fn is_inventory_authorization_rejected(error: &anyhow::Error) -> bool {
-    error
-        .downcast_ref::<InventoryAuthorizationRejected>()
-        .is_some()
+#[derive(Debug, thiserror::Error)]
+pub enum ApiError {
+    #[error("Inventory authorization was rejected with status {0}")]
+    AuthorizationRejected(reqwest::StatusCode),
+    #[error("Inventory API returned status: {0}")]
+    Status(reqwest::StatusCode),
+    #[error("Inventory request failed: {0}")]
+    Request(#[source] reqwest::Error),
+    #[error("Failed to parse inventory JSON: {0}")]
+    Parse(#[source] reqwest::Error),
 }
 
 /// Fetches the player's profile data from the Warframe API using the provided account ID.
@@ -35,7 +37,7 @@ pub async fn fetch_player_profile(
 pub async fn fetch_inventory(
     client: &reqwest::Client,
     auth: &AuthQuery,
-) -> anyhow::Result<Inventory> {
+) -> Result<Inventory, ApiError> {
     log::info!("Fetching inventory from API...");
 
     let response = client
@@ -43,7 +45,7 @@ pub async fn fetch_inventory(
         .query(&[("accountId", &auth.account_id), ("nonce", &auth.nonce)])
         .send()
         .await
-        .map_err(|error| anyhow::anyhow!("Inventory request failed: {}", error.without_url()))?;
+        .map_err(|error| ApiError::Request(error.without_url()))?;
 
     if !response.status().is_success() {
         if matches!(
@@ -52,17 +54,15 @@ pub async fn fetch_inventory(
                 | reqwest::StatusCode::UNAUTHORIZED
                 | reqwest::StatusCode::FORBIDDEN
         ) {
-            return Err(InventoryAuthorizationRejected(response.status()).into());
+            return Err(ApiError::AuthorizationRejected(response.status()));
         }
-        return Err(anyhow::anyhow!(
-            "Inventory API returned status: {}",
-            response.status()
-        ));
+        return Err(ApiError::Status(response.status()));
     }
 
-    let inventory: Inventory = response.json().await.map_err(|error| {
-        anyhow::anyhow!("Failed to parse inventory JSON: {}", error.without_url())
-    })?;
+    let inventory: Inventory = response
+        .json()
+        .await
+        .map_err(|error| ApiError::Parse(error.without_url()))?;
 
     log::info!("Successfully fetched inventory data");
     Ok(inventory)

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use anyhow::{Context, Result, anyhow, bail};
 use wf_core::process;
 
 use winapi::shared::minwindef::DWORD;
@@ -8,6 +7,26 @@ use winapi::shared::windef::HWND;
 use winapi::um::winuser::GetWindowThreadProcessId;
 
 use super::ScreenshotState;
+
+#[derive(Debug, thiserror::Error)]
+pub enum CaptureError {
+    #[error("Warframe process not detected")]
+    ProcessNotDetected,
+    #[error("Failed to enumerate windows: {0}")]
+    EnumerateWindows(String),
+    #[error("Visible Warframe window not found for PID {0}")]
+    WindowNotFound(u32),
+    #[error("Failed to capture Warframe window {hwnd} ({window_name}): {reason}")]
+    CaptureWindow {
+        hwnd: isize,
+        window_name: String,
+        reason: String,
+    },
+    #[error("Failed to create RGBA image buffer from Windows screenshot")]
+    ImageBuffer,
+    #[error(transparent)]
+    Encode(#[from] image::ImageError),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct WindowCacheEntry {
@@ -17,14 +36,15 @@ pub(crate) struct WindowCacheEntry {
 }
 
 /// Capture the Warframe window and return the screenshot content as BMP.
-pub(crate) async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, String)> {
+pub(crate) async fn capture_screen(
+    state: &ScreenshotState,
+) -> Result<(Vec<u8>, String), CaptureError> {
     use image::ExtendedColorType;
     use image::codecs::bmp::BmpEncoder;
     use image::{DynamicImage, RgbaImage};
     use win_screenshot::prelude::*;
 
-    let warframe_pid =
-        cached_warframe_pid(state).ok_or_else(|| anyhow!("Warframe process not detected"))?;
+    let warframe_pid = cached_warframe_pid(state).ok_or(CaptureError::ProcessNotDetected)?;
     let cached = cached_window(state, warframe_pid);
     let window = match cached.clone() {
         Some(window) => window,
@@ -42,33 +62,31 @@ pub(crate) async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, 
             );
             clear_cached_window(state);
             clear_cached_warframe_pid(state);
-            let warframe_pid = cached_warframe_pid(state)
-                .ok_or_else(|| anyhow!("Warframe process not detected"))?;
+            let warframe_pid =
+                cached_warframe_pid(state).ok_or(CaptureError::ProcessNotDetected)?;
             let refreshed = resolve_warframe_window(state, warframe_pid)?;
             match capture_window(refreshed.hwnd) {
                 Ok(buf) => buf,
                 Err(retry_err) => {
-                    return Err(anyhow!(
-                        "Failed to capture Warframe window {} ({}): {:?}",
-                        refreshed.hwnd,
-                        refreshed.window_name,
-                        retry_err
-                    ));
+                    return Err(CaptureError::CaptureWindow {
+                        hwnd: refreshed.hwnd,
+                        window_name: refreshed.window_name.clone(),
+                        reason: format!("{retry_err:?}"),
+                    });
                 }
             }
         }
         Err(err) => {
-            return Err(anyhow!(
-                "Failed to capture Warframe window {} ({}): {:?}",
-                window.hwnd,
-                window.window_name,
-                err
-            ));
+            return Err(CaptureError::CaptureWindow {
+                hwnd: window.hwnd,
+                window_name: window.window_name.clone(),
+                reason: format!("{err:?}"),
+            });
         }
     };
 
     let img = RgbaImage::from_raw(buf.width, buf.height, buf.pixels)
-        .context("Failed to create RGBA image buffer from Windows screenshot")?;
+        .ok_or(CaptureError::ImageBuffer)?;
     let rgb = DynamicImage::ImageRgba8(img).to_rgb8();
 
     let mut bmp_bytes = Vec::new();
@@ -117,15 +135,15 @@ fn clear_cached_window(state: &ScreenshotState) {
 fn resolve_warframe_window(
     state: &ScreenshotState,
     warframe_pid: u32,
-) -> Result<Arc<WindowCacheEntry>> {
+) -> Result<Arc<WindowCacheEntry>, CaptureError> {
     let candidates: Vec<_> = win_screenshot::utils::window_list()
-        .map_err(|e| anyhow!("Failed to enumerate windows: {:?}", e))?
+        .map_err(|e| CaptureError::EnumerateWindows(format!("{e:?}")))?
         .into_iter()
         .filter(|window| window_process_id(window.hwnd) == warframe_pid)
         .collect::<Vec<_>>();
 
     if candidates.is_empty() {
-        bail!("Visible Warframe window not found for PID {}", warframe_pid);
+        return Err(CaptureError::WindowNotFound(warframe_pid));
     }
 
     let selected = candidates

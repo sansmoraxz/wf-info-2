@@ -2,7 +2,6 @@ use std::sync::Arc;
 #[cfg(feature = "memory")]
 use std::time::Duration;
 
-use anyhow::{Context, Result, anyhow};
 use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -17,15 +16,53 @@ use super::events::{
     DaemonEvent, EventBus, InventoryFetchedEvent, InventoryStaleEvent, InventorySummary, Source,
 };
 use super::market::{MarketCache, fetch_market_summary};
-use super::requests::{HandleOp, Handles};
+use super::requests::{ControlError, HandleOp, Handles};
 use super::search::{
     Category, EnvelopeAccess, IndexedInventory, InventoryIndexCache, InventoryItemEnvelope,
-    count_inventory_items, search_inventory,
+    SearchError, count_inventory_items, search_inventory,
 };
 use wf_itemdata::traits::Item as _;
 
 #[cfg(feature = "memory")]
 use wf_core::{inventory_refresh, process};
+
+#[derive(Debug, thiserror::Error)]
+pub enum InventoryError {
+    #[error("inventory.load expects exactly one of 'path', 'json', or 'raw'")]
+    AmbiguousSource,
+    #[error("Failed to read inventory file {path}")]
+    ReadFile {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("Failed to parse inventory JSON")]
+    ParseJson(#[source] serde_json::Error),
+    #[error("Unknown category '{0}'")]
+    UnknownCategory(String),
+    #[error("Unsupported timestamp string format")]
+    UnsupportedTimestamp,
+    #[cfg(not(feature = "memory"))]
+    #[error("inventory.refresh requires the 'memory' feature to be enabled")]
+    MemoryFeatureDisabled,
+    #[cfg(feature = "memory")]
+    #[error("Warframe process not detected; launch the game and try again")]
+    ProcessNotDetected,
+    #[cfg(feature = "memory")]
+    #[error("Could not locate auth data in Warframe memory")]
+    AuthNotFound,
+    #[cfg(feature = "memory")]
+    #[error(transparent)]
+    Refresh(#[from] inventory_refresh::RefreshError),
+    #[error(transparent)]
+    Storage(#[from] storage::StorageError),
+    #[error(transparent)]
+    Search(#[from] SearchError),
+    #[error(transparent)]
+    Tantivy(#[from] tantivy::TantivyError),
+    #[error(transparent)]
+    QueryParser(#[from] tantivy::query::QueryParserError),
+}
 
 /// Wire mirror for inventory.load params; converted to [`LoadInventoryRequest`]
 /// so the exactly-one-source rule is enforced before the handler runs.
@@ -49,25 +86,29 @@ pub enum InventoryInput {
 }
 
 impl InventoryInput {
-    async fn load(self) -> Result<Inventory> {
+    async fn load(self) -> Result<Inventory, InventoryError> {
         match self {
             Self::Path { path, encrypted } => {
                 if encrypted {
                     let data = tokio::fs::read(&path)
                         .await
-                        .with_context(|| format!("Failed to read inventory file {path}"))?;
-                    storage::decrypt_inventory_bytes(&data)
+                        .map_err(|source| InventoryError::ReadFile {
+                            path: path.clone(),
+                            source,
+                        })?;
+                    Ok(storage::decrypt_inventory_bytes(&data)?)
                 } else {
-                    let raw = tokio::fs::read_to_string(&path)
-                        .await
-                        .with_context(|| format!("Failed to read inventory file {path}"))?;
-                    serde_json::from_str(&raw).context("Failed to parse inventory JSON")
+                    let raw = tokio::fs::read_to_string(&path).await.map_err(|source| {
+                        InventoryError::ReadFile {
+                            path: path.clone(),
+                            source,
+                        }
+                    })?;
+                    serde_json::from_str(&raw).map_err(InventoryError::ParseJson)
                 }
             }
-            Self::Raw(raw) => serde_json::from_str(&raw).context("Failed to parse inventory JSON"),
-            Self::Json(json) => {
-                serde_json::from_value(json).context("Failed to parse inventory JSON")
-            }
+            Self::Raw(raw) => serde_json::from_str(&raw).map_err(InventoryError::ParseJson),
+            Self::Json(json) => serde_json::from_value(json).map_err(InventoryError::ParseJson),
         }
     }
 }
@@ -80,19 +121,15 @@ pub struct LoadInventoryRequest {
 }
 
 impl TryFrom<LoadInventoryParams> for LoadInventoryRequest {
-    type Error = anyhow::Error;
+    type Error = InventoryError;
 
-    fn try_from(params: LoadInventoryParams) -> Result<Self> {
+    fn try_from(params: LoadInventoryParams) -> Result<Self, Self::Error> {
         let encrypted = params.encrypted.unwrap_or(false);
         let input = match (params.path, params.json, params.raw) {
             (Some(path), None, None) => InventoryInput::Path { path, encrypted },
             (None, Some(json), None) => InventoryInput::Json(json),
             (None, None, Some(raw)) => InventoryInput::Raw(raw),
-            _ => {
-                return Err(anyhow!(
-                    "inventory.load expects exactly one of 'path', 'json', or 'raw'"
-                ));
-            }
+            _ => return Err(InventoryError::AmbiguousSource),
         };
         Ok(Self {
             input,
@@ -122,15 +159,15 @@ pub struct InventoryFilterResponse {
 impl HandleOp for LoadInventoryParams {
     type Response = InventoryLoadResponse;
 
-    async fn handle(self, cx: &Handles) -> Result<Self::Response> {
-        handle_inventory_load(&cx.events, self).await
+    async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError> {
+        Ok(handle_inventory_load(&cx.events, self).await?)
     }
 }
 
 pub async fn handle_inventory_load(
     events: &EventBus,
     params: LoadInventoryParams,
-) -> Result<InventoryLoadResponse> {
+) -> Result<InventoryLoadResponse, InventoryError> {
     let LoadInventoryRequest {
         input,
         save,
@@ -194,8 +231,8 @@ pub struct CountFilter {
 impl HandleOp for FilterParams {
     type Response = InventoryFilterResponse;
 
-    async fn handle(self, cx: &Handles) -> Result<Self::Response> {
-        handle_inventory_filter(&cx.inventory_index, &cx.market, &cx.item_index, self).await
+    async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError> {
+        Ok(handle_inventory_filter(&cx.inventory_index, &cx.market, &cx.item_index, self).await?)
     }
 }
 
@@ -204,7 +241,7 @@ pub async fn handle_inventory_filter(
     market: &MarketCache,
     item_index: &wf_itemdata::item_data::ItemIndex,
     mut params: FilterParams,
-) -> Result<InventoryFilterResponse> {
+) -> Result<InventoryFilterResponse, InventoryError> {
     let custom_path = params.path.take().map(|path| InventoryInput::Path {
         path,
         encrypted: params.encrypted.unwrap_or(false),
@@ -215,7 +252,7 @@ pub async fn handle_inventory_filter(
         Some(raw) if raw.eq_ignore_ascii_case("all") => None,
         Some(raw) => Some(
             raw.parse::<Category>()
-                .map_err(|_| anyhow!("Unknown category '{raw}'"))?,
+                .map_err(|_| InventoryError::UnknownCategory(raw.to_string()))?,
         ),
     };
     let include_details = params.include_details.unwrap_or(false);
@@ -355,24 +392,23 @@ impl HandleOp for RefreshParams {
     type Response = InventoryLoadResponse;
 
     #[cfg(feature = "memory")]
-    async fn handle(self, cx: &Handles) -> Result<Self::Response> {
-        handle_inventory_refresh(&cx.http, &cx.events, self).await
+    async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError> {
+        Ok(handle_inventory_refresh(&cx.http, &cx.events, self).await?)
     }
 
     #[cfg(not(feature = "memory"))]
-    async fn handle(self, _cx: &Handles) -> Result<Self::Response> {
-        anyhow::bail!("inventory.refresh requires the 'memory' feature to be enabled")
+    async fn handle(self, _cx: &Handles) -> Result<Self::Response, ControlError> {
+        Err(InventoryError::MemoryFeatureDisabled.into())
     }
 }
 
 #[cfg(feature = "memory")]
-pub(crate) async fn handle_inventory_refresh(
+pub async fn handle_inventory_refresh(
     client: &reqwest::Client,
     events: &EventBus,
     params: RefreshParams,
-) -> Result<InventoryLoadResponse> {
-    let pid = process::get_warframe_pid()
-        .ok_or_else(|| anyhow!("Warframe process not detected; launch the game and try again"))?;
+) -> Result<InventoryLoadResponse, InventoryError> {
+    let pid = process::get_warframe_pid().ok_or(InventoryError::ProcessNotDetected)?;
 
     let scan_retries = params.scan_retries.unwrap_or(5);
     let scan_delay = Duration::from_millis(params.scan_delay_ms.unwrap_or(1500));
@@ -380,8 +416,8 @@ pub(crate) async fn handle_inventory_refresh(
     let inventory =
         inventory_refresh::fetch_inventory_from_process(client, pid, scan_retries, scan_delay)
             .await?
-        .ok_or_else(|| anyhow!("Could not locate auth data in Warframe memory"))?
-        .inventory;
+            .ok_or(InventoryError::AuthNotFound)?
+            .inventory;
 
     let save = params.save.unwrap_or(true);
     let source = params.source.unwrap_or(Source::LiveRefresh);
@@ -416,7 +452,7 @@ pub enum TimestampParam {
 }
 
 impl TimestampParam {
-    fn to_datetime(&self) -> Result<DateTime<Utc>> {
+    fn to_datetime(&self) -> Result<DateTime<Utc>, InventoryError> {
         match self {
             Self::Text(s) => {
                 if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
@@ -425,7 +461,7 @@ impl TimestampParam {
                 if let Ok(num) = s.parse::<i64>() {
                     return Ok(epoch_to_datetime(num));
                 }
-                Err(anyhow!("Unsupported timestamp string format"))
+                Err(InventoryError::UnsupportedTimestamp)
             }
             Self::Epoch(num) => Ok(epoch_to_datetime(*num)),
         }
@@ -441,15 +477,15 @@ pub struct StaleParams {
 impl HandleOp for StaleParams {
     type Response = storage::InventoryMeta;
 
-    async fn handle(self, cx: &Handles) -> Result<Self::Response> {
-        handle_inventory_stale_update(&cx.events, self)
+    async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError> {
+        Ok(handle_inventory_stale_update(&cx.events, self)?)
     }
 }
 
 pub fn handle_inventory_stale_update(
     events: &EventBus,
     params: StaleParams,
-) -> Result<storage::InventoryMeta> {
+) -> Result<storage::InventoryMeta, InventoryError> {
     let timestamp = if let Some(value) = params.timestamp {
         value.to_datetime()?
     } else {

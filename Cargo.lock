@@ -4799,7 +4799,6 @@ checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 name = "wf-control"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "arc-swap",
  "ashpd",
  "base64",
@@ -4824,6 +4823,7 @@ dependencies = [
  "serde_with",
  "strum",
  "tantivy",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite",
  "uuid",
@@ -4842,7 +4842,6 @@ version = "0.1.0"
 dependencies = [
  "aes",
  "aes-gcm",
- "anyhow",
  "cbc",
  "chrono",
  "derive_more",
@@ -4858,6 +4857,7 @@ dependencies = [
  "serde_with",
  "sha2",
  "sysinfo",
+ "thiserror 2.0.18",
  "tokio",
  "wf-inventory",
  "winapi",
@@ -4902,7 +4902,6 @@ dependencies = [
 name = "wf-itemdata"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "derive_more",
  "dirs",
  "enum_dispatch",
@@ -4913,6 +4912,7 @@ dependencies = [
  "serde_repr",
  "serde_with",
  "strum",
+ "thiserror 2.0.18",
  "wf-inventory",
 ]
 
@@ -4920,7 +4920,6 @@ dependencies = [
 name = "wf-ocr"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "image",
  "imageproc",
  "itertools 0.14.0",
@@ -4928,6 +4927,7 @@ dependencies = [
  "ocr-rs",
  "rust-embed",
  "serde",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
