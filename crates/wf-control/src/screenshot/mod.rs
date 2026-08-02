@@ -46,21 +46,21 @@ mod unix;
 mod windows;
 
 #[cfg(unix)]
-pub(crate) use unix::BackendCacheEntry;
+pub use unix::BackendCacheEntry;
 #[cfg(unix)]
-pub(crate) use unix::capture_screen;
+pub use unix::capture_screen;
 #[cfg(windows)]
 pub(crate) use windows::WindowCacheEntry;
 #[cfg(windows)]
 pub(crate) use windows::capture_screen;
 
 #[derive(Debug, Deserialize, Default)]
-pub(crate) struct ScreenshotParams {
+pub struct ScreenshotParams {
     pub metadata: Option<Value>,
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct ScreenshotEvent {
+pub struct ScreenshotEvent {
     pub id: String,
     pub timestamp: DateTime<Utc>,
     pub metadata: Option<Value>,
@@ -85,7 +85,7 @@ impl HandleOp for ScreenshotParams {
     }
 }
 
-pub(crate) async fn handle_screenshot_trigger(
+pub async fn handle_screenshot_trigger(
     shots: &ScreenshotState,
     events: &EventBus,
     params: ScreenshotParams,
@@ -154,7 +154,7 @@ fn record_screenshot_event(
         content_len: event.content.len(),
     })
     .context("Failed to serialize screenshot event log entry")?;
-    writeln!(file, "{}", line).context("Failed to append screenshot event")?;
+    writeln!(file, "{line}").context("Failed to append screenshot event")?;
 
     Ok(event)
 }

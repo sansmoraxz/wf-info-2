@@ -136,9 +136,9 @@ pub struct WarframeCompanion {
 impl ProductCategory for PetEntry {
     fn get_product_categories(&self) -> Vec<String> {
         match self {
-            PetEntry::KubrowPets(_) => vec!["KubrowPets".to_string()],
-            PetEntry::Pistols(_) => vec!["MiscItems".to_string()],
-            PetEntry::SpecialItems(_) => vec!["SpecialItems".to_string()],
+            Self::KubrowPets(_) => vec!["KubrowPets".to_string()],
+            Self::Pistols(_) => vec!["MiscItems".to_string()],
+            Self::SpecialItems(_) => vec!["SpecialItems".to_string()],
         }
     }
 }
@@ -146,58 +146,58 @@ impl ProductCategory for PetEntry {
 impl Item for PetEntry {
     fn unique_name(&self) -> &str {
         match self {
-            PetEntry::KubrowPets(p) => &p.identity.unique_name,
-            PetEntry::Pistols(p) => &p.identity.unique_name,
-            PetEntry::SpecialItems(p) => &p.identity.unique_name,
+            Self::KubrowPets(p) => &p.identity.unique_name,
+            Self::Pistols(p) => &p.identity.unique_name,
+            Self::SpecialItems(p) => &p.identity.unique_name,
         }
     }
     fn name(&self) -> &str {
         match self {
-            PetEntry::KubrowPets(p) => &p.identity.name,
-            PetEntry::Pistols(p) => &p.identity.name,
-            PetEntry::SpecialItems(p) => &p.identity.name,
+            Self::KubrowPets(p) => &p.identity.name,
+            Self::Pistols(p) => &p.identity.name,
+            Self::SpecialItems(p) => &p.identity.name,
         }
     }
     fn category(&self) -> &str {
         match self {
-            PetEntry::KubrowPets(p) => &p.identity.category,
-            PetEntry::Pistols(p) => &p.identity.category,
-            PetEntry::SpecialItems(p) => &p.identity.category,
+            Self::KubrowPets(p) => &p.identity.category,
+            Self::Pistols(p) => &p.identity.category,
+            Self::SpecialItems(p) => &p.identity.category,
         }
     }
     fn type_field(&self) -> &str {
         match self {
-            PetEntry::KubrowPets(p) => p.type_field.as_ref(),
-            PetEntry::Pistols(p) => p.type_field.as_ref(),
-            PetEntry::SpecialItems(p) => p.type_field.as_ref(),
+            Self::KubrowPets(p) => p.type_field.as_ref(),
+            Self::Pistols(p) => p.type_field.as_ref(),
+            Self::SpecialItems(p) => p.type_field.as_ref(),
         }
     }
     fn image_name(&self) -> Option<&str> {
         match self {
-            PetEntry::KubrowPets(p) => p.detail.image_name.as_deref(),
-            PetEntry::Pistols(p) => p.detail.image_name.as_deref(),
-            PetEntry::SpecialItems(p) => p.detail.image_name.as_deref(),
+            Self::KubrowPets(p) => p.detail.image_name.as_deref(),
+            Self::Pistols(p) => p.detail.image_name.as_deref(),
+            Self::SpecialItems(p) => p.detail.image_name.as_deref(),
         }
     }
     fn tradable(&self) -> bool {
         match self {
-            PetEntry::KubrowPets(p) => p.trade.tradable,
-            PetEntry::Pistols(p) => p.trade.tradable,
-            PetEntry::SpecialItems(p) => p.trade.tradable,
+            Self::KubrowPets(p) => p.trade.tradable,
+            Self::Pistols(p) => p.trade.tradable,
+            Self::SpecialItems(p) => p.trade.tradable,
         }
     }
     fn masterable(&self) -> bool {
         match self {
-            PetEntry::KubrowPets(p) => p.trade.masterable,
-            PetEntry::Pistols(p) => p.trade.masterable,
-            PetEntry::SpecialItems(p) => p.trade.masterable,
+            Self::KubrowPets(p) => p.trade.masterable,
+            Self::Pistols(p) => p.trade.masterable,
+            Self::SpecialItems(p) => p.trade.masterable,
         }
     }
     fn patchlogs(&self) -> &[Patchlog] {
         match self {
-            PetEntry::KubrowPets(p) => &p.patchlogs,
-            PetEntry::Pistols(p) => &p.patchlogs,
-            PetEntry::SpecialItems(p) => &p.patchlogs,
+            Self::KubrowPets(p) => &p.patchlogs,
+            Self::Pistols(p) => &p.patchlogs,
+            Self::SpecialItems(p) => &p.patchlogs,
         }
     }
 }
@@ -205,9 +205,9 @@ impl Item for PetEntry {
 impl Droppable for PetEntry {
     fn drops(&self) -> &[Drop] {
         match self {
-            PetEntry::KubrowPets(p) => &p.drops,
-            PetEntry::SpecialItems(p) => &p.drops,
-            PetEntry::Pistols(_) => &[],
+            Self::KubrowPets(p) => &p.drops,
+            Self::SpecialItems(p) => &p.drops,
+            Self::Pistols(_) => &[],
         }
     }
 }
@@ -215,39 +215,39 @@ impl Droppable for PetEntry {
 impl Buildable for PetEntry {
     fn build_price(&self) -> Option<i64> {
         match self {
-            PetEntry::Pistols(p) => p.build.build_price,
+            Self::Pistols(p) => p.build.build_price,
             _ => None,
         }
     }
     fn build_quantity(&self) -> Option<i64> {
         match self {
-            PetEntry::Pistols(p) => p.build.build_quantity,
+            Self::Pistols(p) => p.build.build_quantity,
             _ => None,
         }
     }
     fn build_time(&self) -> Option<i64> {
         match self {
-            PetEntry::Pistols(p) => p.build.build_time,
+            Self::Pistols(p) => p.build.build_time,
             _ => None,
         }
     }
     fn skip_build_time_price(&self) -> Option<i64> {
         match self {
-            PetEntry::Pistols(p) => p.build.skip_build_time_price,
+            Self::Pistols(p) => p.build.skip_build_time_price,
             _ => None,
         }
     }
     fn consume_on_build(&self) -> Option<bool> {
         match self {
-            PetEntry::Pistols(p) => p.build.consume_on_build,
+            Self::Pistols(p) => p.build.consume_on_build,
             _ => None,
         }
     }
     fn mastery_req(&self) -> Option<i64> {
         match self {
-            PetEntry::KubrowPets(p) => Some(p.mastery_req),
-            PetEntry::Pistols(p) => Some(p.mastery_req),
-            PetEntry::SpecialItems(p) => Some(p.mastery_req),
+            Self::KubrowPets(p) => Some(p.mastery_req),
+            Self::Pistols(p) => Some(p.mastery_req),
+            Self::SpecialItems(p) => Some(p.mastery_req),
         }
     }
     fn market_cost(&self) -> Option<i64> {
@@ -258,7 +258,7 @@ impl Buildable for PetEntry {
     }
     fn components(&self) -> &[crate::components::Component] {
         match self {
-            PetEntry::Pistols(p) => &p.build.components,
+            Self::Pistols(p) => &p.build.components,
             _ => &[],
         }
     }
@@ -267,37 +267,37 @@ impl Buildable for PetEntry {
 impl WikiaLinked for PetEntry {
     fn wiki_available(&self) -> Option<bool> {
         match self {
-            PetEntry::KubrowPets(p) => Some(p.wiki_available),
-            PetEntry::SpecialItems(p) => Some(p.wiki_available),
-            PetEntry::Pistols(_) => None,
+            Self::KubrowPets(p) => Some(p.wiki_available),
+            Self::SpecialItems(p) => Some(p.wiki_available),
+            Self::Pistols(_) => None,
         }
     }
     fn wikia_url(&self) -> Option<&str> {
         match self {
-            PetEntry::KubrowPets(p) => Some(&p.wikia_url),
-            PetEntry::SpecialItems(p) => Some(&p.wikia_url),
-            PetEntry::Pistols(_) => None,
+            Self::KubrowPets(p) => Some(&p.wikia_url),
+            Self::SpecialItems(p) => Some(&p.wikia_url),
+            Self::Pistols(_) => None,
         }
     }
     fn wikia_thumbnail(&self) -> Option<&str> {
         match self {
-            PetEntry::KubrowPets(p) => Some(&p.wikia_thumbnail),
-            PetEntry::SpecialItems(p) => Some(&p.wikia_thumbnail),
-            PetEntry::Pistols(_) => None,
+            Self::KubrowPets(p) => Some(&p.wikia_thumbnail),
+            Self::SpecialItems(p) => Some(&p.wikia_thumbnail),
+            Self::Pistols(_) => None,
         }
     }
     fn introduced(&self) -> Option<&Introduced> {
         match self {
-            PetEntry::KubrowPets(p) => Some(&p.introduced),
-            PetEntry::SpecialItems(p) => Some(&p.introduced),
-            PetEntry::Pistols(_) => None,
+            Self::KubrowPets(p) => Some(&p.introduced),
+            Self::SpecialItems(p) => Some(&p.introduced),
+            Self::Pistols(_) => None,
         }
     }
     fn release_date(&self) -> Option<&str> {
         match self {
-            PetEntry::KubrowPets(p) => Some(&p.release_date),
-            PetEntry::SpecialItems(p) => Some(&p.release_date),
-            PetEntry::Pistols(_) => None,
+            Self::KubrowPets(p) => Some(&p.release_date),
+            Self::SpecialItems(p) => Some(&p.release_date),
+            Self::Pistols(_) => None,
         }
     }
 }
@@ -305,9 +305,9 @@ impl WikiaLinked for PetEntry {
 impl Equippable for PetEntry {
     fn polarities(&self) -> &[Polarity] {
         match self {
-            PetEntry::KubrowPets(p) => &p.polarities,
-            PetEntry::SpecialItems(p) => &p.polarities,
-            PetEntry::Pistols(_) => &[],
+            Self::KubrowPets(p) => &p.polarities,
+            Self::SpecialItems(p) => &p.polarities,
+            Self::Pistols(_) => &[],
         }
     }
     fn slot(&self) -> Option<&crate::enums::Slot> {

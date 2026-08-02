@@ -85,7 +85,7 @@ fn transform_trade_confirm(c: &Captures) -> Option<LogEvent> {
     let sent = extract_trade_items(c.get(1)?.as_str());
     let name = c.get(2)?.as_str().to_string();
     let received = extract_trade_items(c.get(4)?.as_str());
-    let platform = Platform::from_glyph(c.get(3)?.as_str());
+    let platform = Platform::from(c.get(3)?.as_str());
 
     let info = crate::logs::TradeInfo {
         sent,
@@ -98,7 +98,7 @@ fn transform_trade_confirm(c: &Captures) -> Option<LogEvent> {
 
 fn transform_login(c: &Captures) -> Option<LogEvent> {
     let name = c.get(1)?.as_str().to_string();
-    let platform = Platform::from_glyph(c.get(2)?.as_str());
+    let platform = Platform::from(c.get(2)?.as_str());
     let clan_name = c.get(3)?.as_str().to_string();
     let clan_id = c.get(4)?.as_str().to_string();
     let clan = [clan_name, "#".to_string(), clan_id].concat();
@@ -112,7 +112,7 @@ fn transform_login(c: &Captures) -> Option<LogEvent> {
 
 fn transform_dm_tab(c: &Captures) -> Option<LogEvent> {
     let username = c.get(1)?.as_str().to_string();
-    let platform = Platform::from_glyph(c.get(2)?.as_str());
+    let platform = Platform::from(c.get(2)?.as_str());
     Some(LogEvent::DmTabOpened(DirectMessageInfo {
         username,
         platform,

@@ -43,7 +43,7 @@ fn find_by_name<'a, T: Item>(items: &'a [T], name: &str) -> &'a T {
     items
         .iter()
         .find(|i| i.name() == name)
-        .unwrap_or_else(|| panic!("item '{}' not found", name))
+        .unwrap_or_else(|| panic!("item '{name}' not found"))
 }
 
 // ── Warframes ──
@@ -1198,7 +1198,7 @@ fn test_fish_tabular_fields() {
         let item = arr
             .iter()
             .find(|f| f.unique_name() == unique)
-            .unwrap_or_else(|| panic!("fish with unique_name '{}' not found", unique));
+            .unwrap_or_else(|| panic!("fish with unique_name '{unique}' not found"));
         assert_eq!(item.name(), name, "{unique} name");
         assert_eq!(item.category(), "Fish", "{unique} category");
         assert_eq!(item.type_field(), "Fish", "{unique} type");
@@ -1454,7 +1454,7 @@ fn test_enemies_tabular_fields() {
         let item = arr
             .iter()
             .find(|e| e.unique_name() == unique)
-            .unwrap_or_else(|| panic!("enemy '{}' not found", unique));
+            .unwrap_or_else(|| panic!("enemy '{unique}' not found"));
         assert_eq!(item.type_field(), typ, "{unique} type");
         assert_eq!(item.combat.health, health, "{unique} health");
         assert_eq!(item.combat.armor, armor, "{unique} armor");

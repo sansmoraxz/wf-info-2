@@ -5,7 +5,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::enums::Rarity;
 
 /// Patch/update log entry - records changes made to an item
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Patchlog {
     pub name: String,
@@ -17,7 +17,7 @@ pub struct Patchlog {
 }
 
 /// Game update information - when an item was introduced
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Introduced {
     pub name: String,
@@ -47,7 +47,7 @@ pub struct Drop {
 }
 
 /// Level statistics for mods and arcanes
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LevelStat {
     #[serde(default)]
@@ -55,7 +55,7 @@ pub struct LevelStat {
 }
 
 /// Ability information for Warframes and Archwings
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Ability {
     pub unique_name: String,

@@ -147,9 +147,9 @@ pub struct HelminthData {
 impl ProductCategory for WarframeEntry {
     fn get_product_categories(&self) -> Vec<String> {
         match self {
-            WarframeEntry::Suits(_) => vec!["Suits".to_string()],
-            WarframeEntry::MechSuits(_) => vec!["MechSuits".to_string()],
-            WarframeEntry::Helminth(_) => vec![],
+            Self::Suits(_) => vec!["Suits".to_string()],
+            Self::MechSuits(_) => vec!["MechSuits".to_string()],
+            Self::Helminth(_) => vec![],
         }
     }
 }
@@ -157,65 +157,65 @@ impl ProductCategory for WarframeEntry {
 impl Item for WarframeEntry {
     fn unique_name(&self) -> &str {
         match self {
-            WarframeEntry::Suits(w) => &w.identity.unique_name,
-            WarframeEntry::MechSuits(w) => &w.identity.unique_name,
-            WarframeEntry::Helminth(w) => &w.identity.unique_name,
+            Self::Suits(w) => &w.identity.unique_name,
+            Self::MechSuits(w) => &w.identity.unique_name,
+            Self::Helminth(w) => &w.identity.unique_name,
         }
     }
     fn name(&self) -> &str {
         match self {
-            WarframeEntry::Suits(w) => &w.identity.name,
-            WarframeEntry::MechSuits(w) => &w.identity.name,
-            WarframeEntry::Helminth(w) => &w.identity.name,
+            Self::Suits(w) => &w.identity.name,
+            Self::MechSuits(w) => &w.identity.name,
+            Self::Helminth(w) => &w.identity.name,
         }
     }
     fn category(&self) -> &str {
         match self {
-            WarframeEntry::Suits(w) => &w.identity.category,
-            WarframeEntry::MechSuits(w) => &w.identity.category,
-            WarframeEntry::Helminth(w) => &w.identity.category,
+            Self::Suits(w) => &w.identity.category,
+            Self::MechSuits(w) => &w.identity.category,
+            Self::Helminth(w) => &w.identity.category,
         }
     }
     fn type_field(&self) -> &str {
         match self {
-            WarframeEntry::Suits(w) => w.type_field.as_ref(),
-            WarframeEntry::MechSuits(w) => w.type_field.as_ref(),
-            WarframeEntry::Helminth(w) => w.type_field.as_ref(),
+            Self::Suits(w) => w.type_field.as_ref(),
+            Self::MechSuits(w) => w.type_field.as_ref(),
+            Self::Helminth(w) => w.type_field.as_ref(),
         }
     }
     fn image_name(&self) -> Option<&str> {
         match self {
-            WarframeEntry::Suits(w) => w.detail.image_name.as_deref(),
-            WarframeEntry::MechSuits(w) => w.detail.image_name.as_deref(),
-            WarframeEntry::Helminth(w) => w.detail.image_name.as_deref(),
+            Self::Suits(w) => w.detail.image_name.as_deref(),
+            Self::MechSuits(w) => w.detail.image_name.as_deref(),
+            Self::Helminth(w) => w.detail.image_name.as_deref(),
         }
     }
     fn description(&self) -> Option<&str> {
         match self {
-            WarframeEntry::Suits(w) => w.detail.description.as_deref(),
-            WarframeEntry::MechSuits(w) => w.detail.description.as_deref(),
-            WarframeEntry::Helminth(w) => w.detail.description.as_deref(),
+            Self::Suits(w) => w.detail.description.as_deref(),
+            Self::MechSuits(w) => w.detail.description.as_deref(),
+            Self::Helminth(w) => w.detail.description.as_deref(),
         }
     }
     fn tradable(&self) -> bool {
         match self {
-            WarframeEntry::Suits(w) => w.trade.tradable,
-            WarframeEntry::MechSuits(w) => w.trade.tradable,
-            WarframeEntry::Helminth(w) => w.trade.tradable,
+            Self::Suits(w) => w.trade.tradable,
+            Self::MechSuits(w) => w.trade.tradable,
+            Self::Helminth(w) => w.trade.tradable,
         }
     }
     fn masterable(&self) -> bool {
         match self {
-            WarframeEntry::Suits(w) => w.trade.masterable,
-            WarframeEntry::MechSuits(w) => w.trade.masterable,
-            WarframeEntry::Helminth(w) => w.trade.masterable,
+            Self::Suits(w) => w.trade.masterable,
+            Self::MechSuits(w) => w.trade.masterable,
+            Self::Helminth(w) => w.trade.masterable,
         }
     }
     fn patchlogs(&self) -> &[Patchlog] {
         match self {
-            WarframeEntry::Suits(w) => &w.patchlogs,
-            WarframeEntry::MechSuits(w) => &w.patchlogs,
-            WarframeEntry::Helminth(_) => &[],
+            Self::Suits(w) => &w.patchlogs,
+            Self::MechSuits(w) => &w.patchlogs,
+            Self::Helminth(_) => &[],
         }
     }
 }
@@ -223,9 +223,9 @@ impl Item for WarframeEntry {
 impl Droppable for WarframeEntry {
     fn drops(&self) -> &[Drop] {
         match self {
-            WarframeEntry::Suits(w) => &w.drops,
-            WarframeEntry::Helminth(w) => &w.drops,
-            WarframeEntry::MechSuits(_) => &[],
+            Self::Suits(w) => &w.drops,
+            Self::Helminth(w) => &w.drops,
+            Self::MechSuits(_) => &[],
         }
     }
 }
@@ -233,63 +233,63 @@ impl Droppable for WarframeEntry {
 impl Buildable for WarframeEntry {
     fn build_price(&self) -> Option<i64> {
         match self {
-            WarframeEntry::Suits(w) => w.build.build_price,
-            WarframeEntry::MechSuits(w) => w.build.build_price,
-            WarframeEntry::Helminth(_) => None,
+            Self::Suits(w) => w.build.build_price,
+            Self::MechSuits(w) => w.build.build_price,
+            Self::Helminth(_) => None,
         }
     }
     fn build_quantity(&self) -> Option<i64> {
         match self {
-            WarframeEntry::Suits(w) => w.build.build_quantity,
-            WarframeEntry::MechSuits(w) => w.build.build_quantity,
-            WarframeEntry::Helminth(_) => None,
+            Self::Suits(w) => w.build.build_quantity,
+            Self::MechSuits(w) => w.build.build_quantity,
+            Self::Helminth(_) => None,
         }
     }
     fn build_time(&self) -> Option<i64> {
         match self {
-            WarframeEntry::Suits(w) => w.build.build_time,
-            WarframeEntry::MechSuits(w) => w.build.build_time,
-            WarframeEntry::Helminth(_) => None,
+            Self::Suits(w) => w.build.build_time,
+            Self::MechSuits(w) => w.build.build_time,
+            Self::Helminth(_) => None,
         }
     }
     fn skip_build_time_price(&self) -> Option<i64> {
         match self {
-            WarframeEntry::Suits(w) => w.build.skip_build_time_price,
-            WarframeEntry::MechSuits(w) => w.build.skip_build_time_price,
-            WarframeEntry::Helminth(_) => None,
+            Self::Suits(w) => w.build.skip_build_time_price,
+            Self::MechSuits(w) => w.build.skip_build_time_price,
+            Self::Helminth(_) => None,
         }
     }
     fn consume_on_build(&self) -> Option<bool> {
         match self {
-            WarframeEntry::Suits(w) => w.build.consume_on_build,
-            WarframeEntry::MechSuits(w) => w.build.consume_on_build,
-            WarframeEntry::Helminth(_) => None,
+            Self::Suits(w) => w.build.consume_on_build,
+            Self::MechSuits(w) => w.build.consume_on_build,
+            Self::Helminth(_) => None,
         }
     }
     fn mastery_req(&self) -> Option<i64> {
         match self {
-            WarframeEntry::Suits(w) => Some(w.mastery_req),
-            WarframeEntry::MechSuits(w) => Some(w.mastery_req),
-            WarframeEntry::Helminth(_) => None,
+            Self::Suits(w) => Some(w.mastery_req),
+            Self::MechSuits(w) => Some(w.mastery_req),
+            Self::Helminth(_) => None,
         }
     }
     fn market_cost(&self) -> Option<i64> {
         match self {
-            WarframeEntry::Suits(w) => w.build.market_cost,
+            Self::Suits(w) => w.build.market_cost,
             _ => None,
         }
     }
     fn bp_cost(&self) -> Option<i64> {
         match self {
-            WarframeEntry::Suits(w) => w.build.bp_cost,
+            Self::Suits(w) => w.build.bp_cost,
             _ => None,
         }
     }
     fn components(&self) -> &[Component] {
         match self {
-            WarframeEntry::Suits(w) => &w.build.components,
-            WarframeEntry::MechSuits(w) => &w.build.components,
-            WarframeEntry::Helminth(_) => &[],
+            Self::Suits(w) => &w.build.components,
+            Self::MechSuits(w) => &w.build.components,
+            Self::Helminth(_) => &[],
         }
     }
 }
@@ -297,26 +297,26 @@ impl Buildable for WarframeEntry {
 impl Prime for WarframeEntry {
     fn is_prime(&self) -> bool {
         match self {
-            WarframeEntry::Suits(w) => w.prime.is_prime,
-            WarframeEntry::MechSuits(w) => w.prime.is_prime,
-            WarframeEntry::Helminth(w) => w.prime.is_prime,
+            Self::Suits(w) => w.prime.is_prime,
+            Self::MechSuits(w) => w.prime.is_prime,
+            Self::Helminth(w) => w.prime.is_prime,
         }
     }
     fn vaulted(&self) -> Option<bool> {
         match self {
-            WarframeEntry::Suits(w) => w.prime.vaulted,
+            Self::Suits(w) => w.prime.vaulted,
             _ => None,
         }
     }
     fn vault_date(&self) -> Option<&str> {
         match self {
-            WarframeEntry::Suits(w) => w.prime.vault_date.as_deref(),
+            Self::Suits(w) => w.prime.vault_date.as_deref(),
             _ => None,
         }
     }
     fn estimated_vault_date(&self) -> Option<&str> {
         match self {
-            WarframeEntry::Suits(w) => w.prime.estimated_vault_date.as_deref(),
+            Self::Suits(w) => w.prime.estimated_vault_date.as_deref(),
             _ => None,
         }
     }
@@ -325,13 +325,13 @@ impl Prime for WarframeEntry {
 impl WikiaLinked for WarframeEntry {
     fn wiki_available(&self) -> Option<bool> {
         match self {
-            WarframeEntry::Suits(w) => Some(w.wiki_available),
+            Self::Suits(w) => Some(w.wiki_available),
             _ => None,
         }
     }
     fn wikia_url(&self) -> Option<&str> {
         match self {
-            WarframeEntry::Suits(w) => Some(&w.wikia_url),
+            Self::Suits(w) => Some(&w.wikia_url),
             _ => None,
         }
     }
@@ -340,13 +340,13 @@ impl WikiaLinked for WarframeEntry {
     }
     fn introduced(&self) -> Option<&Introduced> {
         match self {
-            WarframeEntry::Suits(w) => Some(&w.introduced),
+            Self::Suits(w) => Some(&w.introduced),
             _ => None,
         }
     }
     fn release_date(&self) -> Option<&str> {
         match self {
-            WarframeEntry::Suits(w) => Some(&w.release_date),
+            Self::Suits(w) => Some(&w.release_date),
             _ => None,
         }
     }
@@ -355,44 +355,44 @@ impl WikiaLinked for WarframeEntry {
 impl Character for WarframeEntry {
     fn health(&self) -> i64 {
         match self {
-            WarframeEntry::Suits(w) => w.stats.health,
-            WarframeEntry::MechSuits(w) => w.stats.health,
-            WarframeEntry::Helminth(w) => w.stats.health,
+            Self::Suits(w) => w.stats.health,
+            Self::MechSuits(w) => w.stats.health,
+            Self::Helminth(w) => w.stats.health,
         }
     }
     fn shield(&self) -> i64 {
         match self {
-            WarframeEntry::Suits(w) => w.stats.shield,
-            WarframeEntry::MechSuits(w) => w.stats.shield,
-            WarframeEntry::Helminth(w) => w.stats.shield,
+            Self::Suits(w) => w.stats.shield,
+            Self::MechSuits(w) => w.stats.shield,
+            Self::Helminth(w) => w.stats.shield,
         }
     }
     fn armor(&self) -> i64 {
         match self {
-            WarframeEntry::Suits(w) => w.stats.armor,
-            WarframeEntry::MechSuits(w) => w.stats.armor,
-            WarframeEntry::Helminth(w) => w.stats.armor,
+            Self::Suits(w) => w.stats.armor,
+            Self::MechSuits(w) => w.stats.armor,
+            Self::Helminth(w) => w.stats.armor,
         }
     }
     fn power(&self) -> i64 {
         match self {
-            WarframeEntry::Suits(w) => w.stats.power,
-            WarframeEntry::MechSuits(w) => w.stats.power,
-            WarframeEntry::Helminth(w) => w.stats.power,
+            Self::Suits(w) => w.stats.power,
+            Self::MechSuits(w) => w.stats.power,
+            Self::Helminth(w) => w.stats.power,
         }
     }
     fn stamina(&self) -> i64 {
         match self {
-            WarframeEntry::Suits(w) => w.stats.stamina,
-            WarframeEntry::MechSuits(w) => w.stats.stamina,
-            WarframeEntry::Helminth(w) => w.stats.stamina,
+            Self::Suits(w) => w.stats.stamina,
+            Self::MechSuits(w) => w.stats.stamina,
+            Self::Helminth(w) => w.stats.stamina,
         }
     }
     fn sprint_speed(&self) -> Option<f64> {
         match self {
-            WarframeEntry::Suits(w) => w.stats.sprint_speed,
-            WarframeEntry::MechSuits(w) => w.stats.sprint_speed,
-            WarframeEntry::Helminth(_) => None,
+            Self::Suits(w) => w.stats.sprint_speed,
+            Self::MechSuits(w) => w.stats.sprint_speed,
+            Self::Helminth(_) => None,
         }
     }
 }
@@ -400,9 +400,9 @@ impl Character for WarframeEntry {
 impl HasAbilities for WarframeEntry {
     fn abilities(&self) -> &[Ability] {
         match self {
-            WarframeEntry::Suits(w) => &w.abilities,
-            WarframeEntry::MechSuits(w) => &w.abilities,
-            WarframeEntry::Helminth(w) => &w.abilities,
+            Self::Suits(w) => &w.abilities,
+            Self::MechSuits(w) => &w.abilities,
+            Self::Helminth(w) => &w.abilities,
         }
     }
 }
@@ -410,7 +410,7 @@ impl HasAbilities for WarframeEntry {
 impl Equippable for WarframeEntry {
     fn polarities(&self) -> &[Polarity] {
         match self {
-            WarframeEntry::Suits(w) => &w.polarities,
+            Self::Suits(w) => &w.polarities,
             _ => &[],
         }
     }

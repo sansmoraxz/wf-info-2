@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::ObjectId;
 
 /// Represents an Operator loadout configuration.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OperatorLoadOut {
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,
@@ -26,7 +26,7 @@ pub struct OperatorLoadOut {
 }
 
 /// Represents an Adult Operator (Drifter) loadout configuration.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AdultOperatorLoadOut {
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,

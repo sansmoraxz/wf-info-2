@@ -12,7 +12,7 @@ use crate::damage::{Attack, DamageBreakdown};
 use crate::enums::{Noise, Polarity, ResistanceType, Slot, Trigger};
 
 /// Core identity fields present on every item type.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemIdentityProps {
     pub unique_name: String,
@@ -21,7 +21,7 @@ pub struct ItemIdentityProps {
 }
 
 /// Tradability and mastery properties.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TradableProps {
     pub tradable: bool,
@@ -30,7 +30,7 @@ pub struct TradableProps {
 }
 
 /// Optional detail fields (image and description).
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemDetailProps {
     pub image_name: Option<String>,
@@ -54,7 +54,7 @@ pub struct BuildableProps {
 }
 
 /// Properties for wiki/external resource integration.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WikiaProps {
     pub wiki_available: Option<bool>,
@@ -67,7 +67,7 @@ pub struct WikiaProps {
 }
 
 /// Properties for Prime items and vault status.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PrimeProps {
     #[serde(default)]
@@ -78,7 +78,7 @@ pub struct PrimeProps {
 }
 
 /// Properties for equippable items (mod slots, polarities).
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EquippableProps {
     #[serde(default)]
@@ -214,15 +214,15 @@ pub enum ComponentWeapon {
 
 impl Default for ComponentWeapon {
     fn default() -> Self {
-        ComponentWeapon::Unarmed {}
+        Self::Unarmed {}
     }
 }
 
 impl ComponentWeapon {
     pub fn as_armed(&self) -> Option<&ComponentWeaponData> {
         match self {
-            ComponentWeapon::Armed(data) => Some(data),
-            ComponentWeapon::Unarmed {} => None,
+            Self::Armed(data) => Some(data),
+            Self::Unarmed {} => None,
         }
     }
 }
@@ -319,7 +319,7 @@ impl WeaponTypeStats {
         let has_ranged = magazine_size.is_some() || reload_time.is_some();
 
         if has_melee {
-            WeaponTypeStats::Melee(MeleeWeaponData {
+            Self::Melee(MeleeWeaponData {
                 blocking_angle,
                 combo_duration,
                 follow_through,
@@ -336,7 +336,7 @@ impl WeaponTypeStats {
                 wind_up,
             })
         } else if has_ranged {
-            WeaponTypeStats::Ranged(RangedWeaponData {
+            Self::Ranged(RangedWeaponData {
                 accuracy,
                 magazine_size,
                 reload_time,
@@ -347,14 +347,14 @@ impl WeaponTypeStats {
                 flight,
             })
         } else {
-            WeaponTypeStats::None
+            Self::None
         }
     }
 
     /// Get ranged weapon data if available
     pub fn as_ranged(&self) -> Option<&RangedWeaponData> {
         match self {
-            WeaponTypeStats::Ranged(data) => Some(data),
+            Self::Ranged(data) => Some(data),
             _ => None,
         }
     }
@@ -362,14 +362,14 @@ impl WeaponTypeStats {
     /// Get melee weapon data if available
     pub fn as_melee(&self) -> Option<&MeleeWeaponData> {
         match self {
-            WeaponTypeStats::Melee(data) => Some(data),
+            Self::Melee(data) => Some(data),
             _ => None,
         }
     }
 }
 
 /// Base defensive stats.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DefenseStats {
     pub health: i64,

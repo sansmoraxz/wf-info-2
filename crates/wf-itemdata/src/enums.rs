@@ -202,12 +202,12 @@ impl Disposition {
     /// Convert disposition to numeric value (1-5), returns 0 for Unknown
     pub fn as_u8(&self) -> u8 {
         match self {
-            Disposition::One => 1,
-            Disposition::Two => 2,
-            Disposition::Three => 3,
-            Disposition::Four => 4,
-            Disposition::Five => 5,
-            Disposition::Unknown(_) => 0,
+            Self::One => 1,
+            Self::Two => 2,
+            Self::Three => 3,
+            Self::Four => 4,
+            Self::Five => 5,
+            Self::Unknown(_) => 0,
         }
     }
 }
@@ -1257,14 +1257,14 @@ impl VaultStatus {
 
     pub fn vault_date(&self) -> Option<&str> {
         match self {
-            VaultStatus::Vaulted { date } => date.as_deref(),
+            Self::Vaulted { date } => date.as_deref(),
             _ => None,
         }
     }
 
     pub fn estimated_vault_date(&self) -> Option<&str> {
         match self {
-            VaultStatus::EstimatedVault { estimated_date } => Some(estimated_date),
+            Self::EstimatedVault { estimated_date } => Some(estimated_date),
             _ => None,
         }
     }
@@ -1293,14 +1293,14 @@ impl ModCategory {
 
     pub fn mod_set(&self) -> Option<&str> {
         match self {
-            ModCategory::SetMember { mod_set } => Some(mod_set),
+            Self::SetMember { mod_set } => Some(mod_set),
             _ => None,
         }
     }
 
     pub fn num_upgrades_in_set(&self) -> Option<i64> {
         match self {
-            ModCategory::SetDefinition {
+            Self::SetDefinition {
                 num_upgrades_in_set,
             } => Some(*num_upgrades_in_set),
             _ => None,

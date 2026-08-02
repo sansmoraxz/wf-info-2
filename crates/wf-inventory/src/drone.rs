@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::ObjectId;
 
 /// Represents a resource drone in the inventory.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Drone {
     #[serde(rename = "ItemType")]
     pub item_type: String,

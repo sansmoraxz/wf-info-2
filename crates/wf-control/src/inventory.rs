@@ -30,7 +30,7 @@ use wf_core::{inventory_refresh, process};
 /// Wire mirror for inventory.load params; converted to [`LoadInventoryRequest`]
 /// so the exactly-one-source rule is enforced before the handler runs.
 #[derive(Debug, Deserialize, Default)]
-pub(crate) struct LoadInventoryParams {
+pub struct LoadInventoryParams {
     pub path: Option<String>,
     pub json: Option<Value>,
     pub raw: Option<String>,
@@ -42,7 +42,7 @@ pub(crate) struct LoadInventoryParams {
 /// Exactly one place an inventory can be loaded from. `encrypted` only makes
 /// sense for file reads, so it lives inside `Path`.
 #[derive(Debug)]
-pub(crate) enum InventoryInput {
+pub enum InventoryInput {
     Path { path: String, encrypted: bool },
     Json(Value),
     Raw(String),
@@ -55,12 +55,12 @@ impl InventoryInput {
                 if encrypted {
                     let data = tokio::fs::read(&path)
                         .await
-                        .with_context(|| format!("Failed to read inventory file {}", path))?;
+                        .with_context(|| format!("Failed to read inventory file {path}"))?;
                     storage::decrypt_inventory_bytes(&data)
                 } else {
                     let raw = tokio::fs::read_to_string(&path)
                         .await
-                        .with_context(|| format!("Failed to read inventory file {}", path))?;
+                        .with_context(|| format!("Failed to read inventory file {path}"))?;
                     serde_json::from_str(&raw).context("Failed to parse inventory JSON")
                 }
             }
@@ -73,7 +73,7 @@ impl InventoryInput {
 }
 
 #[derive(Debug)]
-pub(crate) struct LoadInventoryRequest {
+pub struct LoadInventoryRequest {
     pub input: InventoryInput,
     pub save: bool,
     pub source: Source,
@@ -103,14 +103,14 @@ impl TryFrom<LoadInventoryParams> for LoadInventoryRequest {
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct InventoryLoadResponse {
+pub struct InventoryLoadResponse {
     pub saved: bool,
     pub summary: InventorySummary,
     pub meta: storage::InventoryMeta,
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct InventoryFilterResponse {
+pub struct InventoryFilterResponse {
     pub total: usize,
     pub filtered: usize,
     pub offset: usize,
@@ -127,7 +127,7 @@ impl HandleOp for LoadInventoryParams {
     }
 }
 
-pub(crate) async fn handle_inventory_load(
+pub async fn handle_inventory_load(
     events: &EventBus,
     params: LoadInventoryParams,
 ) -> Result<InventoryLoadResponse> {
@@ -160,7 +160,7 @@ pub(crate) async fn handle_inventory_load(
 }
 
 #[derive(Debug, Deserialize, Default)]
-pub(crate) struct FilterParams {
+pub struct FilterParams {
     pub category: Option<String>,
     pub item_type: Option<String>,
     pub contains: Option<String>,
@@ -176,7 +176,7 @@ pub(crate) struct FilterParams {
 
 #[derive(Debug, Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum CountOp {
+pub enum CountOp {
     Gt,
     Gte,
     Lt,
@@ -186,7 +186,7 @@ pub(crate) enum CountOp {
 }
 
 #[derive(Debug, Deserialize, Clone, Copy)]
-pub(crate) struct CountFilter {
+pub struct CountFilter {
     pub op: CountOp,
     pub value: i64,
 }
@@ -199,7 +199,7 @@ impl HandleOp for FilterParams {
     }
 }
 
-pub(crate) async fn handle_inventory_filter(
+pub async fn handle_inventory_filter(
     index: &InventoryIndexCache,
     market: &MarketCache,
     item_index: &wf_itemdata::item_data::ItemIndex,
@@ -215,7 +215,7 @@ pub(crate) async fn handle_inventory_filter(
         Some(raw) if raw.eq_ignore_ascii_case("all") => None,
         Some(raw) => Some(
             raw.parse::<Category>()
-                .map_err(|_| anyhow!("Unknown category '{}'", raw))?,
+                .map_err(|_| anyhow!("Unknown category '{raw}'"))?,
         ),
     };
     let include_details = params.include_details.unwrap_or(false);
@@ -338,13 +338,13 @@ pub(crate) async fn handle_inventory_filter(
     })
 }
 
-pub(crate) fn handle_inventory_meta_get() -> Result<storage::InventoryMeta> {
-    Ok(storage::read_inventory_meta().unwrap_or_default())
+pub fn handle_inventory_meta_get() -> storage::InventoryMeta {
+    storage::read_inventory_meta().unwrap_or_default()
 }
 
 #[derive(Debug, Deserialize, Default)]
 #[cfg_attr(not(feature = "memory"), allow(dead_code))]
-pub(crate) struct RefreshParams {
+pub struct RefreshParams {
     pub scan_retries: Option<u32>,
     pub scan_delay_ms: Option<u64>,
     pub save: Option<bool>,
@@ -410,7 +410,7 @@ pub(crate) async fn handle_inventory_refresh(
 /// string holding RFC3339 or a stringified epoch.
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
-pub(crate) enum TimestampParam {
+pub enum TimestampParam {
     Epoch(i64),
     Text(String),
 }
@@ -433,7 +433,7 @@ impl TimestampParam {
 }
 
 #[derive(Debug, Deserialize, Default)]
-pub(crate) struct StaleParams {
+pub struct StaleParams {
     pub timestamp: Option<TimestampParam>,
     pub reason: Option<String>,
 }
@@ -446,7 +446,7 @@ impl HandleOp for StaleParams {
     }
 }
 
-pub(crate) fn handle_inventory_stale_update(
+pub fn handle_inventory_stale_update(
     events: &EventBus,
     params: StaleParams,
 ) -> Result<storage::InventoryMeta> {
@@ -467,7 +467,7 @@ pub(crate) fn handle_inventory_stale_update(
     Ok(meta)
 }
 
-pub(crate) fn inventory_summary(inventory: &Inventory) -> InventorySummary {
+pub fn inventory_summary(inventory: &Inventory) -> InventorySummary {
     InventorySummary {
         suits: inventory.suits.len(),
         long_guns: inventory.long_guns.len(),

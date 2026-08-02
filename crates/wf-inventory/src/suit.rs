@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use crate::{DateWrapper, ObjectId, Polarity};
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArchonCrystalUpgrade {
     #[serde(rename = "Color")]
     pub color: Option<String>,
@@ -11,7 +11,7 @@ pub struct ArchonCrystalUpgrade {
     pub upgrade_type: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ArchonCrystalUpgradeWrapper {
     ArchonCrystalUpgrade(ArchonCrystalUpgrade),
@@ -19,7 +19,7 @@ pub enum ArchonCrystalUpgradeWrapper {
 }
 
 /// Represents a warframe suit in the inventory.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Suit {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -70,6 +70,6 @@ mod test {
         let suit: Suit = from_str(json_data).unwrap();
 
         assert_eq!(suit.item_type, "/Lotus/Powersuits/Trinity/TrinityPrime");
-        assert_eq!(suit.xp.unwrap(), 3106125);
+        assert_eq!(suit.xp.unwrap(), 3_106_125);
     }
 }

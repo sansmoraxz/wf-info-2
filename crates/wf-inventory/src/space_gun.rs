@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use crate::{ObjectId, Polarity};
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpaceGun {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -52,6 +52,6 @@ mod tests {
             "/Lotus/Weapons/Tenno/Archwing/Primary/FoldingMachineGun/ArchMachineGun"
         );
 
-        assert_eq!(space_gun.xp.unwrap(), 2284379);
+        assert_eq!(space_gun.xp.unwrap(), 2_284_379);
     }
 }

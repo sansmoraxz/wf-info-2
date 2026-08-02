@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::{ObjectId, Polarity};
 
 /// Represents a Necramech in the inventory.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MechSuit {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -49,6 +49,6 @@ mod tests {
         let item: MechSuit = from_str(json_data).unwrap();
 
         assert_eq!(item.item_type, "/Lotus/Powersuits/EntratiMech/NechroTech");
-        assert_eq!(item.xp.unwrap(), 503210);
+        assert_eq!(item.xp.unwrap(), 503_210);
     }
 }

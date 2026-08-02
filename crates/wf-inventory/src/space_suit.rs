@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use crate::{ObjectId, Polarity};
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpaceSuit {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -51,6 +51,6 @@ mod test {
             space_suit.item_type,
             "/Lotus/Powersuits/Archwing/SupportJetPack/SupportJetPack"
         );
-        assert_eq!(space_suit.xp.unwrap(), 4376023);
+        assert_eq!(space_suit.xp.unwrap(), 4_376_023);
     }
 }

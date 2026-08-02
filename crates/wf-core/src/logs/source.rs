@@ -79,9 +79,9 @@ where
     ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + '_>> {
         Box::pin(async move {
             while let Some(line) = self.lines.next_line().await? {
-                log::trace!("wine debug stderr raw line: {:?}", line);
+                log::trace!("wine debug stderr raw line: {line:?}");
                 if let Some(message) = decode_wine_debug_line(&line) {
-                    log::debug!("wine debugstr accepted payload: {:?}", message);
+                    log::debug!("wine debugstr accepted payload: {message:?}");
                     return Ok(Some(message));
                 }
                 log::trace!("wine debug stderr ignored line");
@@ -269,7 +269,7 @@ fn decode_wine_debug_payload(payload: &str) -> Option<String> {
         }
     }
 
-    log::debug!("failed to decode wine debug payload: {:?}", payload);
+    log::debug!("failed to decode wine debug payload: {payload:?}");
     None
 }
 

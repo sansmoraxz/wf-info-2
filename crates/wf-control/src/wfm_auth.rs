@@ -96,12 +96,10 @@ impl WsReply {
             ReplyOutcome::Ok => Ok(self.payload),
             ReplyOutcome::Error => {
                 let msg = self
-                    .payload
-                    .map(|p| match p {
+                    .payload.map_or_else(|| "unknown error".into(), |p| match p {
                         Value::String(s) => s,
                         other => other.to_string(),
-                    })
-                    .unwrap_or_else(|| "unknown error".into());
+                    });
                 Err(anyhow!(msg))
             }
         }
@@ -328,7 +326,7 @@ async fn rest_signin(
     device_id: &str,
 ) -> Result<String> {
     let raw_resp = client
-        .post(format!("{}/auth/signin", WFM_AUTH_BASE))
+        .post(format!("{WFM_AUTH_BASE}/auth/signin"))
         .header("Authorization", "JWT")
         .json(&json!({
             "auth_type": "header",
@@ -342,7 +340,7 @@ async fn rest_signin(
     let status = raw_resp.status();
     if !status.is_success() {
         let body = raw_resp.text().await.unwrap_or_default();
-        return Err(anyhow!("WFM signin failed ({}): {}", status, body));
+        return Err(anyhow!("WFM signin failed ({status}): {body}"));
     }
 
     // Extract JWT from Authorization header ("JWT <token>")
@@ -356,8 +354,7 @@ async fn rest_signin(
 
     if !auth_header.starts_with("JWT ") {
         return Err(anyhow!(
-            "Unexpected Authorization header format: {}",
-            auth_header
+            "Unexpected Authorization header format: {auth_header}"
         ));
     }
 
@@ -395,7 +392,7 @@ impl WsConnection {
         await_reply(rx)
             .await?
             .into_result()
-            .map_err(|e| anyhow!("WS auth failed: {}", e))?;
+            .map_err(|e| anyhow!("WS auth failed: {e}"))?;
 
         log::info!("WFM WebSocket authenticated");
         Ok(WfmSession {
@@ -422,7 +419,7 @@ impl WsConnection {
         self.ws_tx
             .send(tungstenite::Message::Text(json_msg.to_string().into()))
             .await
-            .map_err(|e| anyhow!("WS send failed: {}", e))?;
+            .map_err(|e| anyhow!("WS send failed: {e}"))?;
         Ok(rx)
     }
 }
@@ -447,18 +444,18 @@ async fn ws_recv_loop(
                 break;
             }
             Err(e) => {
-                log::warn!("WFM WebSocket error: {}", e);
+                log::warn!("WFM WebSocket error: {e}");
                 break;
             }
             _ => continue,
         };
 
-        log::debug!("WFM WS raw message: {}", msg);
+        log::debug!("WFM WS raw message: {msg}");
 
         let parsed: WsMessage = match serde_json::from_str(&msg) {
             Ok(m) => m,
             Err(e) => {
-                log::debug!("WFM WS unparseable message: {}", e);
+                log::debug!("WFM WS unparseable message: {e}");
                 continue;
             }
         };
@@ -492,7 +489,7 @@ async fn ws_recv_loop(
                     Some(Ok(StatusEventPayload { status })) => {
                         wfm.record_status(status).await;
                     }
-                    Some(Err(e)) => log::debug!("Ignoring unparseable WFM status event: {}", e),
+                    Some(Err(e)) => log::debug!("Ignoring unparseable WFM status event: {e}"),
                     None => {}
                 }
             }
@@ -516,6 +513,7 @@ pub(crate) struct SignstatusParams {
     status: Option<String>,
     /// PATCH semantics: absent = don't change, null = remove, number = set
     #[serde(default, with = "serde_with::rust::double_option")]
+    #[allow(clippy::option_option)]
     duration: Option<Option<u64>>,
 }
 
@@ -523,6 +521,7 @@ pub(crate) struct SignstatusParams {
 struct StatusSetPayload {
     status: Status,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[allow(clippy::option_option)]
     duration: Option<Option<u64>>,
 }
 
@@ -568,8 +567,7 @@ pub(crate) async fn handle_wfm_signstatus(
     };
     let status = raw_status.parse::<Status>().map_err(|_| {
         anyhow!(
-            "Invalid status '{}'. Must be: online, invisible, ingame",
-            raw_status
+            "Invalid status '{raw_status}'. Must be: online, invisible, ingame"
         )
     })?;
 
@@ -583,7 +581,7 @@ pub(crate) async fn handle_wfm_signstatus(
     wfm.set_status(payload)
         .await?
         .into_result()
-        .map_err(|e| anyhow!("Status update failed: {}", e))?;
+        .map_err(|e| anyhow!("Status update failed: {e}"))?;
 
     wfm.record_status(status).await;
 
@@ -660,9 +658,9 @@ pub(crate) async fn handle_wfm_signout(wfm: &WfmHandle) -> Result<()> {
 // ── Session restore (called on daemon start) ──
 
 pub async fn try_restore_session(wfm: &WfmHandle) {
-    let token_data = match storage::read_auth_token() {
-        Ok(t) => t,
-        Err(_) => return, // No cached token, nothing to restore
+    // No cached token means nothing to restore
+    let Ok(token_data) = storage::read_auth_token() else {
+        return;
     };
 
     // If token is expired, we can't refresh with v1 — user must re-login
@@ -673,7 +671,7 @@ pub async fn try_restore_session(wfm: &WfmHandle) {
 
     match wfm.sign_in(token_data).await {
         Ok(()) => log::info!("WFM session restored from cached token"),
-        Err(e) => log::warn!("Failed to restore WFM session: {}", e),
+        Err(e) => log::warn!("Failed to restore WFM session: {e}"),
     }
 }
 
@@ -686,9 +684,9 @@ pub async fn set_status_if_connected(wfm: &WfmHandle, status: Status) {
     match wfm.set_status(json!({ "status": status })).await {
         Ok(_) => {
             wfm.record_status(status).await;
-            log::info!("WFM status set to '{}'", status);
+            log::info!("WFM status set to '{status}'");
         }
-        Err(e) => log::warn!("Failed to set WFM status: {}", e),
+        Err(e) => log::warn!("Failed to set WFM status: {e}"),
     }
 }
 

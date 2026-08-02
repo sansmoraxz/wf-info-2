@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::ObjectId;
 
 /// Represents a data knife (hacking device / parazon) in the inventory.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DataKnife {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -43,6 +43,6 @@ mod tests {
             item.item_type,
             "/Lotus/Weapons/Tenno/HackingDevices/TnHackingDevice/TnHackingDeviceWeapon"
         );
-        assert_eq!(item.xp.unwrap(), 450000);
+        assert_eq!(item.xp.unwrap(), 450_000);
     }
 }

@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::ObjectId;
 
 /// Represents an Operator Amp in the inventory.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OperatorAmp {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -52,6 +52,6 @@ mod tests {
             item.item_type,
             "/Lotus/Weapons/Sentients/OperatorAmplifiers/SentTrainingAmplifier/OperatorTrainingAmpWeapon"
         );
-        assert_eq!(item.xp.unwrap(), 838159);
+        assert_eq!(item.xp.unwrap(), 838_159);
     }
 }

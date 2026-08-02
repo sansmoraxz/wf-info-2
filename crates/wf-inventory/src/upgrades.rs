@@ -5,7 +5,7 @@ use serde_with::{PickFirst, Same, json::JsonString, serde_as};
 use crate::ObjectId;
 
 /// Represent unupgraded mods
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RawUpgrade {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -22,7 +22,7 @@ pub struct RawUpgrade {
 
 /// Represent upgraded mods
 #[serde_as]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Upgrade {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -40,12 +40,12 @@ pub struct Upgrade {
     pub other: Option<Value>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClassicFingerprint {
     pub lvl: i64,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Buff {
     #[serde(rename = "Tag")]
     pub tag: String,
@@ -54,7 +54,7 @@ pub struct Buff {
     pub value: i64,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RivenFingerprint {
     pub compat: String,
     pub lim: i64,
@@ -69,7 +69,7 @@ pub struct RivenFingerprint {
     pub other: Option<Value>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RivenChallengeDetail {
     #[serde(rename = "Type")]
     pub type_path: String,
@@ -79,7 +79,7 @@ pub struct RivenChallengeDetail {
     pub required: i64,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RivenChallenge {
     #[serde(rename = "challenge")]
     pub challenge: RivenChallengeDetail,
@@ -87,7 +87,7 @@ pub struct RivenChallenge {
 
 // Variant order matters: untagged tries top-down, and RivenChallenge/RivenMod have
 // required fields that ClassicFingerprint's flexible shape would otherwise swallow.
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum UpgradeFingerprint {
     /// Riven challenge for veiled riven mods
@@ -152,7 +152,7 @@ mod tests {
 
         if let UpgradeFingerprint::RivenMod(r) = fp {
             assert_eq!(r.compat, "/Lotus/Weapons/Tenno/Pistol/Pistol");
-            assert_eq!(r.lim, 773424723);
+            assert_eq!(r.lim, 773_424_723);
             assert_eq!(r.lvl_req, Some(13));
             assert_eq!(r.lvl, Some(8));
             assert_eq!(r.rerolls, Some(5));
@@ -181,7 +181,7 @@ mod tests {
                 r.compat,
                 "/Lotus/Weapons/Tenno/Melee/Swords/DarkSword/DarkLongSword"
             );
-            assert_eq!(r.lim, 380023905);
+            assert_eq!(r.lim, 380_023_905);
             assert_eq!(r.lvl_req, Some(12));
             assert_eq!(r.pol, "AP_DEFENSE");
             assert_eq!(r.buffs.len(), 2);

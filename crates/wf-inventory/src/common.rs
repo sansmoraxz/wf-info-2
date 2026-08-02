@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::ObjectId;
 
 /// Simple countable item (Consumables, MiscItems, ShipDecorations, LevelKeys, etc.)
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CountableItem {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -17,7 +17,7 @@ pub struct CountableItem {
 }
 
 /// Type-only item (FlavourItems, FocusUpgrades, etc.)
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TypeOnlyItem {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -27,7 +27,7 @@ pub struct TypeOnlyItem {
 }
 
 /// Weapon skin reference (ItemType + ItemId)
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WeaponSkin {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -40,7 +40,7 @@ pub struct WeaponSkin {
 }
 
 /// Inventory slot bin (Extra + Slots)
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SlotBin {
     #[serde(rename = "Extra")]
     pub extra: Option<i64>,

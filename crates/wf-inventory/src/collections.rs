@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::ObjectId;
 
 /// Represents a fusion treasure (relic) with socket info.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FusionTreasure {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -17,7 +17,7 @@ pub struct FusionTreasure {
 }
 
 /// Represents a quest key with completion state.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QuestKey {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -35,7 +35,7 @@ pub struct QuestKey {
 }
 
 /// Represents an active booster.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Booster {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -45,7 +45,7 @@ pub struct Booster {
 }
 
 /// Represents mastery XP info for an item.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct XPInfoEntry {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -55,7 +55,7 @@ pub struct XPInfoEntry {
 }
 
 /// Represents a Railjack salvaged weapon.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CrewShipSalvagedWeapon {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -83,7 +83,7 @@ pub struct CrewShipSalvagedWeapon {
 }
 
 /// Represents a Railjack component skin (engines, shields, etc.).
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CrewShipWeaponSkin {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -99,7 +99,7 @@ pub struct CrewShipWeaponSkin {
 }
 
 /// Represents a Kubrow/Kavat genetic imprint.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KubrowPetPrint {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -121,7 +121,7 @@ pub struct KubrowPetPrint {
 }
 
 /// Represents an evolution progress entry (incarnon).
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvolutionProgress {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -134,7 +134,7 @@ pub struct EvolutionProgress {
 }
 
 /// Represents a spectral loadout.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpectreLoadout {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -156,7 +156,7 @@ pub struct SpectreLoadout {
 }
 
 /// Represents a challenge instance state.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChallengeInstanceState {
     pub id: Option<Value>,
 
@@ -173,7 +173,7 @@ pub struct ChallengeInstanceState {
 }
 
 /// Represents a collectible series (Kuria, fragments, etc.).
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CollectibleSeries {
     #[serde(rename = "CollectibleType")]
     pub collectible_type: Option<String>,
@@ -195,7 +195,7 @@ pub struct CollectibleSeries {
 }
 
 /// Represents a completed job chain.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompletedJobChain {
     #[serde(rename = "LocationTag")]
     pub location_tag: Option<String>,
@@ -208,7 +208,7 @@ pub struct CompletedJobChain {
 }
 
 /// Represents a completed job.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompletedJob {
     #[serde(rename = "JobId")]
     pub job_id: Option<String>,
@@ -221,7 +221,7 @@ pub struct CompletedJob {
 }
 
 /// Represents a discovered marker.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DiscoveredMarker {
     pub tag: Option<String>,
 
@@ -233,7 +233,7 @@ pub struct DiscoveredMarker {
 }
 
 /// Represents a Descent (The Circuit) reward state.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DescentReward {
     #[serde(rename = "Seed")]
     pub seed: Option<i64>,
@@ -252,7 +252,7 @@ pub struct DescentReward {
 }
 
 /// Represents an Endless XP (Steel Path) entry.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EndlessXPEntry {
     #[serde(rename = "Category")]
     pub category: Option<String>,
@@ -265,7 +265,7 @@ pub struct EndlessXPEntry {
 }
 
 /// Represents focus loadout preset.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FocusLoadout {
     #[serde(rename = "FocusAbility")]
     pub focus_ability: Option<String>,
@@ -278,7 +278,7 @@ pub struct FocusLoadout {
 }
 
 /// Represents hub NPC customization.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HubNpcCustomization {
     #[serde(rename = "Tag")]
     pub tag: Option<String>,
@@ -294,7 +294,7 @@ pub struct HubNpcCustomization {
 }
 
 /// Represents a Kahl loadout.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KahlLoadOut {
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,
@@ -307,7 +307,7 @@ pub struct KahlLoadOut {
 }
 
 /// Represents Codex library scan progress.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LibraryPersonalProgress {
     #[serde(rename = "TargetType")]
     pub target_type: Option<String>,
@@ -320,7 +320,7 @@ pub struct LibraryPersonalProgress {
 }
 
 /// Represents a login milestone reward.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SortieRewardEntry {
     #[serde(rename = "Manifest")]
     pub manifest: Option<String>,
@@ -336,7 +336,7 @@ pub struct SortieRewardEntry {
 }
 
 /// Represents a nemesis history entry (Lich/Sister).
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NemesisHistory {
     #[serde(rename = "AgentIdx")]
     pub agent_idx: Option<i64>,
@@ -355,7 +355,7 @@ pub struct NemesisHistory {
 }
 
 /// Represents a pending trade.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PendingTrade {
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,
@@ -377,7 +377,7 @@ pub struct PendingTrade {
 }
 
 /// Represents periodic mission completion data.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PeriodicMissionCompletion {
     pub tag: Option<String>,
     pub date: Option<Value>,
@@ -404,7 +404,7 @@ pub struct PersonalGoalProgress {
 }
 
 /// Represents a dojo research project.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersonalTechProject {
     #[serde(rename = "ItemType")]
     pub item_type: Option<String>,
@@ -429,7 +429,7 @@ pub struct PersonalTechProject {
 }
 
 /// Represents a recent vendor purchase history.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecentVendorPurchase {
     #[serde(rename = "VendorType")]
     pub vendor_type: Option<String>,
@@ -442,14 +442,14 @@ pub struct RecentVendorPurchase {
 }
 
 /// Represents a Nightwave season challenge history entry.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SeasonChallengeHistory {
     pub id: Option<String>,
     pub challenge: Option<String>,
 }
 
 /// Represents a song challenge (Shawzin).
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SongChallenge {
     #[serde(rename = "Song")]
     pub song: Option<String>,
@@ -469,7 +469,7 @@ pub struct RewardAttenuation {
 }
 
 /// Represents a step sequencer (Mandachord).
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StepSequencer {
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,
@@ -488,14 +488,14 @@ pub struct StepSequencer {
 }
 
 /// Represents a taunt history entry.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TauntHistory {
     pub node: Option<String>,
     pub state: Option<String>,
 }
 
 /// Represents a library daily task info.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LibraryDailyTaskInfo {
     #[serde(rename = "EnemyIcon")]
     pub enemy_icon: Option<String>,

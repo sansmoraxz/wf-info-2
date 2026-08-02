@@ -54,7 +54,7 @@ impl Handles {
 
 /// A control operation's params type: handling consumes the params and yields
 /// a typed response that converts into [`ResponseData`].
-pub(crate) trait HandleOp {
+pub trait HandleOp {
     type Response: Into<ResponseData>;
     async fn handle(self, cx: &Handles) -> anyhow::Result<Self::Response>;
 }
@@ -71,20 +71,20 @@ pub struct Request {
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct PingResponse {
+pub struct PingResponse {
     pub pong: bool,
 }
 
 /// Serializes to `{}`.
 #[derive(Debug, Serialize)]
-pub(crate) struct EmptyResponse {}
+pub struct EmptyResponse {}
 
 /// Typed payload of a successful response. Serialize-only untagged: each
 /// variant serializes as its inner response object. `#[from]` also accepts
 /// the unboxed type, forwarding through `Box: From<T>`.
 #[derive(Debug, Serialize, derive_more::From)]
 #[serde(untagged)]
-pub(crate) enum ResponseData {
+pub enum ResponseData {
     #[from(PingResponse, Box<PingResponse>)]
     Ping(Box<PingResponse>),
     #[from(InventoryLoadResponse, Box<InventoryLoadResponse>)]
@@ -154,7 +154,7 @@ impl Response {
 
 /// Outcome of handling a request line: either a plain reply, or a reply that
 /// transitions the connection into subscription mode.
-pub(crate) enum HandleOutcome {
+pub enum HandleOutcome {
     Reply(Response),
     EnterSubscription {
         response: Response,
@@ -171,10 +171,10 @@ impl HandleOutcome {
     }
 }
 
-pub(crate) async fn handle_line(cx: &Handles, line: &str) -> HandleOutcome {
+pub async fn handle_line(cx: &Handles, line: &str) -> HandleOutcome {
     match serde_json::from_str::<Request>(line) {
         Ok(req) => handle_request(cx, req).await,
-        Err(e) => HandleOutcome::Reply(Response::error(None, format!("Invalid request: {}", e))),
+        Err(e) => HandleOutcome::Reply(Response::error(None, format!("Invalid request: {e}"))),
     }
 }
 
@@ -183,8 +183,7 @@ async fn handle_request(cx: &Handles, req: Request) -> HandleOutcome {
 
     // Handle subscribe separately since it needs to return the filter
     if let Ok(ControlOp::Subscribe) = req.op.parse() {
-        let result =
-            parse_params::<SubscribeParams>(req.params).and_then(subscription::handle_subscribe);
+        let result = parse_params::<SubscribeParams>(req.params).map(subscription::handle_subscribe);
         return match result {
             Ok(result) => HandleOutcome::EnterSubscription {
                 response: Response::ok(id, result.response.into()),
@@ -203,7 +202,7 @@ async fn handle_request(cx: &Handles, req: Request) -> HandleOutcome {
 async fn dispatch(cx: &Handles, op: &str, params: Option<Value>) -> anyhow::Result<ResponseData> {
     let op: ControlOp = op
         .parse()
-        .map_err(|_| anyhow::anyhow!("Unknown operation '{}'", op))?;
+        .map_err(|_| anyhow::anyhow!("Unknown operation '{op}'"))?;
     Ok(match op {
         ControlOp::Ping => PingResponse { pong: true }.into(),
         ControlOp::Inventory(InventoryOp::Load) => {
@@ -212,7 +211,7 @@ async fn dispatch(cx: &Handles, op: &str, params: Option<Value>) -> anyhow::Resu
         ControlOp::Inventory(InventoryOp::Filter) => {
             run(parse_params::<FilterParams>(params)?, cx).await?
         }
-        ControlOp::Inventory(InventoryOp::MetaGet) => handle_inventory_meta_get()?.into(),
+        ControlOp::Inventory(InventoryOp::MetaGet) => handle_inventory_meta_get().into(),
         ControlOp::Inventory(InventoryOp::StaleUpdate) => {
             run(parse_params::<StaleParams>(params)?, cx).await?
         }

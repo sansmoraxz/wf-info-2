@@ -50,7 +50,7 @@ pub fn save_encrypted_profile(profile: &ProfileData) -> anyhow::Result<()> {
 
     let ciphertext = cipher
         .encrypt(nonce, json.as_ref())
-        .map_err(|e| anyhow::anyhow!("Encryption failure: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Encryption failure: {e}"))?;
 
     // Store nonce + ciphertext
     let mut final_data = Vec::with_capacity(nonce_bytes.len() + ciphertext.len());
@@ -92,7 +92,7 @@ fn gcm_encrypt(plaintext: &[u8]) -> anyhow::Result<Vec<u8>> {
 
     let ciphertext = cipher
         .encrypt(nonce, plaintext)
-        .map_err(|e| anyhow::anyhow!("Encryption failure: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Encryption failure: {e}"))?;
 
     let mut out = Vec::with_capacity(12 + ciphertext.len());
     out.extend_from_slice(&nonce_bytes);
@@ -113,7 +113,7 @@ fn gcm_decrypt(data: &[u8]) -> anyhow::Result<Vec<u8>> {
     let nonce = Nonce::from_slice(&data[..12]);
     let plaintext = cipher
         .decrypt(nonce, &data[12..])
-        .map_err(|e| anyhow::anyhow!("Decryption failure: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Decryption failure: {e}"))?;
     Ok(plaintext)
 }
 
@@ -136,14 +136,14 @@ pub fn save_auth_token(data: &AuthTokenData) -> anyhow::Result<()> {
     let json = serde_json::to_vec(data).context("Failed to serialize auth token")?;
     let encrypted = gcm_encrypt(&json)?;
     let file_path = app_cache_dir()?.join(AUTH_TOKEN_FILE);
-    fs::write(&file_path, encrypted).context(format!("Failed to write {:?}", file_path))?;
+    fs::write(&file_path, encrypted).context(format!("Failed to write {file_path:?}"))?;
     log::info!("Saved encrypted auth token to {}", file_path.display());
     Ok(())
 }
 
 pub fn read_auth_token() -> anyhow::Result<AuthTokenData> {
     let file_path = app_cache_dir()?.join(AUTH_TOKEN_FILE);
-    let data = fs::read(&file_path).context(format!("Failed to read {:?}", file_path))?;
+    let data = fs::read(&file_path).context(format!("Failed to read {file_path:?}"))?;
     let plaintext = gcm_decrypt(&data)?;
     serde_json::from_slice(&plaintext).context("Failed to parse auth token JSON")
 }
@@ -151,7 +151,7 @@ pub fn read_auth_token() -> anyhow::Result<AuthTokenData> {
 pub fn delete_auth_token() -> anyhow::Result<()> {
     let file_path = app_cache_dir()?.join(AUTH_TOKEN_FILE);
     if file_path.exists() {
-        fs::remove_file(&file_path).context(format!("Failed to delete {:?}", file_path))?;
+        fs::remove_file(&file_path).context(format!("Failed to delete {file_path:?}"))?;
         log::info!("Deleted auth token at {}", file_path.display());
     }
     Ok(())
@@ -164,11 +164,11 @@ pub fn save_inventory(inventory: &inventory::Inventory) -> anyhow::Result<()> {
     let ciphertext = encrypt_inventory_bytes(inventory)?;
 
     let file_path = app_cache_dir.join(INVENTORY_FILE);
-    fs::write(&file_path, ciphertext).context(format!("Failed to write {:?}", file_path))?;
+    fs::write(&file_path, ciphertext).context(format!("Failed to write {file_path:?}"))?;
     log::info!("Saved encrypted inventory to {}", file_path.display());
 
     if let Err(e) = touch_inventory_updated(None) {
-        log::warn!("Failed to update inventory metadata: {}", e);
+        log::warn!("Failed to update inventory metadata: {e}");
     }
 
     Ok(())
@@ -194,7 +194,7 @@ pub fn decrypt_inventory_bytes(data: &[u8]) -> anyhow::Result<inventory::Invento
     let cipher = Aes128CbcDec::new(&INVENTORY_KEY.into(), &INVENTORY_IV.into());
     let plaintext = cipher
         .decrypt_padded_mut::<Pkcs7>(&mut buf)
-        .map_err(|e| anyhow::anyhow!("Decryption error: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Decryption error: {e:?}"))?;
 
     let inventory =
         serde_json::from_slice(plaintext).context("Failed to parse decrypted inventory JSON")?;
@@ -203,7 +203,7 @@ pub fn decrypt_inventory_bytes(data: &[u8]) -> anyhow::Result<inventory::Invento
 
 pub fn read_inventory() -> anyhow::Result<inventory::Inventory> {
     let file_path = app_cache_dir()?.join(INVENTORY_FILE);
-    let data = fs::read(&file_path).context(format!("Failed to read {:?}", file_path))?;
+    let data = fs::read(&file_path).context(format!("Failed to read {file_path:?}"))?;
     decrypt_inventory_bytes(&data)
 }
 
@@ -283,7 +283,7 @@ pub fn encrypt_inventory_bytes(inventory: &inventory::Inventory) -> anyhow::Resu
     let cipher = Aes128CbcEnc::new(&INVENTORY_KEY.into(), &INVENTORY_IV.into());
     let ciphertext = cipher
         .encrypt_padded_mut::<Pkcs7>(&mut buffer, json_bytes.len())
-        .map_err(|e| anyhow::anyhow!("Encryption error: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Encryption error: {e:?}"))?;
 
     Ok(ciphertext.to_vec())
 }
@@ -306,7 +306,7 @@ pub fn encrypt_inventory_bytes_with_key(
     let cipher = Aes128CbcEnc::new(key.into(), iv.into());
     let ciphertext = cipher
         .encrypt_padded_mut::<Pkcs7>(&mut buffer, json_bytes.len())
-        .map_err(|e| anyhow::anyhow!("Encryption error: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Encryption error: {e:?}"))?;
 
     Ok(ciphertext.to_vec())
 }
@@ -324,7 +324,7 @@ pub fn decrypt_inventory_bytes_with_key(
     let cipher = Aes128CbcDec::new(key.into(), iv.into());
     let plaintext = cipher
         .decrypt_padded_mut::<Pkcs7>(&mut buf)
-        .map_err(|e| anyhow::anyhow!("Decryption error: {:?}", e))?;
+        .map_err(|e| anyhow::anyhow!("Decryption error: {e:?}"))?;
 
     let inventory =
         serde_json::from_slice(plaintext).context("Failed to parse decrypted inventory JSON")?;

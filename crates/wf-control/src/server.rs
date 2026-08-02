@@ -102,7 +102,7 @@ pub async fn start_control_server(cfg: ControlConfig, cx: Handles) -> Result<Con
             }
             #[cfg(unix)]
             ControlEndpoint::Unix(path) => {
-                let (handle, guard) = spawn_unix_server(path, cx.clone()).await?;
+                let (handle, guard) = spawn_unix_server(path, cx.clone())?;
                 handles.push(handle);
                 unix_guards.push(guard);
             }
@@ -123,8 +123,8 @@ pub async fn start_control_server(cfg: ControlConfig, cx: Handles) -> Result<Con
 async fn spawn_tcp_server(addr: &str, cx: Handles) -> Result<JoinHandle<()>> {
     let listener = TcpListener::bind(addr)
         .await
-        .with_context(|| format!("Failed to bind TCP control socket at {}", addr))?;
-    log::info!("Control API listening on tcp {}", addr);
+        .with_context(|| format!("Failed to bind TCP control socket at {addr}"))?;
+    log::info!("Control API listening on tcp {addr}");
 
     Ok(tokio::spawn(async move {
         loop {
@@ -133,12 +133,12 @@ async fn spawn_tcp_server(addr: &str, cx: Handles) -> Result<JoinHandle<()>> {
                     let cx = cx.clone();
                     tokio::spawn(async move {
                         if let Err(e) = handle_stream(stream, cx).await {
-                            log::warn!("Control connection error: {}", e);
+                            log::warn!("Control connection error: {e}");
                         }
                     });
                 }
                 Err(e) => {
-                    log::error!("Control TCP accept error: {}", e);
+                    log::error!("Control TCP accept error: {e}");
                     break;
                 }
             }
@@ -188,10 +188,7 @@ async fn spawn_npipe_server(path: &str, cx: Handles) -> Result<JoinHandle<()>> {
 }
 
 #[cfg(unix)]
-async fn spawn_unix_server(
-    path: PathBuf,
-    cx: Handles,
-) -> Result<(JoinHandle<()>, UnixSocketGuard)> {
+fn spawn_unix_server(path: PathBuf, cx: Handles) -> Result<(JoinHandle<()>, UnixSocketGuard)> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create unix socket dir {}", parent.display()))?;
@@ -213,12 +210,12 @@ async fn spawn_unix_server(
                     let cx = cx.clone();
                     tokio::spawn(async move {
                         if let Err(e) = handle_stream(stream, cx).await {
-                            log::warn!("Control connection error: {}", e);
+                            log::warn!("Control connection error: {e}");
                         }
                     });
                 }
                 Err(e) => {
-                    log::error!("Control unix accept error: {}", e);
+                    log::error!("Control unix accept error: {e}");
                     break;
                 }
             }
@@ -263,7 +260,7 @@ where
 {
     let msg = EventMessage::from(event);
     let payload =
-        serde_json::to_string(&msg).context(format!("Failed to serialize event {:?}", msg))?;
+        serde_json::to_string(&msg).context(format!("Failed to serialize event {msg:?}"))?;
     writer.write_all(payload.as_bytes()).await?;
     writer.write_all(b"\n").await?;
 
@@ -290,11 +287,11 @@ where
                     Ok(event) => {
                         if filter.matches(&event)
                             && let Err(e) = event_writer(event, writer).await  {
-                                log::error!("Error publishing event {:?}", e);
+                                log::error!("Error publishing event {e:?}");
                             }
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {
-                        log::warn!("Subscription client lagged, missed {} events", count);
+                        log::warn!("Subscription client lagged, missed {count} events");
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                         log::debug!("Broadcast channel closed");

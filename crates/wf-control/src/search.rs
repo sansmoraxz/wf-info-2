@@ -19,7 +19,7 @@ use wf_inventory::Inventory;
 use wf_itemdata::item_data::ItemIndex;
 
 #[derive(Clone)]
-pub(crate) struct InventorySearchIndex {
+pub struct InventorySearchIndex {
     pub index: Index,
     pub item_type_exact: Field,
     pub item_type_text: Field,
@@ -32,7 +32,7 @@ pub(crate) struct InventorySearchIndex {
 /// An inventory snapshot together with the search index built from it. The
 /// two are only ever created (and cached) as a unit, so an index can never
 /// be paired with a different inventory than the one it was built over.
-pub(crate) struct IndexedInventory {
+pub struct IndexedInventory {
     pub inventory: Inventory,
     pub index: InventorySearchIndex,
     /// `InventoryMeta::last_updated` at build time; the cache key.
@@ -59,7 +59,7 @@ impl IndexedInventory {
 /// `InventoryMeta::last_updated`. Owned by the composition root as
 /// `Arc<InventoryIndexCache>`.
 #[derive(Default)]
-pub(crate) struct InventoryIndexCache(arc_swap::ArcSwapOption<IndexedInventory>);
+pub struct InventoryIndexCache(arc_swap::ArcSwapOption<IndexedInventory>);
 
 impl InventoryIndexCache {
     /// Return the cached inventory+index pair if it matches
@@ -89,7 +89,7 @@ impl InventoryIndexCache {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct ItemEnvelope<T> {
+pub struct ItemEnvelope<T> {
     pub item_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub item_id: Option<String>,
@@ -117,7 +117,7 @@ const RESERVED_ENVELOPE_KEYS: [&str; 5] = ["category", "item_type", "item_id", "
     Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr,
 )]
 #[strum(serialize_all = "snake_case", ascii_case_insensitive)]
-pub(crate) enum Category {
+pub enum Category {
     #[strum(
         to_string = "suits",
         serialize = "suit",
@@ -179,7 +179,7 @@ pub(crate) enum Category {
 #[enum_dispatch::enum_dispatch(EnvelopeAccess)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "category", rename_all = "snake_case")]
-pub(crate) enum InventoryItemEnvelope {
+pub enum InventoryItemEnvelope {
     Suits(ItemEnvelope<wf_inventory::suit::Suit>),
     LongGuns(ItemEnvelope<wf_inventory::long_gun::LongGun>),
     Pistols(ItemEnvelope<wf_inventory::pistol::Pistol>),
@@ -197,7 +197,7 @@ pub(crate) enum InventoryItemEnvelope {
 /// everything the envelope offers that doesn't depend on the item type.
 /// `enum_dispatch` generates the delegating impl on [`InventoryItemEnvelope`].
 #[enum_dispatch::enum_dispatch]
-pub(crate) trait EnvelopeAccess {
+pub trait EnvelopeAccess {
     fn item_type(&self) -> &str;
     fn item_other(&self) -> Option<&serde_json::Value>;
     fn set_details(&mut self, details: wf_itemdata::item_data::ItemDetails);
@@ -290,13 +290,13 @@ impl_has_other!(
     wf_inventory::recipe::PendingRecipe,
 );
 
-pub(crate) struct ItemView<'a> {
+pub struct ItemView<'a> {
     pub details_name: Option<&'a str>,
     pub details_desc: Option<&'a str>,
     pub envelope: InventoryItemEnvelope,
 }
 
-pub(crate) fn collect_inventory_items<'a>(
+pub fn collect_inventory_items<'a>(
     inventory: &Inventory,
     category: Option<Category>,
     item_index: &'a ItemIndex,
@@ -371,7 +371,7 @@ pub(crate) fn collect_inventory_items<'a>(
     items
 }
 
-pub(crate) fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchIndex> {
+pub fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchIndex> {
     let mut schema_builder = SchemaBuilder::default();
 
     let item_type_exact = schema_builder.add_text_field("item_type_exact", STRING | STORED);
@@ -441,7 +441,7 @@ pub(crate) fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchI
     })
 }
 
-pub(crate) fn search_inventory(
+pub fn search_inventory(
     search_index: &InventorySearchIndex,
     clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)>,
 ) -> Result<(usize, Vec<InventoryItemEnvelope>)> {
@@ -472,7 +472,7 @@ pub(crate) fn search_inventory(
             .unwrap_or_default();
         match serde_json::from_str::<InventoryItemEnvelope>(&raw) {
             Ok(envelope) => results.push(envelope),
-            Err(e) => log::warn!("Skipping unparseable indexed item: {}", e),
+            Err(e) => log::warn!("Skipping unparseable indexed item: {e}"),
         }
     }
 
@@ -533,7 +533,7 @@ mod tests {
             assert_eq!(value["category"], item.envelope.category().to_string());
         }
         for (cat, wire) in ALL_CATEGORIES {
-            assert!(seen.contains(&cat), "fixture missing category {}", cat);
+            assert!(seen.contains(&cat), "fixture missing category {cat}");
             // Category's Display must byte-match the serde tag wire names
             assert_eq!(cat.to_string(), wire);
             // ...and FromStr must round-trip the canonical name

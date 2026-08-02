@@ -11,7 +11,7 @@ use crate::traits::{Buildable, Droppable, Item};
 pub type Root = Vec<Skin>;
 
 /// A single hex colour entry in a Color Palette.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HexColour {
     pub value: String,
 }

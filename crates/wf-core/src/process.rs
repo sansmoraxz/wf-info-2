@@ -78,7 +78,7 @@ pub async fn wait_for_warframe_start() -> u32 {
         refresh_all_process_commands(&mut system);
 
         if let Some(pid) = find_warframe_pid(&system) {
-            log::info!("Warframe process detected (PID: {}).", pid);
+            log::info!("Warframe process detected (PID: {pid}).");
             return pid;
         }
 
@@ -132,8 +132,7 @@ pub fn handoff_grace() -> Duration {
     std::env::var("WF_HANDOFF_GRACE_SECS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
-        .map(Duration::from_secs)
-        .unwrap_or(DEFAULT_HANDOFF_GRACE)
+        .map_or(DEFAULT_HANDOFF_GRACE, Duration::from_secs)
 }
 
 /// The Warframe launcher has been spawned; the game process is not up yet.
@@ -167,7 +166,7 @@ impl Launcher {
             refresh_all_process_commands(&mut system);
 
             if let Some(pid) = find_new_warframe_pid(&system, &self.existing_pids, self.pid) {
-                log::info!("Launched Warframe game process detected (PID: {}).", pid);
+                log::info!("Launched Warframe game process detected (PID: {pid}).");
                 return RunningGame {
                     pid,
                     launcher_pid: self.pid,
@@ -272,8 +271,7 @@ pub fn is_warframe_pid(pid: u32) -> bool {
 
     system
         .process(pid)
-        .map(is_warframe_game_process)
-        .unwrap_or(false)
+        .is_some_and(is_warframe_game_process)
 }
 
 pub fn terminate_process(pid: u32) -> bool {
@@ -283,8 +281,7 @@ pub fn terminate_process(pid: u32) -> bool {
 
     system
         .process(pid)
-        .map(|process| process.kill())
-        .unwrap_or(false)
+        .is_some_and(|process| process.kill())
 }
 
 /// Authorization query string containing accountId and nonce

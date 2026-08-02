@@ -32,13 +32,13 @@ struct BackendResolution {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct BackendCacheEntry {
+pub struct BackendCacheEntry {
     warframe_pid: u32,
     native_wayland_capture: bool,
     resolution: BackendResolution,
 }
 
-pub(crate) async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, String)> {
+pub async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, String)> {
     let total_start = Instant::now();
     let pid_start = Instant::now();
     let (warframe_pid, pid_cache_status) = cached_warframe_pid(state)
@@ -69,8 +69,7 @@ pub(crate) async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, 
     match capture_with_backend(warframe_pid, &resolution).await {
         Err(err) if cached.is_some() && resolution.is_x11_window() => {
             log::warn!(
-                "Cached X11/XWayland capture backend failed; resolving screenshot backend again: {}",
-                err
+                "Cached X11/XWayland capture backend failed; resolving screenshot backend again: {err}"
             );
             clear_cached_resolution(state);
             clear_cached_warframe_pid(state);
@@ -99,13 +98,18 @@ pub(crate) async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, 
     }
 }
 
+// async only used by the portal branch under native-wayland-screenshot
+#[cfg_attr(
+    not(feature = "native-wayland-screenshot"),
+    allow(clippy::unused_async)
+)]
 async fn capture_with_backend(
     _warframe_pid: u32,
     resolution: &BackendResolution,
 ) -> Result<(Vec<u8>, String)> {
     match &resolution.capture_backend {
         CaptureBackend::X11Window { window_id } => {
-            log::info!("Capturing Warframe via X11/XWayland window {}", window_id);
+            log::info!("Capturing Warframe via X11/XWayland window {window_id}");
             let start = Instant::now();
             let bytes = x11::capture_window(window_id)?;
             log::trace!(
@@ -132,7 +136,7 @@ async fn capture_with_backend(
             );
             Ok((bytes, "image/bmp".to_string()))
         }
-        CaptureBackend::Unsupported { reason } => bail!("{}", reason),
+        CaptureBackend::Unsupported { reason } => bail!("{reason}"),
     }
 }
 
@@ -149,17 +153,13 @@ fn resolve_backend(warframe_pid: u32, force_native_wayland: bool) -> BackendReso
         let x11_window_id = match x11::find_window(warframe_pid) {
             Ok(window_id) => {
                 log::info!(
-                    "Detected Warframe X11/XWayland window {} for PID {}",
-                    window_id,
-                    warframe_pid
+                    "Detected Warframe X11/XWayland window {window_id} for PID {warframe_pid}"
                 );
                 Some(window_id)
             }
             Err(err) => {
                 log::debug!(
-                    "Warframe X11/XWayland window probe failed for PID {}: {}",
-                    warframe_pid,
-                    err
+                    "Warframe X11/XWayland window probe failed for PID {warframe_pid}: {err}"
                 );
                 None
             }

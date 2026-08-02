@@ -163,7 +163,7 @@ pub struct Falloff {
 }
 
 /// Slam attack information for melee weapons.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Slam {
     /// Damage value (can be number as string in source)
@@ -172,7 +172,7 @@ pub struct Slam {
 }
 
 /// Radial damage from slam attacks.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Radial {
     pub damage: String,
@@ -182,7 +182,7 @@ pub struct Radial {
 }
 
 /// Pellet information for multi-projectile weapons.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pellet {
     pub name: String,
@@ -212,7 +212,7 @@ mod tests {
         ));
         assert!(matches!(
             serde_json::from_str::<SlideValue>("10000000000000000000").unwrap(),
-            SlideValue::UInt(10000000000000000000)
+            SlideValue::UInt(10_000_000_000_000_000_000)
         ));
     }
 

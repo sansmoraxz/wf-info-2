@@ -44,8 +44,8 @@ pub async fn update_cache(client: &reqwest::Client) -> anyhow::Result<()> {
     let base = base_url();
 
     for &file in FILE_NAMES {
-        let url = format!("{}{}", base, file);
-        let etag_path = dir.join(format!("{}.etag", file));
+        let url = format!("{base}{file}");
+        let etag_path = dir.join(format!("{file}.etag"));
 
         let mut req = client.get(&url);
 
@@ -57,7 +57,7 @@ pub async fn update_cache(client: &reqwest::Client) -> anyhow::Result<()> {
         match req.send().await {
             Ok(resp) => {
                 if resp.status() == reqwest::StatusCode::NOT_MODIFIED {
-                    log::info!("itemdata: {} unchanged", file);
+                    log::info!("itemdata: {file} unchanged");
                     continue;
                 }
                 if !resp.status().is_success() {
@@ -74,10 +74,10 @@ pub async fn update_cache(client: &reqwest::Client) -> anyhow::Result<()> {
 
                 let body = resp.text().await?;
                 fs::write(dir.join(file), &body)?;
-                log::info!("itemdata: {} updated", file);
+                log::info!("itemdata: {file} updated");
             }
             Err(e) => {
-                log::warn!("itemdata: failed to fetch {}: {}", file, e);
+                log::warn!("itemdata: failed to fetch {file}: {e}");
             }
         }
     }

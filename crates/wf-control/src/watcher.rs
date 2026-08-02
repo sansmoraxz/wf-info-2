@@ -188,10 +188,10 @@ fn event_emitter_fn(
         match entry {
             LogEvent::Login(AccountInfo { username, .. }) => {
                 if !state.session.login(&username) {
-                    log::debug!("Duplicate login event for username={}", username);
+                    log::debug!("Duplicate login event for username={username}");
                     continue;
                 }
-                log::info!("User logged in: username={}", username);
+                log::info!("User logged in: username={username}");
                 state
                     .events
                     .emit(DaemonEvent::AccountLogin(AccountLoginEvent {
@@ -221,7 +221,7 @@ fn event_emitter_fn(
                 lifecycle.mark_quit_requested();
             }
             LogEvent::WhoQuery(username) => {
-                log::debug!("Self-initiated DM WHO query for {}", username);
+                log::debug!("Self-initiated DM WHO query for {username}");
                 state.self_initiated_dms.insert(username);
             }
             LogEvent::DmTabOpened(info) => {
@@ -244,7 +244,7 @@ fn event_emitter_fn(
             }
             LogEvent::TradeSuccess => {
                 if let Some(trades) = state.trade.resolve() {
-                    log::info!("Trade confirmed: {:?}", trades);
+                    log::info!("Trade confirmed: {trades:?}");
                     let popup = crate::events::TradeConfirmPopupEvent {
                         sent: trades.sent,
                         received: trades.received,
@@ -262,7 +262,7 @@ fn event_emitter_fn(
             }
             LogEvent::TradeFail(reason) => {
                 if let Some(trades) = state.trade.resolve() {
-                    log::info!("Trade failed: {:?}, reason: {}", trades, reason);
+                    log::info!("Trade failed: {trades:?}, reason: {reason}");
                     let popup = crate::events::TradeConfirmPopupEvent {
                         sent: trades.sent,
                         received: trades.received,
@@ -279,7 +279,7 @@ fn event_emitter_fn(
                 }
             }
             LogEvent::TradeConfirmPopup(info) => {
-                log::info!("Got trade request confirmation: {:?}", info);
+                log::info!("Got trade request confirmation: {info:?}");
                 state.trade.confirm_popup(info);
             }
             LogEvent::RelicOpen => {
@@ -414,16 +414,16 @@ async fn handle_relic_selection_popup(
         Ok((image_bytes, _)) => match load_image(&image_bytes) {
             Ok(img) => match recognizer.recognize_and_list(&img) {
                 Ok(mut v) => {
-                    log::info!("Got relic items: {:?}", v);
+                    log::info!("Got relic items: {v:?}");
                     let filtered: Vec<String> = v.drain(..).map(|e| e.text).collect();
                     let popup = crate::events::RelicSelectionPopup { items: filtered };
                     events.emit(DaemonEvent::RelicSelectionOpen(popup));
                 }
-                Err(e) => log::error!("OCR failed on screenshot image {}", e),
+                Err(e) => log::error!("OCR failed on screenshot image {e}"),
             },
-            Err(e) => log::error!("Failed to parse screenshot image {}", e),
+            Err(e) => log::error!("Failed to parse screenshot image {e}"),
         },
-        Err(e) => log::error!("Failed to capture screenshot for relic ocr {}", e),
+        Err(e) => log::error!("Failed to capture screenshot for relic ocr {e}"),
     }
 }
 
@@ -469,7 +469,7 @@ pub async fn observe_warframe_activity_with_lifecycle<S: LogSource>(
                     continue;
                 }
                 let entries = log_processor.extract_events(&lines);
-                log::debug!("Observed entries: {:?}", entries);
+                log::debug!("Observed entries: {entries:?}");
                 state = event_emitter_fn(state, entries, &lifecycle);
             }
             None => {

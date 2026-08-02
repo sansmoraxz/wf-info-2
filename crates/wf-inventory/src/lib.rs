@@ -104,7 +104,7 @@ pub mod collections;
 /// Progress and standing data
 pub mod progress;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FractionSyndicates {
     SteelMeridianSyndicate,
     ArbitersSyndicate,
@@ -133,7 +133,7 @@ pub struct ObjectId {
     oid: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Polarity {
     #[serde(rename = "Value")]
     pub value: Option<String>,
@@ -142,7 +142,7 @@ pub struct Polarity {
     pub other: Option<Value>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DateWrapper {
     #[serde(rename = "$date")]
     #[serde(deserialize_with = "deserialize_mongo_date_option")]

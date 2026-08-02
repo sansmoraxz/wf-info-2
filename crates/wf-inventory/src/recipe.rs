@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use crate::{DateWrapper, ObjectId};
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Recipe {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -15,7 +15,7 @@ pub struct Recipe {
     pub other: Option<Value>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PendingRecipe {
     #[serde(rename = "ItemType")]
     pub item_type: String,

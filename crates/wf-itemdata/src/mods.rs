@@ -114,7 +114,7 @@ pub struct SetMemberModData {
 }
 
 /// Set definition mod (describes set bonuses, `numUpgradesInSet` field).
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SetDefinitionModData {
     #[serde(flatten)]
@@ -185,14 +185,14 @@ impl ModEntry {
     /// Get the computed mod category classification.
     pub fn mod_category(&self) -> ModCategory {
         match self {
-            ModEntry::Riven(_) => ModCategory::Riven,
-            ModEntry::SetMember(m) => ModCategory::SetMember {
+            Self::Riven(_) => ModCategory::Riven,
+            Self::SetMember(m) => ModCategory::SetMember {
                 mod_set: m.mod_set.clone(),
             },
-            ModEntry::SetDefinition(m) => ModCategory::SetDefinition {
+            Self::SetDefinition(m) => ModCategory::SetDefinition {
                 num_upgrades_in_set: m.num_upgrades_in_set,
             },
-            ModEntry::Regular(_) => ModCategory::Regular,
+            Self::Regular(_) => ModCategory::Regular,
         }
     }
 
@@ -204,74 +204,74 @@ impl ModEntry {
 impl Item for ModEntry {
     fn unique_name(&self) -> &str {
         match self {
-            ModEntry::Riven(m) => &m.identity.unique_name,
-            ModEntry::SetMember(m) => &m.identity.unique_name,
-            ModEntry::SetDefinition(m) => &m.identity.unique_name,
-            ModEntry::Regular(m) => &m.identity.unique_name,
+            Self::Riven(m) => &m.identity.unique_name,
+            Self::SetMember(m) => &m.identity.unique_name,
+            Self::SetDefinition(m) => &m.identity.unique_name,
+            Self::Regular(m) => &m.identity.unique_name,
         }
     }
     fn name(&self) -> &str {
         match self {
-            ModEntry::Riven(m) => &m.identity.name,
-            ModEntry::SetMember(m) => &m.identity.name,
-            ModEntry::SetDefinition(m) => &m.identity.name,
-            ModEntry::Regular(m) => &m.identity.name,
+            Self::Riven(m) => &m.identity.name,
+            Self::SetMember(m) => &m.identity.name,
+            Self::SetDefinition(m) => &m.identity.name,
+            Self::Regular(m) => &m.identity.name,
         }
     }
     fn category(&self) -> &str {
         match self {
-            ModEntry::Riven(m) => &m.identity.category,
-            ModEntry::SetMember(m) => &m.identity.category,
-            ModEntry::SetDefinition(m) => &m.identity.category,
-            ModEntry::Regular(m) => &m.identity.category,
+            Self::Riven(m) => &m.identity.category,
+            Self::SetMember(m) => &m.identity.category,
+            Self::SetDefinition(m) => &m.identity.category,
+            Self::Regular(m) => &m.identity.category,
         }
     }
     fn type_field(&self) -> &str {
         match self {
-            ModEntry::Riven(m) => m.type_field.as_ref(),
-            ModEntry::SetMember(m) => m.type_field.as_ref(),
-            ModEntry::SetDefinition(m) => m.type_field.as_ref(),
-            ModEntry::Regular(m) => m.type_field.as_ref(),
+            Self::Riven(m) => m.type_field.as_ref(),
+            Self::SetMember(m) => m.type_field.as_ref(),
+            Self::SetDefinition(m) => m.type_field.as_ref(),
+            Self::Regular(m) => m.type_field.as_ref(),
         }
     }
     fn image_name(&self) -> Option<&str> {
         match self {
-            ModEntry::Riven(m) => m.detail.image_name.as_deref(),
-            ModEntry::SetMember(m) => m.detail.image_name.as_deref(),
-            ModEntry::SetDefinition(m) => m.detail.image_name.as_deref(),
-            ModEntry::Regular(m) => m.detail.image_name.as_deref(),
+            Self::Riven(m) => m.detail.image_name.as_deref(),
+            Self::SetMember(m) => m.detail.image_name.as_deref(),
+            Self::SetDefinition(m) => m.detail.image_name.as_deref(),
+            Self::Regular(m) => m.detail.image_name.as_deref(),
         }
     }
     fn description(&self) -> Option<&str> {
         match self {
-            ModEntry::Riven(m) => m.detail.description.as_deref(),
-            ModEntry::SetMember(m) => m.detail.description.as_deref(),
-            ModEntry::SetDefinition(m) => m.detail.description.as_deref(),
-            ModEntry::Regular(m) => m.detail.description.as_deref(),
+            Self::Riven(m) => m.detail.description.as_deref(),
+            Self::SetMember(m) => m.detail.description.as_deref(),
+            Self::SetDefinition(m) => m.detail.description.as_deref(),
+            Self::Regular(m) => m.detail.description.as_deref(),
         }
     }
     fn tradable(&self) -> bool {
         match self {
-            ModEntry::Riven(m) => m.trade.tradable,
-            ModEntry::SetMember(m) => m.trade.tradable,
-            ModEntry::SetDefinition(m) => m.trade.tradable,
-            ModEntry::Regular(m) => m.trade.tradable,
+            Self::Riven(m) => m.trade.tradable,
+            Self::SetMember(m) => m.trade.tradable,
+            Self::SetDefinition(m) => m.trade.tradable,
+            Self::Regular(m) => m.trade.tradable,
         }
     }
     fn masterable(&self) -> bool {
         match self {
-            ModEntry::Riven(m) => m.trade.masterable,
-            ModEntry::SetMember(m) => m.trade.masterable,
-            ModEntry::SetDefinition(m) => m.trade.masterable,
-            ModEntry::Regular(m) => m.trade.masterable,
+            Self::Riven(m) => m.trade.masterable,
+            Self::SetMember(m) => m.trade.masterable,
+            Self::SetDefinition(m) => m.trade.masterable,
+            Self::Regular(m) => m.trade.masterable,
         }
     }
     fn patchlogs(&self) -> &[Patchlog] {
         match self {
-            ModEntry::Riven(m) => &m.patchlogs,
-            ModEntry::SetMember(m) => &m.patchlogs,
-            ModEntry::SetDefinition(_) => &[],
-            ModEntry::Regular(m) => &m.patchlogs,
+            Self::Riven(m) => &m.patchlogs,
+            Self::SetMember(m) => &m.patchlogs,
+            Self::SetDefinition(_) => &[],
+            Self::Regular(m) => &m.patchlogs,
         }
     }
 }
@@ -279,9 +279,9 @@ impl Item for ModEntry {
 impl Droppable for ModEntry {
     fn drops(&self) -> &[Drop] {
         match self {
-            ModEntry::SetMember(m) => &m.drops,
-            ModEntry::Regular(m) => &m.drops,
-            ModEntry::Riven(_) | ModEntry::SetDefinition(_) => &[],
+            Self::SetMember(m) => &m.drops,
+            Self::Regular(m) => &m.drops,
+            Self::Riven(_) | Self::SetDefinition(_) => &[],
         }
     }
 }
@@ -289,48 +289,48 @@ impl Droppable for ModEntry {
 impl WikiaLinked for ModEntry {
     fn wiki_available(&self) -> Option<bool> {
         match self {
-            ModEntry::Riven(m) => m.wikia.wiki_available,
-            ModEntry::SetMember(m) => m.wikia.wiki_available,
-            ModEntry::SetDefinition(_) => None,
-            ModEntry::Regular(m) => m.wikia.wiki_available,
+            Self::Riven(m) => m.wikia.wiki_available,
+            Self::SetMember(m) => m.wikia.wiki_available,
+            Self::SetDefinition(_) => None,
+            Self::Regular(m) => m.wikia.wiki_available,
         }
     }
     fn wikia_url(&self) -> Option<&str> {
         match self {
-            ModEntry::Riven(m) => m.wikia.wikia_url.as_deref(),
-            ModEntry::SetMember(m) => m.wikia.wikia_url.as_deref(),
-            ModEntry::SetDefinition(_) => None,
-            ModEntry::Regular(m) => m.wikia.wikia_url.as_deref(),
+            Self::Riven(m) => m.wikia.wikia_url.as_deref(),
+            Self::SetMember(m) => m.wikia.wikia_url.as_deref(),
+            Self::SetDefinition(_) => None,
+            Self::Regular(m) => m.wikia.wikia_url.as_deref(),
         }
     }
     fn wikia_thumbnail(&self) -> Option<&str> {
         match self {
-            ModEntry::Riven(m) => m.wikia.wikia_thumbnail.as_deref(),
-            ModEntry::SetMember(m) => m.wikia.wikia_thumbnail.as_deref(),
-            ModEntry::SetDefinition(_) => None,
-            ModEntry::Regular(m) => m.wikia.wikia_thumbnail.as_deref(),
+            Self::Riven(m) => m.wikia.wikia_thumbnail.as_deref(),
+            Self::SetMember(m) => m.wikia.wikia_thumbnail.as_deref(),
+            Self::SetDefinition(_) => None,
+            Self::Regular(m) => m.wikia.wikia_thumbnail.as_deref(),
         }
     }
     fn introduced(&self) -> Option<&crate::common::Introduced> {
         match self {
-            ModEntry::Riven(m) => m.wikia.introduced.as_ref(),
-            ModEntry::SetMember(m) => m.wikia.introduced.as_ref(),
-            ModEntry::SetDefinition(_) => None,
-            ModEntry::Regular(m) => m.wikia.introduced.as_ref(),
+            Self::Riven(m) => m.wikia.introduced.as_ref(),
+            Self::SetMember(m) => m.wikia.introduced.as_ref(),
+            Self::SetDefinition(_) => None,
+            Self::Regular(m) => m.wikia.introduced.as_ref(),
         }
     }
     fn release_date(&self) -> Option<&str> {
         match self {
-            ModEntry::Riven(m) => m.wikia.release_date.as_deref(),
-            ModEntry::SetMember(m) => m.wikia.release_date.as_deref(),
-            ModEntry::SetDefinition(_) => None,
-            ModEntry::Regular(m) => m.wikia.release_date.as_deref(),
+            Self::Riven(m) => m.wikia.release_date.as_deref(),
+            Self::SetMember(m) => m.wikia.release_date.as_deref(),
+            Self::SetDefinition(_) => None,
+            Self::Regular(m) => m.wikia.release_date.as_deref(),
         }
     }
 }
 
 /// Riven challenge definition.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AvailableChallenge {
     pub full_name: String,
@@ -340,7 +340,7 @@ pub struct AvailableChallenge {
 }
 
 /// Riven challenge complication modifier.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Complication {
     pub full_name: String,

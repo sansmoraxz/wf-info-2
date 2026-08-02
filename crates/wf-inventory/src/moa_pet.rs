@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::ObjectId;
 
 /// Represents a MOA companion in the inventory.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MoaPet {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -46,6 +46,6 @@ mod tests {
             item.item_type,
             "/Lotus/Types/Friendly/Pets/MoaPets/MoaPetPowerSuit"
         );
-        assert_eq!(item.xp.unwrap(), 904219);
+        assert_eq!(item.xp.unwrap(), 904_219);
     }
 }

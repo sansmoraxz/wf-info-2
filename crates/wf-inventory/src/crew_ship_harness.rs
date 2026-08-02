@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::{ObjectId, Polarity};
 
 /// Represents a Railjack reactor/harness in the inventory.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CrewShipHarness {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -52,6 +52,6 @@ mod tests {
             item.item_type,
             "/Lotus/Types/Game/CrewShip/RailJack/DefaultHarness"
         );
-        assert_eq!(item.xp.unwrap(), 21375974);
+        assert_eq!(item.xp.unwrap(), 21_375_974);
     }
 }

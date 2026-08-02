@@ -137,7 +137,7 @@ async fn handle_game_exit(
     auto_callbacks: AutoCallbacks,
 ) {
     let reason = lifecycle.exit_reason();
-    log::info!("Warframe game process exited: reason={:?}", reason);
+    log::info!("Warframe game process exited: reason={reason:?}");
     events.emit(DaemonEvent::SystemQuit(SystemQuitEvent {
         timestamp: SystemTime::now().into(),
         reason,
@@ -155,15 +155,15 @@ fn exit_from_child_result(
 ) -> ! {
     match result {
         Ok(Ok(status)) => {
-            log::info!("Warframe process exited with status: {}", status);
+            log::info!("Warframe process exited with status: {status}");
             std::process::exit(status.code().unwrap_or(0));
         }
         Ok(Err(e)) => {
-            log::error!("Error waiting for Warframe process: {}", e);
+            log::error!("Error waiting for Warframe process: {e}");
             std::process::exit(1);
         }
         Err(e) => {
-            log::error!("Child process task failed: {}", e);
+            log::error!("Child process task failed: {e}");
             std::process::exit(1);
         }
     }
@@ -237,7 +237,7 @@ async fn main() {
     });
 
     if let Err(e) = item_data_fetch::update_cache(&cx.http).await {
-        log::warn!("Failed to update item data cache: {}", e);
+        log::warn!("Failed to update item data cache: {e}");
     }
 
     wf_control::wfm_auth::try_restore_session(&cx.wfm).await;
@@ -246,7 +246,7 @@ async fn main() {
         Some(cfg) => match wf_control::start_control_server(cfg, cx.clone()).await {
             Ok(server) => server,
             Err(e) => {
-                log::error!("Failed to start control API: {}", e);
+                log::error!("Failed to start control API: {e}");
                 wf_control::ControlServer::empty()
             }
         },
@@ -280,7 +280,7 @@ async fn main() {
         );
     }
     let mut child = command.spawn().unwrap_or_else(|e| {
-        eprintln!("Error: Failed to launch Warframe: {}", e);
+        eprintln!("Error: Failed to launch Warframe: {e}");
         std::process::exit(1);
     });
 
@@ -294,7 +294,7 @@ async fn main() {
         eprintln!("Error: Warframe launched without a PID.");
         std::process::exit(1);
     });
-    log::info!("Warframe launcher spawned with PID: {}", launcher_pid);
+    log::info!("Warframe launcher spawned with PID: {launcher_pid}");
 
     let mut child_handle = tokio::spawn(async move { child.wait().await });
 
@@ -353,7 +353,7 @@ async fn main() {
                     }
                     Ok(_) => {}
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                        log::warn!("WFM auto-status missed {} events", n);
+                        log::warn!("WFM auto-status missed {n} events");
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 }
@@ -379,7 +379,7 @@ async fn main() {
         )
         .await
         {
-            log::error!("Error reading live log source: {}", e);
+            log::error!("Error reading live log source: {e}");
         }
     });
 
@@ -393,7 +393,7 @@ async fn main() {
         }
         watcher = &mut log_watcher => {
             if let Err(e) = watcher {
-                log::error!("Log watcher task failed: {}", e);
+                log::error!("Log watcher task failed: {e}");
             } else {
                 log::info!("Log watcher exited");
             }

@@ -48,7 +48,7 @@ pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
     let total_start = Instant::now();
     let window = window_id
         .parse::<Window>()
-        .with_context(|| format!("Invalid X11 window id '{}'", window_id))?;
+        .with_context(|| format!("Invalid X11 window id '{window_id}'"))?;
     let connect_start = Instant::now();
     let context = X11Context::connect()?;
     log::trace!(
@@ -59,9 +59,9 @@ pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
     let geometry = context
         .conn
         .get_geometry(window)
-        .with_context(|| format!("Failed to request X11 geometry for window {}", window_id))?
+        .with_context(|| format!("Failed to request X11 geometry for window {window_id}"))?
         .reply()
-        .with_context(|| format!("Failed to read X11 geometry for window {}", window_id))?;
+        .with_context(|| format!("Failed to read X11 geometry for window {window_id}"))?;
     log::trace!(
         "Screenshot X11 geometry {}x{} fetched in {:?}",
         geometry.width,
@@ -70,7 +70,7 @@ pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
     );
 
     if geometry.width == 0 || geometry.height == 0 {
-        bail!("X11 window {} has empty geometry", window_id);
+        bail!("X11 window {window_id} has empty geometry");
     }
 
     let get_image_start = Instant::now();
@@ -85,9 +85,9 @@ pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
             geometry.height,
             u32::MAX,
         )
-        .with_context(|| format!("Failed to request X11 image for window {}", window_id))?
+        .with_context(|| format!("Failed to request X11 image for window {window_id}"))?
         .reply()
-        .with_context(|| format!("Failed to read X11 image for window {}", window_id))?;
+        .with_context(|| format!("Failed to read X11 image for window {window_id}"))?;
     log::trace!(
         "Screenshot X11 GetImage returned {} bytes in {:?}",
         image.data.len(),
@@ -103,7 +103,7 @@ pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
         geometry.width,
         geometry.height,
     )
-    .with_context(|| format!("Failed to encode X11 window {} capture as BMP", window_id))?;
+    .with_context(|| format!("Failed to encode X11 window {window_id} capture as BMP"))?;
     log::trace!(
         "Screenshot X11 BMP encode produced {} bytes in {:?}",
         bytes.len(),
@@ -137,9 +137,8 @@ impl X11Context {
     }
 
     fn collect_windows(&self, window: Window, windows: &mut Vec<Window>) -> Result<()> {
-        let tree = match self.conn.query_tree(window)?.reply() {
-            Ok(tree) => tree,
-            Err(_) => return Ok(()),
+        let Ok(tree) = self.conn.query_tree(window)?.reply() else {
+            return Ok(());
         };
 
         for child in tree.children {
@@ -168,18 +167,16 @@ impl X11Context {
 
     fn matches_warframe_hints(&self, window: Window) -> bool {
         self.window_title(window)
-            .map(|title| WARFRAME_TITLE_HINTS.iter().any(|hint| title.contains(hint)))
-            .unwrap_or(false)
+            .is_ok_and(|title| WARFRAME_TITLE_HINTS.iter().any(|hint| title.contains(hint)))
             || self
                 .window_class(window)
-                .map(|classes| {
+                .is_ok_and(|classes| {
                     classes.iter().any(|class| {
                         WARFRAME_CLASS_HINTS
                             .iter()
                             .any(|hint| class.eq_ignore_ascii_case(hint))
                     })
                 })
-                .unwrap_or(false)
     }
 
     fn window_title(&self, window: Window) -> Result<String> {
@@ -270,9 +267,9 @@ fn encode_x11_image_bmp(
 
     if bytes_per_pixel == 4
         && conn.setup().image_byte_order == ImageOrder::LSB_FIRST
-        && visual.red_mask == 0x00ff0000
-        && visual.green_mask == 0x0000ff00
-        && visual.blue_mask == 0x000000ff
+        && visual.red_mask == 0x00ff_0000
+        && visual.green_mask == 0x0000_ff00
+        && visual.blue_mask == 0x0000_00ff
     {
         for y in 0..height_usize {
             let source_start = y * stride;
@@ -330,7 +327,7 @@ fn read_pixel(
                 pixel = (pixel << 8) | u32::from(*byte);
             }
         }
-        _ => bail!("Unsupported X11 image byte order {:?}", image_byte_order),
+        _ => bail!("Unsupported X11 image byte order {image_byte_order:?}"),
     }
     Ok(pixel)
 }

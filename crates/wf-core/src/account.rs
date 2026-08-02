@@ -11,10 +11,10 @@ pub enum Platform {
     UNKNOWN,
 }
 
-impl Platform {
-    /// Lossy lookup from the private-use glyph Warframe appends to player
-    /// names in chat logs; unrecognized glyphs map to `UNKNOWN`.
-    pub fn from_glyph(glyph: &str) -> Self {
+/// Lossy lookup from the private-use glyph Warframe appends to player
+/// names in chat logs; unrecognized glyphs map to `UNKNOWN`.
+impl From<&str> for Platform {
+    fn from(glyph: &str) -> Self {
         match glyph {
             "\u{e000}" => Self::PC,
             "\u{e001}" => Self::XBOX,

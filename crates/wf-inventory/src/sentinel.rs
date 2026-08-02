@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::ObjectId;
 
 /// Represents a sentinel companion in the inventory.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Sentinel {
     #[serde(rename = "ItemType")]
     pub item_type: String,
@@ -43,6 +43,6 @@ mod tests {
             item.item_type,
             "/Lotus/Types/Sentinels/SentinelPowersuits/TnSentinelCrossPowerSuit"
         );
-        assert_eq!(item.xp.unwrap(), 18583058);
+        assert_eq!(item.xp.unwrap(), 18_583_058);
     }
 }

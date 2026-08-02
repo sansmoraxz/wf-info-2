@@ -67,7 +67,7 @@ pub struct SubscribeResult {
 }
 
 /// Handle a subscribe request and return the filter and response.
-pub fn handle_subscribe(params: SubscribeParams) -> anyhow::Result<SubscribeResult> {
+pub fn handle_subscribe(params: SubscribeParams) -> SubscribeResult {
     let filter = EventFilter::from(params);
 
     let filter_info = filter.allowed_events().map(|events| SubscribeFilterInfo {
@@ -79,7 +79,7 @@ pub fn handle_subscribe(params: SubscribeParams) -> anyhow::Result<SubscribeResu
         filter: filter_info,
     };
 
-    Ok(SubscribeResult { filter, response })
+    SubscribeResult { filter, response }
 }
 
 #[cfg(test)]

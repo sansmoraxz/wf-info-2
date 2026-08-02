@@ -318,12 +318,14 @@ enum CliMode {
 
 // Value parsers for clap
 
+// clap's value_parser requires a Result-returning signature
+#[allow(clippy::unnecessary_wraps)]
 fn parse_jsonish_clap(raw: &str) -> Result<Value, String> {
     Ok(parse_jsonish(raw))
 }
 
 fn parse_json_value(raw: &str) -> Result<Value, String> {
-    serde_json::from_str(raw).map_err(|e| format!("Invalid JSON: {}", e))
+    serde_json::from_str(raw).map_err(|e| format!("Invalid JSON: {e}"))
 }
 
 fn parse_jsonish(raw: &str) -> Value {
@@ -437,48 +439,48 @@ impl ConnectionArgs {
 impl Commands {
     fn into_cli_mode(self) -> CliMode {
         let command = match self {
-            Commands::Watch(args) => {
+            Self::Watch(args) => {
                 return CliMode::Watch(WatchConfig {
                     events: args.events,
                 });
             }
-            Commands::Ping => Command {
+            Self::Ping => Command {
                 op: CliOp::Known(ControlOp::Ping),
                 params: None,
             },
-            Commands::InventoryLoad(args) => Command {
+            Self::InventoryLoad(args) => Command {
                 op: CliOp::Known(ControlOp::Inventory(InventoryOp::Load)),
                 params: Some(args.into_params()),
             },
-            Commands::InventoryFilter(args) => Command {
+            Self::InventoryFilter(args) => Command {
                 op: CliOp::Known(ControlOp::Inventory(InventoryOp::Filter)),
                 params: Some(args.into_params()),
             },
-            Commands::InventoryMeta => Command {
+            Self::InventoryMeta => Command {
                 op: CliOp::Known(ControlOp::Inventory(InventoryOp::MetaGet)),
                 params: None,
             },
-            Commands::InventoryStale(args) => Command {
+            Self::InventoryStale(args) => Command {
                 op: CliOp::Known(ControlOp::Inventory(InventoryOp::StaleUpdate)),
                 params: Some(args.into_params()),
             },
-            Commands::InventoryRefresh(args) => Command {
+            Self::InventoryRefresh(args) => Command {
                 op: CliOp::Known(ControlOp::Inventory(InventoryOp::Refresh)),
                 params: Some(args.into_params()),
             },
-            Commands::Screenshot(args) => Command {
+            Self::Screenshot(args) => Command {
                 op: CliOp::Known(ControlOp::Screenshot(ScreenshotOp::Trigger)),
                 params: Some(args.into_params()),
             },
-            Commands::WFMarketPrice(args) => Command {
+            Self::WFMarketPrice(args) => Command {
                 op: CliOp::Known(ControlOp::Wfm(WfmOp::Price)),
                 params: Some(args.into_params()),
             },
-            Commands::WFMarketRefresh => Command {
+            Self::WFMarketRefresh => Command {
                 op: CliOp::Known(ControlOp::Wfm(WfmOp::Refresh)),
                 params: None,
             },
-            Commands::WfmSignin(args) => {
+            Self::WfmSignin(args) => {
                 let mut params = json!({
                     "email": args.email,
                     "password": args.password,
@@ -492,11 +494,11 @@ impl Commands {
                     params: Some(params),
                 }
             }
-            Commands::WfmSignout => Command {
+            Self::WfmSignout => Command {
                 op: CliOp::Known(ControlOp::Wfm(WfmOp::Signout)),
                 params: None,
             },
-            Commands::WfmStatus(args) => {
+            Self::WfmStatus(args) => {
                 let mut params = json!({});
                 if let Some(s) = args.status {
                     params["status"] = Value::String(s);
@@ -509,7 +511,7 @@ impl Commands {
                     params: Some(params),
                 }
             }
-            Commands::Call(args) => Command {
+            Self::Call(args) => Command {
                 op: CliOp::Call(args.op),
                 params: Some(args.params.unwrap_or_else(|| json!({}))),
             },
@@ -767,7 +769,7 @@ where
             .get("error")
             .and_then(|e| e.as_str())
             .unwrap_or("Unknown error");
-        anyhow::bail!("Subscribe failed: {}", error);
+        anyhow::bail!("Subscribe failed: {error}");
     }
 
     if pretty {
@@ -792,10 +794,10 @@ where
             if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
                 println!("{}", serde_json::to_string_pretty(&value)?);
             } else {
-                println!("{}", trimmed);
+                println!("{trimmed}");
             }
         } else {
-            println!("{}", trimmed);
+            println!("{trimmed}");
         }
     }
 
