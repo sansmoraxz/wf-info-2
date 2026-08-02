@@ -30,6 +30,9 @@ pub struct Upgrade {
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,
 
+    #[serde(rename = "ItemCount", skip_serializing_if = "Option::is_none")]
+    pub item_count: Option<i64>,
+
     /// The wire form is usually JSON embedded in a string, but bare objects also occur;
     /// serialization always emits the string form.
     #[serde(rename = "UpgradeFingerprint")]

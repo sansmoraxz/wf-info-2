@@ -27,6 +27,9 @@ pub struct Suit {
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,
 
+    #[serde(rename = "ItemCount", skip_serializing_if = "Option::is_none")]
+    pub item_count: Option<i64>,
+
     #[serde(rename = "InfestationDate")]
     pub infestation_date: Option<DateWrapper>,
 

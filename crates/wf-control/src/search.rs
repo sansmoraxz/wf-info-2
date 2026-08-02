@@ -199,7 +199,6 @@ pub enum InventoryItemEnvelope {
 #[enum_dispatch::enum_dispatch]
 pub trait EnvelopeAccess {
     fn item_type(&self) -> &str;
-    fn item_other(&self) -> Option<&serde_json::Value>;
     fn set_details(&mut self, details: wf_itemdata::item_data::ItemDetails);
     fn set_market(&mut self, market: crate::market::MarketSummary);
 }
@@ -207,9 +206,6 @@ pub trait EnvelopeAccess {
 impl<T: HasOther> EnvelopeAccess for ItemEnvelope<T> {
     fn item_type(&self) -> &str {
         &self.item_type
-    }
-    fn item_other(&self) -> Option<&serde_json::Value> {
-        self.item.other()
     }
     fn set_details(&mut self, details: wf_itemdata::item_data::ItemDetails) {
         self.details = Some(details);
@@ -237,24 +233,23 @@ impl InventoryItemEnvelope {
     }
 
     pub fn item_count(&self) -> Option<i64> {
-        // Only recipes and raw upgrades model ItemCount; preserve the old
-        // behavior of also finding it in the flattened catch-all elsewhere.
         match self {
             Self::Recipes(env) => Some(env.item.item_count),
             Self::RawUpgrades(env) => Some(env.item.item_count),
-            _ => extract_other_item_count(self.item_other()),
+            Self::Suits(env) => env.item.item_count,
+            Self::LongGuns(env) => env.item.item_count,
+            Self::Pistols(env) => env.item.item_count,
+            Self::Melee(env) => env.item.item_count,
+            Self::SpaceSuits(env) => env.item.item_count,
+            Self::SpaceGuns(env) => env.item.item_count,
+            Self::SpaceMelee(env) => env.item.item_count,
+            Self::Upgrades(env) => env.item.item_count,
+            Self::PendingRecipes(env) => env.item.item_count,
         }
     }
 }
 
-fn extract_other_item_count(other: Option<&serde_json::Value>) -> Option<i64> {
-    other
-        .and_then(|v| v.get("ItemCount").or_else(|| v.get("item_count")))
-        .and_then(|v| v.as_i64())
-}
-
 trait HasOther {
-    fn other(&self) -> Option<&serde_json::Value>;
     fn other_mut(&mut self) -> Option<&mut serde_json::Value>;
 }
 
@@ -266,9 +261,6 @@ trait HasOther {
 macro_rules! impl_has_other {
     ($($ty:ty),+ $(,)?) => {
         $(impl HasOther for $ty {
-            fn other(&self) -> Option<&serde_json::Value> {
-                self.other.as_ref()
-            }
             fn other_mut(&mut self) -> Option<&mut serde_json::Value> {
                 self.other.as_mut()
             }
