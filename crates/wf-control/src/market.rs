@@ -10,6 +10,7 @@ use wf_core::storage;
 use wf_inventory::Inventory;
 
 use super::requests::{ControlError, HandleOp, Handles};
+use super::search::InventoryIndexCache;
 use super::utils::wfm_get;
 use wf_itemdata::item_data::{ItemDetails, ItemIndex};
 
@@ -427,7 +428,7 @@ impl HandleOp for MarketPriceParams {
     type Response = MarketPriceResponse;
 
     async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError> {
-        Ok(handle_market_price(&cx.market, &cx.item_index, self).await?)
+        Ok(handle_market_price(&cx.market, &cx.inventory_index, &cx.item_index, self).await?)
     }
 }
 
@@ -578,6 +579,7 @@ pub(super) fn count_in_inventory(inventory: &Inventory, item_type: &str) -> i64 
 
 pub(super) async fn handle_market_price(
     market: &MarketCache,
+    inventory_index: &InventoryIndexCache,
     item_index: &ItemIndex,
     params: MarketPriceParams,
 ) -> Result<MarketPriceResponse, MarketError> {
@@ -605,9 +607,12 @@ pub(super) async fn handle_market_price(
     let orders = fetch_orders(&market.http, &wfm_item.slug).await?;
     let prices = summarize_orders(&orders);
 
-    // Inventory count (graceful)
-    let inventory = storage::read_inventory().ok();
-    let owned = inventory.as_ref().and_then(|inv| {
+    // Inventory count (graceful) — reuse the cached inventory+index pair
+    let indexed = storage::read_inventory_meta()
+        .ok()
+        .and_then(|meta| inventory_index.get_or_build(&meta, item_index).ok());
+    let inventory = indexed.as_deref().map(|indexed| &indexed.inventory);
+    let owned = inventory.and_then(|inv| {
         wfm_item
             .game_ref
             .as_ref()
@@ -638,7 +643,7 @@ pub(super) async fn handle_market_price(
                             let part_orders = fetch_orders(&market.http, &part.slug).await?;
                             let part_prices = summarize_orders(&part_orders);
 
-                            let part_owned = inventory.as_ref().and_then(|inv| {
+                            let part_owned = inventory.and_then(|inv| {
                                 part.game_ref
                                     .as_ref()
                                     .map(|gr| count_in_inventory(inv, gr.as_ref()))

@@ -44,9 +44,9 @@ macro_rules! impl_has_other {
 }
 
 /// Keys the envelope itself emits. A game item whose catch-all carried one of
-/// these would serialize as a duplicate JSON key (breaking re-parse) or shadow
-/// the injected value, so they are stripped at envelope construction — the
-/// same overwrite semantics the old map-insertion code had.
+/// these would serialize as a duplicate JSON key in the filter response or
+/// shadow the injected value, so they are stripped at envelope construction —
+/// the same overwrite semantics the old map-insertion code had.
 const RESERVED_ENVELOPE_KEYS: [&str; 5] = ["category", "item_type", "item_id", "details", "market"];
 
 #[derive(Debug, thiserror::Error)]
@@ -65,7 +65,10 @@ pub(super) struct InventorySearchIndex {
     pub details_name: Field,
     pub details_desc: Field,
     pub category: Field,
-    pub raw_json: Field,
+    /// Index into [`Self::items`]; tantivy stores only this position, the
+    /// envelopes themselves stay typed in memory.
+    pub position: Field,
+    pub items: Vec<InventoryItemEnvelope>,
 }
 
 /// An inventory snapshot together with the search index built from it. The
@@ -85,7 +88,7 @@ impl IndexedInventory {
         item_index: &ItemIndex,
     ) -> Result<Self, tantivy::TantivyError> {
         let items = collect_inventory_items(&inventory, None, item_index);
-        let index = build_tantivy_index(&items)?;
+        let index = build_tantivy_index(items)?;
         Ok(Self {
             inventory,
             index,
@@ -132,9 +135,9 @@ pub(super) struct ItemEnvelope<T> {
     pub item_type: ItemType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub item_id: Option<String>,
-    // details/market are injected after tantivy retrieval and are never part
-    // of the stored raw_json; skip_deserializing keeps a stray same-named key
-    // in the item's catch-all from being parsed as these types.
+    // details/market are injected after retrieval, per request;
+    // skip_deserializing keeps a stray same-named key in the item's catch-all
+    // from being parsed as these types.
     #[serde(default, skip_serializing_if = "Option::is_none", skip_deserializing)]
     pub details: Option<ItemDetails>,
     #[serde(default, skip_serializing_if = "Option::is_none", skip_deserializing)]
@@ -406,7 +409,7 @@ pub(super) fn collect_inventory_items<'a>(
 }
 
 pub(super) fn build_tantivy_index(
-    items: &[ItemView],
+    items: Vec<ItemView<'_>>,
 ) -> Result<InventorySearchIndex, tantivy::TantivyError> {
     let mut schema_builder = SchemaBuilder::default();
 
@@ -424,7 +427,7 @@ pub(super) fn build_tantivy_index(
     let details_name = schema_builder.add_text_field("details_name", ngram_opts.clone());
     let details_desc = schema_builder.add_text_field("details_desc", ngram_opts);
 
-    let raw_json = schema_builder.add_text_field("raw_json", STORED);
+    let position = schema_builder.add_u64_field("position", STORED);
 
     let schema = schema_builder.build();
     let index = Index::create_in_ram(schema);
@@ -434,24 +437,12 @@ pub(super) fn build_tantivy_index(
 
     let mut writer = index.writer(20_000_000)?; // ~20MB buffer, tiny dataset
 
-    for item in items {
-        // One unserializable item must not fail the whole index build
-        let raw = match serde_json::to_string(&item.envelope) {
-            Ok(raw) => raw,
-            Err(e) => {
-                log::warn!(
-                    "Skipping unserializable item {}: {}",
-                    item.envelope.item_type(),
-                    e
-                );
-                continue;
-            }
-        };
+    for (pos, item) in items.iter().enumerate() {
         let mut doc = doc! {
             item_type_exact => item.envelope.item_type().to_owned(),
             category => item.envelope.category().to_string(),
             item_type_text => item.envelope.item_type().to_owned(),
-            raw_json => raw,
+            position => pos as u64,
         };
 
         if let Some(name) = &item.details_name {
@@ -473,7 +464,8 @@ pub(super) fn build_tantivy_index(
         details_name,
         details_desc,
         category,
-        raw_json,
+        position,
+        items: items.into_iter().map(|item| item.envelope).collect(),
     })
 }
 
@@ -500,15 +492,18 @@ pub(super) fn search_inventory(
 
     let mut results = Vec::new();
     for (_score, addr) in top_docs {
-        let raw = searcher
+        let pos = searcher
             .doc::<tantivy::TantivyDocument>(addr)?
-            .get_first(search_index.raw_json)
-            .and_then(|v| v.as_str())
-            .map(str::to_owned)
-            .unwrap_or_default();
-        match serde_json::from_str::<InventoryItemEnvelope>(&raw) {
-            Ok(envelope) => results.push(envelope),
-            Err(e) => log::warn!("Skipping unparseable indexed item: {e}"),
+            .get_first(search_index.position)
+            .and_then(|v| v.as_u64());
+        // A stored position always resolves: items is built in the same pass
+        // that assigned the positions and the two are immutable afterwards.
+        match pos
+            .and_then(|pos| usize::try_from(pos).ok())
+            .and_then(|pos| search_index.items.get(pos))
+        {
+            Some(envelope) => results.push(envelope.clone()),
+            None => log::warn!("Indexed document without a resolvable position"),
         }
     }
 
@@ -545,10 +540,10 @@ mod tests {
         serde_json::from_str(raw).unwrap()
     }
 
-    /// The envelope must survive the tantivy raw_json round-trip
-    /// (serialize -> parse -> serialize must be a fixed point), and the
-    /// serialized "category" tag must agree with the category() accessor,
-    /// for every one of the 11 categories.
+    /// The envelope's JSON wire shape must round-trip (serialize -> parse ->
+    /// serialize must be a fixed point), and the serialized "category" tag
+    /// must agree with the category() accessor, for every one of the 11
+    /// categories.
     #[test]
     fn envelope_round_trips_through_json_for_all_categories() {
         let inventory = sample_inventory();
