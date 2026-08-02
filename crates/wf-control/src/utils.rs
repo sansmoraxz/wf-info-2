@@ -15,6 +15,31 @@ pub(super) enum ParamsError {
     Missing,
 }
 
+/// Strict JSON value parser for clap args.
+#[cfg(feature = "cli")]
+pub(crate) fn parse_json_value(raw: &str) -> Result<Value, String> {
+    serde_json::from_str(raw).map_err(|e| format!("Invalid JSON: {e}"))
+}
+
+/// Lenient parser for clap args: JSON if it parses, then number, bool,
+/// falling back to a plain string.
+#[cfg(feature = "cli")]
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "clap value_parser requires a Result-returning signature"
+)]
+pub(crate) fn parse_jsonish(raw: &str) -> Result<Value, String> {
+    Ok(if let Ok(v) = serde_json::from_str(raw) {
+        v
+    } else if let Ok(num) = raw.parse::<i64>() {
+        Value::Number(num.into())
+    } else if let Ok(b) = raw.parse::<bool>() {
+        Value::Bool(b)
+    } else {
+        Value::String(raw.to_owned())
+    })
+}
+
 /// GET a v2 WFM API path (relative to [`WFM_API_BASE`]) and parse the JSON body.
 pub(super) async fn wfm_get<T>(client: &reqwest::Client, path: &str) -> Result<T, reqwest::Error>
 where

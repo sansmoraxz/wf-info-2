@@ -360,10 +360,23 @@ pub(super) struct MarketSummary {
 
 // ── Handlers ──
 
-#[derive(Debug, Deserialize, Default)]
-pub(super) struct MarketPriceParams {
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[cfg_attr(feature = "cli", derive(clap::Args))]
+pub struct MarketPriceParams {
+    /// Item type (gameRef / unique_name path)
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub item_type: Option<String>,
+    /// Text search against warframe.market item names
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub search: Option<String>,
+    /// Include set component prices and inventory counts
+    #[cfg_attr(
+        feature = "cli",
+        arg(long, num_args = 0..=1, default_missing_value = "true")
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub include_parts: Option<bool>,
 }
 

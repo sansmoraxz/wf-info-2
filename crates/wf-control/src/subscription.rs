@@ -5,10 +5,15 @@ use serde::{Deserialize, Serialize};
 use super::events::{DaemonEvent, DaemonEventKind};
 
 /// Parameters for subscribe request.
-#[derive(Debug, Deserialize, Default)]
-pub(super) struct SubscribeParams {
-    /// List of event types to subscribe to. If empty or None, subscribes to all events.
-    pub(crate) events: Option<Vec<String>>,
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[cfg_attr(feature = "cli", derive(clap::Args))]
+pub struct SubscribeParams {
+    /// Comma-separated list of events to subscribe to; all events if omitted
+    /// (game_start, account_login, account_logout, system_quit, inventory_fetched,
+    /// inventory_stale, profile_updated, screenshot_triggered)
+    #[cfg_attr(feature = "cli", arg(long, value_delimiter = ','))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events: Option<Vec<String>>,
 }
 
 /// Filter for determining which events to send to a subscriber.

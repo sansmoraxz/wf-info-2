@@ -10,6 +10,7 @@ workspace = true
 arc-swap.workspace = true
 base64.workspace = true
 chrono.workspace = true
+clap = { workspace = true, optional = true }
 dirs.workspace = true
 enum_dispatch.workspace = true
 derive_more.workspace = true
@@ -36,6 +37,7 @@ wf-itemdata = { path = "../wf-itemdata" }
 wf-ocr = { path = "../wf-ocr" }
 [features]
 default = []
+cli = ["dep:clap"]
 memory = ["wf-core/memory"]
 vulkan = ["wf-ocr/vulkan"]
 cuda = ["wf-ocr/cuda"]

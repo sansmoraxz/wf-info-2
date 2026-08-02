@@ -1,4 +1,6 @@
+use std::convert::Infallible;
 use std::io;
+use std::str::FromStr;
 use std::sync::Arc;
 #[cfg(feature = "memory")]
 use std::time::Duration;
@@ -69,13 +71,38 @@ pub(super) enum InventoryError {
 
 /// Wire mirror for inventory.load params; converted to [`LoadInventoryRequest`]
 /// so the exactly-one-source rule is enforced before the handler runs.
-#[derive(Debug, Deserialize, Default)]
-pub(super) struct LoadInventoryParams {
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[cfg_attr(feature = "cli", derive(clap::Args))]
+pub struct LoadInventoryParams {
+    /// Path to inventory JSON file
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    /// JSON value to load
+    #[cfg_attr(feature = "cli", arg(long, value_parser = crate::utils::parse_json_value))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub json: Option<Value>,
+    /// Raw JSON string
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub raw: Option<String>,
+    /// Save inventory to disk
+    #[cfg_attr(
+        feature = "cli",
+        arg(long, num_args = 0..=1, default_missing_value = "true")
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub save: Option<bool>,
+    /// Source identifier
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Source>,
+    /// Treat the file as AES-128-CBC encrypted
+    #[cfg_attr(
+        feature = "cli",
+        arg(long, num_args = 0..=1, default_missing_value = "true")
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub encrypted: Option<bool>,
 }
 
@@ -168,24 +195,71 @@ impl HandleOp for LoadInventoryParams {
     }
 }
 
-#[derive(Debug, Deserialize, Default)]
-pub(super) struct FilterParams {
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[cfg_attr(feature = "cli", derive(clap::Args))]
+pub struct FilterParams {
+    /// Filter by category
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub category: Option<String>,
+    /// Filter by item type
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub item_type: Option<String>,
+    /// Filter items containing text
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub contains: Option<String>,
+    /// Filter by tradability
+    #[cfg_attr(
+        feature = "cli",
+        arg(long, num_args = 0..=1, default_missing_value = "true")
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tradable: Option<bool>,
+    /// Filter by item count, e.g. `gt:5`, `eq:1`
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub item_count: Option<CountFilter>,
+    /// Limit number of results
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<usize>,
+    /// Offset for pagination
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub offset: Option<usize>,
+    /// Include detailed item information
+    #[cfg_attr(
+        feature = "cli",
+        arg(long, num_args = 0..=1, default_missing_value = "true")
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub include_details: Option<bool>,
+    /// Include warframe.market price data
+    #[cfg_attr(
+        feature = "cli",
+        arg(long, num_args = 0..=1, default_missing_value = "true")
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub include_market: Option<bool>,
+    /// Path to inventory JSON file
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    /// Treat the file as AES-128-CBC encrypted
+    #[cfg_attr(
+        feature = "cli",
+        arg(long, num_args = 0..=1, default_missing_value = "true")
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub encrypted: Option<bool>,
 }
 
-#[derive(Debug, Deserialize, Clone, Copy)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, strum::EnumString, strum::Display)]
 #[serde(rename_all = "lowercase")]
-pub(super) enum CountOp {
+#[strum(serialize_all = "lowercase")]
+pub enum CountOp {
     Gt,
     Gte,
     Lt,
@@ -194,10 +268,27 @@ pub(super) enum CountOp {
     Ne,
 }
 
-#[derive(Debug, Deserialize, Clone, Copy)]
-pub(super) struct CountFilter {
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
+pub struct CountFilter {
     pub op: CountOp,
     pub value: i64,
+}
+
+/// CLI shorthand: `op:value`, e.g. `gt:5`.
+impl FromStr for CountFilter {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (op, value) = s
+            .split_once(':')
+            .ok_or_else(|| format!("expected `op:value`, got `{s}`"))?;
+        Ok(Self {
+            op: op.parse().map_err(|_| format!("unknown count op `{op}`"))?,
+            value: value
+                .parse()
+                .map_err(|_| format!("invalid count value `{value}`"))?,
+        })
+    }
 }
 
 impl HandleOp for FilterParams {
@@ -208,7 +299,8 @@ impl HandleOp for FilterParams {
     }
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[cfg_attr(feature = "cli", derive(clap::Args))]
 #[cfg_attr(
     not(feature = "memory"),
     allow(
@@ -216,10 +308,25 @@ impl HandleOp for FilterParams {
         reason = "fields are only read by the memory-feature refresh handler"
     )
 )]
-pub(super) struct RefreshParams {
+pub struct RefreshParams {
+    /// Number of scan retries
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub scan_retries: Option<u32>,
+    /// Delay between scans in milliseconds
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub scan_delay_ms: Option<u64>,
+    /// Save inventory to disk after refresh
+    #[cfg_attr(
+        feature = "cli",
+        arg(long, num_args = 0..=1, default_missing_value = "true")
+    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub save: Option<bool>,
+    /// Source identifier
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Source>,
 }
 
@@ -239,11 +346,20 @@ impl HandleOp for RefreshParams {
 
 /// Timestamp accepted as a numeric epoch (seconds or milliseconds) or a
 /// string holding RFC3339 or a stringified epoch.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
-pub(super) enum TimestampParam {
+pub enum TimestampParam {
     Epoch(i64),
     Text(String),
+}
+
+impl FromStr for TimestampParam {
+    type Err = Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(s.parse::<i64>()
+            .map_or_else(|_| Self::Text(s.to_owned()), Self::Epoch))
+    }
 }
 
 impl TimestampParam {
@@ -263,9 +379,16 @@ impl TimestampParam {
     }
 }
 
-#[derive(Debug, Deserialize, Default)]
-pub(super) struct StaleParams {
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[cfg_attr(feature = "cli", derive(clap::Args))]
+pub struct StaleParams {
+    /// Timestamp for stale marker (epoch seconds/millis or RFC3339)
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<TimestampParam>,
+    /// Reason for marking stale
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
 }
 

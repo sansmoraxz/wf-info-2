@@ -1,11 +1,16 @@
 use clap::{Args, Parser, Subcommand};
-use serde_json::{Map, Value, json};
+use serde::Serialize;
+use serde_json::Value;
 #[cfg(unix)]
 use std::path::PathBuf;
 use tokio::io::{AsyncBufReadExt as _, AsyncRead, AsyncWrite, AsyncWriteExt as _, BufReader};
 use tokio::net::TcpStream;
 use wf_control::control_ops::{ControlOp, InventoryOp, ScreenshotOp, WfmOp};
-use wf_control::{ControlConfig, ControlEndpoint};
+use wf_control::{
+    ControlConfig, ControlEndpoint, FilterParams, LoadInventoryParams, MarketPriceParams,
+    RefreshParams, Request, ScreenshotParams, SigninParams, SignstatusParams, StaleParams,
+    SubscribeParams,
+};
 
 #[cfg(unix)]
 use tokio::net::UnixStream;
@@ -49,21 +54,21 @@ struct ConnectionArgs {
     npipe: Option<String>,
 }
 
-#[derive(Subcommand, Debug, Clone)]
+#[derive(Subcommand, Debug)]
 enum Commands {
     /// Ping the daemon
     Ping,
 
     /// Subscribe to events (streaming mode)
-    Watch(WatchArgs),
+    Watch(SubscribeParams),
 
     /// Load inventory data
     #[command(name = "inventory-load")]
-    InventoryLoad(InventoryLoadArgs),
+    InventoryLoad(LoadInventoryParams),
 
     /// Filter inventory items
     #[command(name = "inventory-filter")]
-    InventoryFilter(InventoryFilterArgs),
+    InventoryFilter(FilterParams),
 
     /// Get inventory metadata
     #[command(name = "inventory-meta")]
@@ -71,18 +76,18 @@ enum Commands {
 
     /// Update inventory stale status
     #[command(name = "inventory-stale")]
-    InventoryStale(InventoryStaleArgs),
+    InventoryStale(StaleParams),
 
     /// Refresh inventory from game
     #[command(name = "inventory-refresh")]
-    InventoryRefresh(InventoryRefreshArgs),
+    InventoryRefresh(RefreshParams),
 
     /// Trigger a screenshot capture
-    Screenshot(ScreenshotArgs),
+    Screenshot(ScreenshotParams),
 
     /// Query market prices for an item
     #[command(name = "wfm-price")]
-    WFMarketPrice(WFMarketPriceArgs),
+    WFMarketPrice(MarketPriceParams),
 
     /// Refresh warframe.market item cache
     #[command(name = "wfm-refresh")]
@@ -90,7 +95,7 @@ enum Commands {
 
     /// Sign in to warframe.market
     #[command(name = "wfm-signin")]
-    WfmSignin(WfmSigninArgs),
+    WfmSignin(SigninParams),
 
     /// Sign out from warframe.market
     #[command(name = "wfm-signout")]
@@ -98,167 +103,10 @@ enum Commands {
 
     /// Check warframe.market auth status
     #[command(name = "wfm-status")]
-    WfmStatus(WfmStatusArgs),
+    WfmStatus(SignstatusParams),
 
     /// Call a generic operation by name
     Call(CallArgs),
-}
-
-#[derive(Args, Debug, Clone)]
-struct WatchArgs {
-    /// Comma-separated list of events to subscribe to
-    /// (game_start, account_login, account_logout, system_quit, inventory_fetched,
-    /// inventory_stale, profile_updated, screenshot_triggered)
-    #[arg(long, value_delimiter = ',')]
-    events: Option<Vec<String>>,
-}
-
-#[derive(Args, Debug, Clone)]
-struct InventoryLoadArgs {
-    /// Path to inventory JSON file
-    #[arg(long)]
-    path: Option<String>,
-
-    /// Raw JSON string
-    #[arg(long)]
-    raw: Option<String>,
-
-    /// JSON value to load
-    #[arg(long, value_parser = parse_json_value)]
-    json: Option<Value>,
-
-    /// Save inventory to disk
-    #[arg(long)]
-    save: Option<bool>,
-
-    /// Source identifier
-    #[arg(long)]
-    source: Option<String>,
-
-    /// Treat the file as AES-128-CBC encrypted
-    #[arg(long)]
-    encrypted: bool,
-}
-
-#[derive(Args, Debug, Clone)]
-struct InventoryFilterArgs {
-    /// Filter by category
-    #[arg(long)]
-    category: Option<String>,
-
-    /// Filter by item type
-    #[arg(long)]
-    item_type: Option<String>,
-
-    /// Filter items containing text
-    #[arg(long)]
-    contains: Option<String>,
-
-    /// Limit number of results
-    #[arg(long)]
-    limit: Option<u64>,
-
-    /// Offset for pagination
-    #[arg(long)]
-    offset: Option<u64>,
-
-    /// Include detailed item information
-    #[arg(long)]
-    include_details: bool,
-
-    /// Include warframe.market price data
-    #[arg(long)]
-    include_market: bool,
-
-    /// Path filter
-    #[arg(long)]
-    path: Option<String>,
-
-    /// Treat the file as AES-128-CBC encrypted
-    #[arg(long)]
-    encrypted: bool,
-}
-
-#[derive(Args, Debug, Clone)]
-struct InventoryStaleArgs {
-    /// Timestamp for stale marker
-    #[arg(long, value_parser = parse_jsonish_clap)]
-    timestamp: Option<Value>,
-
-    /// Reason for marking stale
-    #[arg(long)]
-    reason: Option<String>,
-}
-
-#[derive(Args, Debug, Clone)]
-struct InventoryRefreshArgs {
-    /// Number of scan retries
-    #[arg(long)]
-    scan_retries: Option<u64>,
-
-    /// Delay between scans in milliseconds
-    #[arg(long)]
-    scan_delay_ms: Option<u64>,
-
-    /// Disable saving after refresh
-    #[arg(long)]
-    no_save: bool,
-
-    /// Source identifier
-    #[arg(long)]
-    source: Option<String>,
-}
-
-#[derive(Args, Debug, Clone)]
-struct ScreenshotArgs {
-    /// Additional metadata (JSON)
-    #[arg(long, value_parser = parse_jsonish_clap)]
-    metadata: Option<Value>,
-}
-
-#[derive(Args, Debug, Clone)]
-struct WFMarketPriceArgs {
-    /// Item type (gameRef / unique_name path)
-    #[arg(long)]
-    item_type: Option<String>,
-
-    /// Text search against warframe.market item names
-    #[arg(long)]
-    search: Option<String>,
-
-    /// Include set component prices and inventory counts
-    #[arg(long)]
-    include_parts: Option<bool>,
-}
-
-#[derive(Args, Debug, Clone)]
-struct WfmSigninArgs {
-    /// Account email
-    #[arg(long)]
-    email: String,
-
-    /// Account password
-    #[arg(long)]
-    password: String,
-
-    /// Client ID
-    #[arg(long, default_value = "wf-info-2")]
-    client_id: String,
-
-    /// Device name
-    #[arg(long)]
-    device_name: Option<String>,
-}
-
-#[derive(Args, Debug, Clone)]
-struct WfmStatusArgs {
-    /// Set status (online, invisible, ingame)
-    #[arg(long)]
-    status: Option<String>,
-
-    /// Set status duration (seconds), use "null" to clear
-    #[arg(long, value_parser = parse_jsonish_clap)]
-    duration: Option<Value>,
 }
 
 #[derive(Args, Debug, Clone)]
@@ -267,7 +115,7 @@ struct CallArgs {
     op: String,
 
     /// Parameters as JSON
-    #[arg(long, value_parser = parse_jsonish_clap)]
+    #[arg(long, value_parser = parse_json_value)]
     params: Option<Value>,
 }
 
@@ -303,36 +151,10 @@ struct CliConfig {
     id: Option<String>,
 }
 
-#[derive(Debug, Clone)]
-enum CliOp {
-    Known(ControlOp),
-    Call(String),
-}
-
-impl CliOp {
-    fn op_string(&self) -> String {
-        match self {
-            Self::Known(op) => op.to_string(),
-            Self::Call(op) => op.clone(),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct Command {
-    op: CliOp,
-    params: Option<Value>,
-}
-
-#[derive(Debug)]
-struct WatchConfig {
-    events: Option<Vec<String>>,
-}
-
 #[derive(Debug)]
 enum CliMode {
-    Request(Command),
-    Watch(WatchConfig),
+    Request { op: String, params: Option<Value> },
+    Watch(SubscribeParams),
 }
 
 // Conversion implementations
@@ -436,230 +258,57 @@ impl ConnectionArgs {
 }
 
 impl Commands {
-    fn into_cli_mode(self) -> CliMode {
-        let command = match self {
-            Self::Watch(args) => {
-                return CliMode::Watch(WatchConfig {
-                    events: args.events,
-                });
+    fn into_cli_mode(self) -> anyhow::Result<CliMode> {
+        const NO_PARAMS: Option<Value> = None;
+        match self {
+            Self::Watch(params) => Ok(CliMode::Watch(params)),
+            Self::Ping => request_mode(ControlOp::Ping, NO_PARAMS),
+            Self::InventoryLoad(params) => {
+                request_mode(ControlOp::Inventory(InventoryOp::Load), Some(params))
             }
-            Self::Ping => Command {
-                op: CliOp::Known(ControlOp::Ping),
-                params: None,
-            },
-            Self::InventoryLoad(args) => Command {
-                op: CliOp::Known(ControlOp::Inventory(InventoryOp::Load)),
-                params: Some(args.into_params()),
-            },
-            Self::InventoryFilter(args) => Command {
-                op: CliOp::Known(ControlOp::Inventory(InventoryOp::Filter)),
-                params: Some(args.into_params()),
-            },
-            Self::InventoryMeta => Command {
-                op: CliOp::Known(ControlOp::Inventory(InventoryOp::MetaGet)),
-                params: None,
-            },
-            Self::InventoryStale(args) => Command {
-                op: CliOp::Known(ControlOp::Inventory(InventoryOp::StaleUpdate)),
-                params: Some(args.into_params()),
-            },
-            Self::InventoryRefresh(args) => Command {
-                op: CliOp::Known(ControlOp::Inventory(InventoryOp::Refresh)),
-                params: Some(args.into_params()),
-            },
-            Self::Screenshot(args) => Command {
-                op: CliOp::Known(ControlOp::Screenshot(ScreenshotOp::Trigger)),
-                params: Some(args.into_params()),
-            },
-            Self::WFMarketPrice(args) => Command {
-                op: CliOp::Known(ControlOp::Wfm(WfmOp::Price)),
-                params: Some(args.into_params()),
-            },
-            Self::WFMarketRefresh => Command {
-                op: CliOp::Known(ControlOp::Wfm(WfmOp::Refresh)),
-                params: None,
-            },
-            Self::WfmSignin(args) => {
-                let mut params = Map::new();
-                params.insert("email".to_owned(), Value::String(args.email));
-                params.insert("password".to_owned(), Value::String(args.password));
-                params.insert("client_id".to_owned(), Value::String(args.client_id));
-                if let Some(name) = args.device_name {
-                    params.insert("device_name".to_owned(), Value::String(name));
-                }
-                Command {
-                    op: CliOp::Known(ControlOp::Wfm(WfmOp::Signin)),
-                    params: Some(Value::Object(params)),
-                }
+            Self::InventoryFilter(params) => {
+                request_mode(ControlOp::Inventory(InventoryOp::Filter), Some(params))
             }
-            Self::WfmSignout => Command {
-                op: CliOp::Known(ControlOp::Wfm(WfmOp::Signout)),
-                params: None,
-            },
-            Self::WfmStatus(args) => {
-                let mut params = Map::new();
-                if let Some(s) = args.status {
-                    params.insert("status".to_owned(), Value::String(s));
-                }
-                if let Some(d) = args.duration {
-                    params.insert("duration".to_owned(), d);
-                }
-                Command {
-                    op: CliOp::Known(ControlOp::Wfm(WfmOp::Signstatus)),
-                    params: Some(Value::Object(params)),
-                }
+            Self::InventoryMeta => {
+                request_mode(ControlOp::Inventory(InventoryOp::MetaGet), NO_PARAMS)
             }
-            Self::Call(args) => Command {
-                op: CliOp::Call(args.op),
-                params: Some(args.params.unwrap_or_else(|| json!({}))),
-            },
-        };
-        CliMode::Request(command)
-    }
-}
-
-impl InventoryLoadArgs {
-    fn into_params(self) -> Value {
-        let mut params = Map::new();
-        if let Some(v) = self.path {
-            params.insert("path".to_owned(), Value::String(v));
+            Self::InventoryStale(params) => {
+                request_mode(ControlOp::Inventory(InventoryOp::StaleUpdate), Some(params))
+            }
+            Self::InventoryRefresh(params) => {
+                request_mode(ControlOp::Inventory(InventoryOp::Refresh), Some(params))
+            }
+            Self::Screenshot(params) => {
+                request_mode(ControlOp::Screenshot(ScreenshotOp::Trigger), Some(params))
+            }
+            Self::WFMarketPrice(params) => {
+                request_mode(ControlOp::Wfm(WfmOp::Price), Some(params))
+            }
+            Self::WFMarketRefresh => request_mode(ControlOp::Wfm(WfmOp::Refresh), NO_PARAMS),
+            Self::WfmSignin(params) => request_mode(ControlOp::Wfm(WfmOp::Signin), Some(params)),
+            Self::WfmSignout => request_mode(ControlOp::Wfm(WfmOp::Signout), NO_PARAMS),
+            Self::WfmStatus(params) => {
+                request_mode(ControlOp::Wfm(WfmOp::Signstatus), Some(params))
+            }
+            Self::Call(args) => Ok(CliMode::Request {
+                op: args.op,
+                params: Some(args.params.unwrap_or_else(|| Value::Object(Default::default()))),
+            }),
         }
-        if let Some(v) = self.raw {
-            params.insert("raw".to_owned(), Value::String(v));
-        }
-        if let Some(v) = self.json {
-            params.insert("json".to_owned(), v);
-        }
-        if let Some(v) = self.save {
-            params.insert("save".to_owned(), Value::Bool(v));
-        }
-        if let Some(v) = self.source {
-            params.insert("source".to_owned(), Value::String(v));
-        }
-        if self.encrypted {
-            params.insert("encrypted".to_owned(), Value::Bool(true));
-        }
-        Value::Object(params)
-    }
-}
-
-impl InventoryFilterArgs {
-    fn into_params(self) -> Value {
-        let mut params = Map::new();
-        if let Some(v) = self.category {
-            params.insert("category".to_owned(), Value::String(v));
-        }
-        if let Some(v) = self.item_type {
-            params.insert("item_type".to_owned(), Value::String(v));
-        }
-        if let Some(v) = self.contains {
-            params.insert("contains".to_owned(), Value::String(v));
-        }
-        if let Some(v) = self.limit {
-            params.insert("limit".to_owned(), Value::Number(v.into()));
-        }
-        if let Some(v) = self.offset {
-            params.insert("offset".to_owned(), Value::Number(v.into()));
-        }
-        if self.include_details {
-            params.insert("include_details".to_owned(), Value::Bool(true));
-        }
-        if self.include_market {
-            params.insert("include_market".to_owned(), Value::Bool(true));
-        }
-        if let Some(v) = self.path {
-            params.insert("path".to_owned(), Value::String(v));
-        }
-        if self.encrypted {
-            params.insert("encrypted".to_owned(), Value::Bool(true));
-        }
-        Value::Object(params)
-    }
-}
-
-impl InventoryStaleArgs {
-    fn into_params(self) -> Value {
-        let mut params = Map::new();
-        if let Some(v) = self.timestamp {
-            params.insert("timestamp".to_owned(), v);
-        }
-        if let Some(v) = self.reason {
-            params.insert("reason".to_owned(), Value::String(v));
-        }
-        Value::Object(params)
-    }
-}
-
-impl InventoryRefreshArgs {
-    fn into_params(self) -> Value {
-        let mut params = Map::new();
-        if let Some(v) = self.scan_retries {
-            params.insert("scan_retries".to_owned(), Value::Number(v.into()));
-        }
-        if let Some(v) = self.scan_delay_ms {
-            params.insert("scan_delay_ms".to_owned(), Value::Number(v.into()));
-        }
-        if self.no_save {
-            params.insert("save".to_owned(), Value::Bool(false));
-        }
-        if let Some(v) = self.source {
-            params.insert("source".to_owned(), Value::String(v));
-        }
-        Value::Object(params)
-    }
-}
-
-impl ScreenshotArgs {
-    fn into_params(self) -> Value {
-        let mut params = Map::new();
-        if let Some(v) = self.metadata {
-            params.insert("metadata".to_owned(), v);
-        }
-        Value::Object(params)
-    }
-}
-
-impl WFMarketPriceArgs {
-    fn into_params(self) -> Value {
-        let mut params = Map::new();
-        if let Some(v) = self.item_type {
-            params.insert("item_type".to_owned(), Value::String(v));
-        }
-        if let Some(v) = self.search {
-            params.insert("search".to_owned(), Value::String(v));
-        }
-        if let Some(v) = self.include_parts {
-            params.insert("include_parts".to_owned(), Value::Bool(v));
-        }
-        Value::Object(params)
     }
 }
 
 // Value parsers for clap
 
-// clap's value_parser requires a Result-returning signature
-#[allow(
-    clippy::unnecessary_wraps,
-    reason = "clap value_parser requires a Result-returning signature"
-)]
-fn parse_jsonish_clap(raw: &str) -> Result<Value, String> {
-    Ok(parse_jsonish(raw))
-}
-
 fn parse_json_value(raw: &str) -> Result<Value, String> {
     serde_json::from_str(raw).map_err(|e| format!("Invalid JSON: {e}"))
 }
 
-fn parse_jsonish(raw: &str) -> Value {
-    if let Ok(v) = serde_json::from_str(raw) {
-        v
-    } else if let Ok(num) = raw.parse::<i64>() {
-        Value::Number(num.into())
-    } else if let Ok(b) = raw.parse::<bool>() {
-        Value::Bool(b)
-    } else {
-        Value::String(raw.to_owned())
-    }
+fn request_mode(op: ControlOp, params: Option<impl Serialize>) -> anyhow::Result<CliMode> {
+    Ok(CliMode::Request {
+        op: op.to_string(),
+        params: params.map(serde_json::to_value).transpose()?,
+    })
 }
 
 // Main
@@ -674,15 +323,14 @@ async fn main() -> anyhow::Result<()> {
         OutputFormat::Compact
     };
     let cfg = cli.connection.into_cli_config(output, cli.id)?;
-    let mode = cli.command.into_cli_mode();
 
-    match mode {
-        CliMode::Request(cmd) => {
-            let response = send_request(&cfg, cmd).await?;
+    match cli.command.into_cli_mode()? {
+        CliMode::Request { op, params } => {
+            let response = send_request(&cfg, op, params).await?;
             cfg.output.print_json_line(response.trim_end())?;
         }
-        CliMode::Watch(watch_cfg) => {
-            run_watch(&cfg, watch_cfg).await?;
+        CliMode::Watch(params) => {
+            run_watch(&cfg, params).await?;
         }
     }
 
@@ -691,12 +339,16 @@ async fn main() -> anyhow::Result<()> {
 
 // Network functions
 
-async fn send_request(cfg: &CliConfig, cmd: Command) -> anyhow::Result<String> {
-    let request = json!({
-        "id": cfg.id,
-        "op": cmd.op.op_string(),
-        "params": cmd.params,
-    });
+async fn send_request(
+    cfg: &CliConfig,
+    op: String,
+    params: Option<Value>,
+) -> anyhow::Result<String> {
+    let request = Request {
+        id: cfg.id.clone(),
+        op,
+        params,
+    };
     let payload = serde_json::to_string(&request)?;
 
     if let Some(addr) = cfg.tcp_addr.as_ref() {
@@ -739,13 +391,12 @@ async fn send_request(cfg: &CliConfig, cmd: Command) -> anyhow::Result<String> {
     anyhow::bail!("No valid connection target")
 }
 
-async fn run_watch(cfg: &CliConfig, watch_cfg: WatchConfig) -> anyhow::Result<()> {
-    let request = json!({
-        "op": "subscribe",
-        "params": {
-            "events": watch_cfg.events,
-        },
-    });
+async fn run_watch(cfg: &CliConfig, params: SubscribeParams) -> anyhow::Result<()> {
+    let request = Request {
+        id: None,
+        op: ControlOp::Subscribe.to_string(),
+        params: Some(serde_json::to_value(&params)?),
+    };
     let payload = serde_json::to_string(&request)?;
 
     if let Some(addr) = cfg.tcp_addr.as_ref() {

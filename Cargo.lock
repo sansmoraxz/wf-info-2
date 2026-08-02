@@ -4803,6 +4803,7 @@ dependencies = [
  "ashpd",
  "base64",
  "chrono",
+ "clap",
  "derive_more",
  "dirs",
  "enum_dispatch",
@@ -4869,6 +4870,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "serde",
  "serde_json",
  "tokio",
  "wf-control",

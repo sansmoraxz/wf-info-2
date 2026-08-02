@@ -389,11 +389,23 @@ impl WfmHandle {
 
 // ── Handlers ──
 
-#[derive(Debug, Deserialize, Default)]
-pub(crate) struct SignstatusParams {
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[cfg_attr(feature = "cli", derive(clap::Args))]
+pub struct SignstatusParams {
+    /// Set status (online, invisible, ingame)
+    #[cfg_attr(feature = "cli", arg(long))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     status: Option<String>,
     /// PATCH semantics: absent = don't change, null = remove, number = set
-    #[serde(default, with = "serde_with::rust::double_option")]
+    #[cfg_attr(
+        feature = "cli",
+        arg(long, value_parser = parse_nullable_u64, help = "Set status duration (seconds), use \"null\" to clear")
+    )]
+    #[serde(
+        default,
+        with = "serde_with::rust::double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
     #[allow(
         clippy::option_option,
         reason = "PATCH semantics: absent (don't change) vs null (remove) vs number (set)"
@@ -436,12 +448,21 @@ impl HandleOp for SignstatusParams {
 
 // ── Sign in handler ──
 
-#[derive(Debug, Deserialize)]
-pub(crate) struct SigninParams {
+#[derive(Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "cli", derive(clap::Args))]
+pub struct SigninParams {
+    /// Account email
+    #[cfg_attr(feature = "cli", arg(long))]
     email: String,
+    /// Account password
+    #[cfg_attr(feature = "cli", arg(long))]
     password: String,
+    /// Client ID
+    #[cfg_attr(feature = "cli", arg(long, default_value = "wf-info-2"))]
     #[serde(default = "default_app_name")]
     client_id: String,
+    /// Device name
+    #[cfg_attr(feature = "cli", arg(long, default_value = "wf-info-2"))]
     #[serde(default = "default_app_name")]
     device_name: String,
 }
@@ -663,6 +684,15 @@ pub(crate) async fn handle_wfm_signstatus(
 
 fn default_app_name() -> String {
     "wf-info-2".to_owned()
+}
+
+#[cfg(feature = "cli")]
+fn parse_nullable_u64(raw: &str) -> Result<Option<u64>, String> {
+    if raw.eq_ignore_ascii_case("null") {
+        Ok(None)
+    } else {
+        raw.parse::<u64>().map(Some).map_err(|e| e.to_string())
+    }
 }
 
 pub(crate) async fn handle_wfm_signin(

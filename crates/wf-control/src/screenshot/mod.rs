@@ -81,8 +81,12 @@ impl From<ScreenshotConfig> for ScreenshotState {
     }
 }
 
-#[derive(Debug, Deserialize, Default)]
-pub(super) struct ScreenshotParams {
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[cfg_attr(feature = "cli", derive(clap::Args))]
+pub struct ScreenshotParams {
+    /// Additional metadata (JSON)
+    #[cfg_attr(feature = "cli", arg(long, value_parser = crate::utils::parse_jsonish))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
 }
 

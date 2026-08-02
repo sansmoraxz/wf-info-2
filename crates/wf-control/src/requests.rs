@@ -97,10 +97,13 @@ pub(super) trait HandleOp {
     async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError>;
 }
 
-#[derive(Debug, Deserialize)]
-pub(super) struct Request {
+/// Wire request envelope, shared by the daemon (deserialize) and CLI (serialize).
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Request {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub op: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub params: Option<Value>,
 }
 

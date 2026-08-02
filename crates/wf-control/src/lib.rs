@@ -16,10 +16,16 @@ pub use events::{
     GameStartEvent, InventoryFetchedEvent, InventoryStaleEvent, InventorySummary,
     ProfileUpdatedEvent, ScreenshotTriggeredEvent, SystemQuitEvent, SystemQuitReason,
 };
-pub use requests::Handles;
-pub use screenshot::{ScreenshotConfig, ScreenshotState, WaylandCapture};
+pub use inventory::{
+    CountFilter, CountOp, FilterParams, LoadInventoryParams, RefreshParams, StaleParams,
+    TimestampParam,
+};
+pub use market::MarketPriceParams;
+pub use requests::{Handles, Request};
+pub use screenshot::{ScreenshotConfig, ScreenshotParams, ScreenshotState, WaylandCapture};
+pub use subscription::SubscribeParams;
 pub use server::{
     ControlConfig, ControlEndpoint, ControlServer, start_control_server,
     start_control_server_from_env,
 };
-pub use wfm_auth::WfmHandle;
+pub use wfm_auth::{SigninParams, SignstatusParams, WfmHandle};
