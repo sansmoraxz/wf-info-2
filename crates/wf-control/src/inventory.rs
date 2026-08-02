@@ -27,7 +27,7 @@ use wf_itemdata::traits::Item as _;
 use wf_core::{inventory_refresh, process};
 
 #[derive(Debug, thiserror::Error)]
-pub enum InventoryError {
+pub(super) enum InventoryError {
     #[error("inventory.load expects exactly one of 'path', 'json', or 'raw'")]
     AmbiguousSource,
     #[error("Failed to read inventory file {path}")]
@@ -67,7 +67,7 @@ pub enum InventoryError {
 /// Wire mirror for inventory.load params; converted to [`LoadInventoryRequest`]
 /// so the exactly-one-source rule is enforced before the handler runs.
 #[derive(Debug, Deserialize, Default)]
-pub struct LoadInventoryParams {
+pub(super) struct LoadInventoryParams {
     pub path: Option<String>,
     pub json: Option<Value>,
     pub raw: Option<String>,
@@ -79,7 +79,7 @@ pub struct LoadInventoryParams {
 /// Exactly one place an inventory can be loaded from. `encrypted` only makes
 /// sense for file reads, so it lives inside `Path`.
 #[derive(Debug)]
-pub enum InventoryInput {
+pub(super) enum InventoryInput {
     Path { path: String, encrypted: bool },
     Json(Value),
     Raw(String),
@@ -114,7 +114,7 @@ impl InventoryInput {
 }
 
 #[derive(Debug)]
-pub struct LoadInventoryRequest {
+pub(super) struct LoadInventoryRequest {
     pub input: InventoryInput,
     pub save: bool,
     pub source: Source,
@@ -140,14 +140,14 @@ impl TryFrom<LoadInventoryParams> for LoadInventoryRequest {
 }
 
 #[derive(Debug, Serialize)]
-pub struct InventoryLoadResponse {
+pub(super) struct InventoryLoadResponse {
     pub saved: bool,
     pub summary: InventorySummary,
     pub meta: storage::InventoryMeta,
 }
 
 #[derive(Debug, Serialize)]
-pub struct InventoryFilterResponse {
+pub(super) struct InventoryFilterResponse {
     pub total: usize,
     pub filtered: usize,
     pub offset: usize,
@@ -164,7 +164,7 @@ impl HandleOp for LoadInventoryParams {
     }
 }
 
-pub async fn handle_inventory_load(
+pub(super) async fn handle_inventory_load(
     events: &EventBus,
     params: LoadInventoryParams,
 ) -> Result<InventoryLoadResponse, InventoryError> {
@@ -197,7 +197,7 @@ pub async fn handle_inventory_load(
 }
 
 #[derive(Debug, Deserialize, Default)]
-pub struct FilterParams {
+pub(super) struct FilterParams {
     pub category: Option<String>,
     pub item_type: Option<String>,
     pub contains: Option<String>,
@@ -213,7 +213,7 @@ pub struct FilterParams {
 
 #[derive(Debug, Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
-pub enum CountOp {
+pub(super) enum CountOp {
     Gt,
     Gte,
     Lt,
@@ -223,7 +223,7 @@ pub enum CountOp {
 }
 
 #[derive(Debug, Deserialize, Clone, Copy)]
-pub struct CountFilter {
+pub(super) struct CountFilter {
     pub op: CountOp,
     pub value: i64,
 }
@@ -236,7 +236,7 @@ impl HandleOp for FilterParams {
     }
 }
 
-pub async fn handle_inventory_filter(
+pub(super) async fn handle_inventory_filter(
     index: &InventoryIndexCache,
     market: &MarketCache,
     item_index: &wf_itemdata::item_data::ItemIndex,
@@ -375,13 +375,13 @@ pub async fn handle_inventory_filter(
     })
 }
 
-pub fn handle_inventory_meta_get() -> storage::InventoryMeta {
+pub(super) fn handle_inventory_meta_get() -> storage::InventoryMeta {
     storage::read_inventory_meta().unwrap_or_default()
 }
 
 #[derive(Debug, Deserialize, Default)]
 #[cfg_attr(not(feature = "memory"), allow(dead_code))]
-pub struct RefreshParams {
+pub(super) struct RefreshParams {
     pub scan_retries: Option<u32>,
     pub scan_delay_ms: Option<u64>,
     pub save: Option<bool>,
@@ -403,7 +403,7 @@ impl HandleOp for RefreshParams {
 }
 
 #[cfg(feature = "memory")]
-pub async fn handle_inventory_refresh(
+pub(crate) async fn handle_inventory_refresh(
     client: &reqwest::Client,
     events: &EventBus,
     params: RefreshParams,
@@ -446,7 +446,7 @@ pub async fn handle_inventory_refresh(
 /// string holding RFC3339 or a stringified epoch.
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
-pub enum TimestampParam {
+pub(super) enum TimestampParam {
     Epoch(i64),
     Text(String),
 }
@@ -469,7 +469,7 @@ impl TimestampParam {
 }
 
 #[derive(Debug, Deserialize, Default)]
-pub struct StaleParams {
+pub(super) struct StaleParams {
     pub timestamp: Option<TimestampParam>,
     pub reason: Option<String>,
 }
@@ -482,7 +482,7 @@ impl HandleOp for StaleParams {
     }
 }
 
-pub fn handle_inventory_stale_update(
+pub(super) fn handle_inventory_stale_update(
     events: &EventBus,
     params: StaleParams,
 ) -> Result<storage::InventoryMeta, InventoryError> {
@@ -503,7 +503,7 @@ pub fn handle_inventory_stale_update(
     Ok(meta)
 }
 
-pub fn inventory_summary(inventory: &Inventory) -> InventorySummary {
+pub(super) fn inventory_summary(inventory: &Inventory) -> InventorySummary {
     InventorySummary {
         suits: inventory.suits.len(),
         long_guns: inventory.long_guns.len(),

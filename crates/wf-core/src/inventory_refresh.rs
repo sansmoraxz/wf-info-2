@@ -7,7 +7,6 @@ use wf_inventory::Inventory;
 #[derive(Debug)]
 pub struct InventoryFetch {
     pub inventory: Inventory,
-    pub auth: process::AuthQuery,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -41,7 +40,7 @@ pub async fn fetch_inventory_with_auth_from_process(
     scan_delay: Duration,
 ) -> Result<Option<InventoryFetch>, RefreshError> {
     match api::fetch_inventory(client, &auth).await {
-        Ok(inventory) => Ok(Some(InventoryFetch { inventory, auth })),
+        Ok(inventory) => Ok(Some(InventoryFetch { inventory })),
         Err(api::ApiError::AuthorizationRejected(_)) => {
             log::warn!("Inventory authorization was rejected; rescanning process memory once");
             let Some(new_auth) =
@@ -50,10 +49,7 @@ pub async fn fetch_inventory_with_auth_from_process(
                 return Ok(None);
             };
             let inventory = api::fetch_inventory(client, &new_auth).await?;
-            Ok(Some(InventoryFetch {
-                inventory,
-                auth: new_auth,
-            }))
+            Ok(Some(InventoryFetch { inventory }))
         }
         Err(error) => Err(error.into()),
     }

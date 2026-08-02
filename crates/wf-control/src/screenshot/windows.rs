@@ -9,7 +9,7 @@ use winapi::um::winuser::GetWindowThreadProcessId;
 use super::ScreenshotState;
 
 #[derive(Debug, thiserror::Error)]
-pub enum CaptureError {
+pub(crate) enum CaptureError {
     #[error("Warframe process not detected")]
     ProcessNotDetected,
     #[error("Failed to enumerate windows: {0}")]

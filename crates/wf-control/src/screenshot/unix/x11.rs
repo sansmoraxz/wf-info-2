@@ -12,7 +12,7 @@ use x11rb::rust_connection::RustConnection;
 use super::common::{BmpError, BmpRgb24, WARFRAME_CLASS_HINTS, WARFRAME_TITLE_HINTS};
 
 #[derive(Debug, thiserror::Error)]
-pub enum X11Error {
+pub(crate) enum X11Error {
     #[error("No X11/XWayland window found for Warframe; PID and title/class lookup both failed")]
     WindowNotFound,
     #[error("Invalid X11 window id '{0}'")]

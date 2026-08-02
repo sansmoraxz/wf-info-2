@@ -56,7 +56,7 @@ impl Handles {
 /// the wire boundary in [`handle_request`], so each variant's message (or its
 /// transparent inner message) IS the wire error string.
 #[derive(Debug, thiserror::Error)]
-pub enum ControlError {
+pub(super) enum ControlError {
     #[error("Unknown operation '{0}'")]
     UnknownOperation(String),
     #[error("Unexpected subscribe operation")]
@@ -85,7 +85,7 @@ pub enum ControlError {
 
 /// A control operation's params type: handling consumes the params and yields
 /// a typed response that converts into [`ResponseData`].
-pub trait HandleOp {
+pub(super) trait HandleOp {
     type Response: Into<ResponseData>;
     async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError>;
 }
@@ -95,27 +95,27 @@ async fn run<P: HandleOp>(params: P, cx: &Handles) -> Result<ResponseData, Contr
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Request {
+pub(super) struct Request {
     pub id: Option<String>,
     pub op: String,
     pub params: Option<Value>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct PingResponse {
-    pub pong: bool,
+pub(super) struct PingResponse {
+    pub pong: monostate::MustBe!(true),
 }
 
 /// Serializes to `{}`.
 #[derive(Debug, Serialize)]
-pub struct EmptyResponse {}
+pub(super) struct EmptyResponse {}
 
 /// Typed payload of a successful response. Serialize-only untagged: each
 /// variant serializes as its inner response object. `#[from]` also accepts
 /// the unboxed type, forwarding through `Box: From<T>`.
 #[derive(Debug, Serialize, derive_more::From)]
 #[serde(untagged)]
-pub enum ResponseData {
+pub(super) enum ResponseData {
     #[from(PingResponse, Box<PingResponse>)]
     Ping(Box<PingResponse>),
     #[from(InventoryLoadResponse, Box<InventoryLoadResponse>)]
@@ -139,8 +139,8 @@ pub enum ResponseData {
 }
 
 #[derive(Debug, Serialize)]
-pub struct Response {
-    pub id: Option<String>,
+pub(super) struct Response {
+    pub(crate) id: Option<String>,
     #[serde(flatten)]
     body: ResponseBody,
 }
@@ -185,7 +185,7 @@ impl Response {
 
 /// Outcome of handling a request line: either a plain reply, or a reply that
 /// transitions the connection into subscription mode.
-pub enum HandleOutcome {
+pub(super) enum HandleOutcome {
     Reply(Response),
     EnterSubscription {
         response: Response,
@@ -202,7 +202,7 @@ impl HandleOutcome {
     }
 }
 
-pub async fn handle_line(cx: &Handles, line: &str) -> HandleOutcome {
+pub(super) async fn handle_line(cx: &Handles, line: &str) -> HandleOutcome {
     match serde_json::from_str::<Request>(line) {
         Ok(req) => handle_request(cx, req).await,
         Err(e) => HandleOutcome::Reply(Response::error(None, format!("Invalid request: {e}"))),
@@ -239,7 +239,7 @@ async fn dispatch(
         .parse()
         .map_err(|_| ControlError::UnknownOperation(op.to_string()))?;
     Ok(match op {
-        ControlOp::Ping => PingResponse { pong: true }.into(),
+        ControlOp::Ping => PingResponse { pong: monostate::MustBe!(true) }.into(),
         ControlOp::Inventory(InventoryOp::Load) => {
             run(parse_params::<LoadInventoryParams>(params)?, cx).await?
         }

@@ -106,16 +106,6 @@ pub fn save_encrypted_profile(profile: &ProfileData) -> Result<(), StorageError>
     Ok(())
 }
 
-pub fn delete_profile() -> Result<(), StorageError> {
-    let file_path = app_cache_dir()?.join(PROFILE_FILE);
-
-    if file_path.exists() {
-        fs::remove_file(&file_path).map_err(StorageError::io("Failed to delete profile file"))?;
-        log::info!("Deleted profile data at {}", file_path.display());
-    }
-
-    Ok(())
-}
 
 // AES-256-GCM helpers (shared by profile & auth token)
 fn gcm_encrypt(plaintext: &[u8]) -> Result<Vec<u8>, StorageError> {
@@ -276,7 +266,7 @@ pub fn read_inventory_meta() -> Result<InventoryMeta, StorageError> {
     serde_json::from_str(&raw).map_err(StorageError::json("Failed to parse inventory metadata"))
 }
 
-pub fn write_inventory_meta(meta: &InventoryMeta) -> Result<(), StorageError> {
+fn write_inventory_meta(meta: &InventoryMeta) -> Result<(), StorageError> {
     let path = inventory_meta_path()?;
     let raw = serde_json::to_string_pretty(meta)
         .map_err(StorageError::json("Failed to serialize inventory metadata"))?;
@@ -317,7 +307,7 @@ pub fn clear_inventory_stale() -> Result<InventoryMeta, StorageError> {
 
 /// Encrypt inventory bytes using AES-128-CBC with the built-in key/IV.
 /// Returns the ciphertext (PKCS7-padded).
-pub fn encrypt_inventory_bytes(inventory: &inventory::Inventory) -> Result<Vec<u8>, StorageError> {
+pub(crate) fn encrypt_inventory_bytes(inventory: &inventory::Inventory) -> Result<Vec<u8>, StorageError> {
     use aes::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
     type Aes128CbcEnc = cbc::Encryptor<aes::Aes128>;
 
@@ -336,8 +326,9 @@ pub fn encrypt_inventory_bytes(inventory: &inventory::Inventory) -> Result<Vec<u
     Ok(ciphertext.to_vec())
 }
 
+#[cfg(test)]
 /// Encrypt inventory bytes using a caller-supplied AES-128-CBC key and IV.
-pub fn encrypt_inventory_bytes_with_key(
+pub(crate) fn encrypt_inventory_bytes_with_key(
     inventory: &inventory::Inventory,
     key: &[u8; 16],
     iv: &[u8; 16],

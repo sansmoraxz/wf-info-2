@@ -1,8 +1,11 @@
+#[cfg(feature = "memory")]
 use crate::process::AuthQuery;
 use crate::profile::ProfileData;
+#[cfg(feature = "memory")]
 use wf_inventory::Inventory;
 
 const PLAYER_INFO_URL: &str = "https://api.warframe.com/cdn/getProfileViewingData.php";
+#[cfg(feature = "memory")]
 const INVENTORY_URL: &str = "https://api.warframe.com/api/inventory.php";
 
 #[derive(Debug, thiserror::Error)]
@@ -34,7 +37,8 @@ pub async fn fetch_player_profile(
 
 /// Fetches the player's full inventory using the authenticated query.
 /// Returns the deserialized Inventory on success.
-pub async fn fetch_inventory(
+#[cfg(feature = "memory")]
+pub(crate) async fn fetch_inventory(
     client: &reqwest::Client,
     auth: &AuthQuery,
 ) -> Result<Inventory, ApiError> {

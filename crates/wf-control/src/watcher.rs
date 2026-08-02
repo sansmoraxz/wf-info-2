@@ -424,26 +424,6 @@ async fn handle_relic_selection_popup(
     }
 }
 
-pub async fn observe_warframe_activity<S: LogSource>(
-    events: EventBus,
-    http: reqwest::Client,
-    screenshot: Arc<ScreenshotState>,
-    source: S,
-    warframe_pid: Option<u32>,
-    auto_callbacks: AutoCallbacks,
-) -> Result<(), Box<dyn std::error::Error>> {
-    observe_warframe_activity_with_lifecycle(
-        events,
-        http,
-        screenshot,
-        source,
-        warframe_pid,
-        auto_callbacks,
-        GameLifecycleTracker::default(),
-    )
-    .await
-}
-
 pub async fn observe_warframe_activity_with_lifecycle<S: LogSource>(
     events: EventBus,
     http: reqwest::Client,
@@ -519,6 +499,26 @@ mod tests {
         > {
             Box::pin(async move { self.chunks.pop_front().unwrap_or(Ok(None)) })
         }
+    }
+
+    async fn observe_warframe_activity<S: LogSource>(
+        events: EventBus,
+        http: reqwest::Client,
+        screenshot: Arc<ScreenshotState>,
+        source: S,
+        warframe_pid: Option<u32>,
+        auto_callbacks: AutoCallbacks,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        observe_warframe_activity_with_lifecycle(
+            events,
+            http,
+            screenshot,
+            source,
+            warframe_pid,
+            auto_callbacks,
+            GameLifecycleTracker::default(),
+        )
+        .await
     }
 
     #[test]

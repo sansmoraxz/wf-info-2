@@ -12,7 +12,7 @@ use self::common::{EnvironmentKind, detect_unix_environment};
 use super::{ScreenshotState, WaylandCapture};
 
 #[derive(Debug, thiserror::Error)]
-pub enum CaptureError {
+pub(crate) enum CaptureError {
     #[error("Warframe process not detected; relaunch the game and try again")]
     ProcessNotDetected,
     #[error("{0}")]
@@ -43,13 +43,13 @@ struct BackendResolution {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BackendCacheEntry {
+pub(crate) struct BackendCacheEntry {
     warframe_pid: u32,
     wayland_capture: WaylandCapture,
     resolution: BackendResolution,
 }
 
-pub async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, String), CaptureError> {
+pub(crate) async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, String), CaptureError> {
     let total_start = Instant::now();
     let pid_start = Instant::now();
     let (warframe_pid, pid_cache_status) =

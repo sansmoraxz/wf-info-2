@@ -14,10 +14,10 @@ pub fn load_image(bytes: &[u8]) -> Result<image::DynamicImage, image::ImageError
 
 pub struct RelicRecognizer {
     ocr_engine: OcrEngine,
-    pub start_x: u32,
-    pub start_y: u32,
-    pub box_w: u32,
-    pub box_h: u32,
+    pub(crate) start_x: u32,
+    pub(crate) start_y: u32,
+    pub(crate) box_w: u32,
+    pub(crate) box_h: u32,
 }
 
 impl From<OcrEngine> for RelicRecognizer {
@@ -35,8 +35,8 @@ impl From<OcrEngine> for RelicRecognizer {
 
 #[derive(Debug)]
 pub struct RelicRecogizeText {
-    pub x: u32,
-    pub y: u32,
+    pub(crate) x: u32,
+    pub(crate) y: u32,
     pub text: String,
 }
 

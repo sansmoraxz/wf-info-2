@@ -2,7 +2,7 @@ use std::env;
 use std::num::NonZeroI32;
 
 #[derive(Debug, thiserror::Error)]
-pub enum BmpError {
+pub(crate) enum BmpError {
     #[error("BMP width must be positive: {0}")]
     NegativeWidth(i32),
     #[error("BMP height must be positive: {0}")]

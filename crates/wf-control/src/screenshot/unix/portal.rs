@@ -17,7 +17,7 @@ use wf_core::storage;
 use super::common::{BmpError, BmpRgb24};
 
 #[derive(Debug, thiserror::Error)]
-pub enum PortalError {
+pub(crate) enum PortalError {
     #[error("Failed to connect to xdg-desktop-portal ScreenCast interface")]
     Connect(#[source] ashpd::Error),
     #[error("Failed to create Wayland ScreenCast portal session")]

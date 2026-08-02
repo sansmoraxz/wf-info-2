@@ -6,14 +6,14 @@ use super::events::{DaemonEvent, DaemonEventKind};
 
 /// Parameters for subscribe request.
 #[derive(Debug, Deserialize, Default)]
-pub struct SubscribeParams {
+pub(super) struct SubscribeParams {
     /// List of event types to subscribe to. If empty or None, subscribes to all events.
-    pub events: Option<Vec<String>>,
+    pub(crate) events: Option<Vec<String>>,
 }
 
 /// Filter for determining which events to send to a subscriber.
 #[derive(Debug, Clone)]
-pub struct EventFilter {
+pub(super) struct EventFilter {
     /// If Some, only events matching these kinds are sent.
     /// If None, all events are sent.
     allowed_events: Option<HashSet<DaemonEventKind>>,
@@ -32,7 +32,7 @@ impl From<SubscribeParams> for EventFilter {
 
 impl EventFilter {
     /// Returns true if the event should be sent to the subscriber.
-    pub fn matches(&self, event: &DaemonEvent) -> bool {
+    pub(crate) fn matches(&self, event: &DaemonEvent) -> bool {
         match &self.allowed_events {
             Some(allowed) => allowed.contains(&event.kind()),
             None => true,
@@ -40,7 +40,7 @@ impl EventFilter {
     }
 
     /// Returns the list of allowed events, if any filter is set.
-    pub fn allowed_events(&self) -> Option<Vec<String>> {
+    pub(crate) fn allowed_events(&self) -> Option<Vec<String>> {
         self.allowed_events
             .as_ref()
             .map(|s| s.iter().map(ToString::to_string).collect())
@@ -49,25 +49,25 @@ impl EventFilter {
 
 /// Response data for successful subscribe.
 #[derive(Debug, Serialize)]
-pub struct SubscribeResponse {
+pub(super) struct SubscribeResponse {
     pub subscribed: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filter: Option<SubscribeFilterInfo>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct SubscribeFilterInfo {
+pub(super) struct SubscribeFilterInfo {
     pub allowed_events: Vec<String>,
 }
 
 /// Result of handling a subscribe request.
-pub struct SubscribeResult {
+pub(super) struct SubscribeResult {
     pub filter: EventFilter,
     pub response: SubscribeResponse,
 }
 
 /// Handle a subscribe request and return the filter and response.
-pub fn handle_subscribe(params: SubscribeParams) -> SubscribeResult {
+pub(super) fn handle_subscribe(params: SubscribeParams) -> SubscribeResult {
     let filter = EventFilter::from(params);
 
     let filter_info = filter.allowed_events().map(|events| SubscribeFilterInfo {

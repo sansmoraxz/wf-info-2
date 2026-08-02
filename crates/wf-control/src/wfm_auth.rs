@@ -17,7 +17,7 @@ use crate::utils::{WFM_AUTH_BASE, WFM_SUB_PROTOCOL, WFM_WS_URL};
 use wf_core::storage::{self, AuthTokenData};
 
 #[derive(Debug, thiserror::Error)]
-pub enum WfmError {
+pub(crate) enum WfmError {
     #[error("WFM actor unavailable")]
     ActorUnavailable,
     #[error("Not connected to WFM")]
@@ -243,8 +243,8 @@ impl WfmState {
 
 /// Snapshot of the signed-in session, as reported by the actor.
 pub(crate) struct SessionInfo {
-    pub status: Option<Status>,
-    pub expires_at: DateTime<Utc>,
+    pub(crate) status: Option<Status>,
+    pub(crate) expires_at: DateTime<Utc>,
 }
 
 /// Commands processed by the WFM actor task. Long WS round-trips never block

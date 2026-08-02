@@ -18,7 +18,7 @@ use wf_inventory::{Inventory, ItemType};
 use wf_itemdata::item_data::ItemIndex;
 
 #[derive(Debug, thiserror::Error)]
-pub enum SearchError {
+pub(super) enum SearchError {
     #[error(transparent)]
     Tantivy(#[from] tantivy::TantivyError),
     #[error(transparent)]
@@ -26,7 +26,7 @@ pub enum SearchError {
 }
 
 #[derive(Clone)]
-pub struct InventorySearchIndex {
+pub(super) struct InventorySearchIndex {
     pub index: Index,
     pub item_type_exact: Field,
     pub item_type_text: Field,
@@ -39,9 +39,9 @@ pub struct InventorySearchIndex {
 /// An inventory snapshot together with the search index built from it. The
 /// two are only ever created (and cached) as a unit, so an index can never
 /// be paired with a different inventory than the one it was built over.
-pub struct IndexedInventory {
-    pub inventory: Inventory,
-    pub index: InventorySearchIndex,
+pub(super) struct IndexedInventory {
+    pub(crate) inventory: Inventory,
+    pub(crate) index: InventorySearchIndex,
     /// `InventoryMeta::last_updated` at build time; the cache key.
     last_updated: Option<DateTime<Utc>>,
 }
@@ -66,7 +66,7 @@ impl IndexedInventory {
 /// `InventoryMeta::last_updated`. Owned by the composition root as
 /// `Arc<InventoryIndexCache>`.
 #[derive(Default)]
-pub struct InventoryIndexCache(arc_swap::ArcSwapOption<IndexedInventory>);
+pub(super) struct InventoryIndexCache(arc_swap::ArcSwapOption<IndexedInventory>);
 
 impl InventoryIndexCache {
     /// Return the cached inventory+index pair if it matches
@@ -96,7 +96,7 @@ impl InventoryIndexCache {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ItemEnvelope<T> {
+pub(super) struct ItemEnvelope<T> {
     pub item_type: ItemType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub item_id: Option<String>,
@@ -124,7 +124,7 @@ const RESERVED_ENVELOPE_KEYS: [&str; 5] = ["category", "item_type", "item_id", "
     Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr,
 )]
 #[strum(serialize_all = "snake_case", ascii_case_insensitive)]
-pub enum Category {
+pub(super) enum Category {
     #[strum(
         to_string = "suits",
         serialize = "suit",
@@ -186,7 +186,7 @@ pub enum Category {
 #[enum_dispatch::enum_dispatch(EnvelopeAccess)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "category", rename_all = "snake_case")]
-pub enum InventoryItemEnvelope {
+pub(super) enum InventoryItemEnvelope {
     Suits(ItemEnvelope<wf_inventory::suit::Suit>),
     LongGuns(ItemEnvelope<wf_inventory::long_gun::LongGun>),
     Pistols(ItemEnvelope<wf_inventory::pistol::Pistol>),
@@ -204,7 +204,7 @@ pub enum InventoryItemEnvelope {
 /// everything the envelope offers that doesn't depend on the item type.
 /// `enum_dispatch` generates the delegating impl on [`InventoryItemEnvelope`].
 #[enum_dispatch::enum_dispatch]
-pub trait EnvelopeAccess {
+pub(super) trait EnvelopeAccess {
     fn item_type(&self) -> &str;
     fn set_details(&mut self, details: wf_itemdata::item_data::ItemDetails);
     fn set_market(&mut self, market: crate::market::MarketSummary);
@@ -289,14 +289,14 @@ impl_has_other!(
     wf_inventory::recipe::PendingRecipe,
 );
 
-pub struct ItemView<'a> {
+pub(super) struct ItemView<'a> {
     pub details_name: Option<&'a str>,
     pub details_desc: Option<&'a str>,
     pub envelope: InventoryItemEnvelope,
 }
 
 /// Count items in the selected category without building envelopes.
-pub fn count_inventory_items(inventory: &Inventory, category: Option<Category>) -> usize {
+pub(super) fn count_inventory_items(inventory: &Inventory, category: Option<Category>) -> usize {
     macro_rules! count {
         ($($cat:ident => $field:ident),+ $(,)?) => {
             match category {
@@ -320,7 +320,7 @@ pub fn count_inventory_items(inventory: &Inventory, category: Option<Category>) 
     )
 }
 
-pub fn collect_inventory_items<'a>(
+pub(super) fn collect_inventory_items<'a>(
     inventory: &Inventory,
     category: Option<Category>,
     item_index: &'a ItemIndex,
@@ -395,7 +395,7 @@ pub fn collect_inventory_items<'a>(
     items
 }
 
-pub fn build_tantivy_index(
+pub(super) fn build_tantivy_index(
     items: &[ItemView],
 ) -> Result<InventorySearchIndex, tantivy::TantivyError> {
     let mut schema_builder = SchemaBuilder::default();
@@ -467,7 +467,7 @@ pub fn build_tantivy_index(
     })
 }
 
-pub fn search_inventory(
+pub(super) fn search_inventory(
     search_index: &InventorySearchIndex,
     clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)>,
 ) -> Result<(usize, Vec<InventoryItemEnvelope>), tantivy::TantivyError> {

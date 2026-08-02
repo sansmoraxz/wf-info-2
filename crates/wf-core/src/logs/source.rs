@@ -47,7 +47,8 @@ impl LineAssembler {
         complete
     }
 
-    pub fn pending_fragment(&self) -> &str {
+    #[cfg(test)]
+    pub(crate) fn pending_fragment(&self) -> &str {
         &self.pending
     }
 }

@@ -15,7 +15,7 @@ use wf_itemdata::item_data::ItemIndex;
 const CACHE_TTL: Duration = Duration::from_secs(3600); // 1 hour
 
 #[derive(Debug, thiserror::Error)]
-pub enum MarketError {
+pub(super) enum MarketError {
     #[error("wfm.price requires 'item_type' or 'search' parameter")]
     MissingQuery,
     #[error("Item not found on warframe.market")]
@@ -43,7 +43,7 @@ pub enum MarketError {
 #[serde(transparent)]
 #[from(forward)]
 #[as_ref(str)]
-pub struct GameRef(String);
+pub(super) struct GameRef(String);
 
 /// warframe.market object id. A string on the wire, but must never be
 /// interchanged with [`GameRef`]: each indexes a different cache map.
@@ -60,7 +60,7 @@ pub struct GameRef(String);
 )]
 #[serde(transparent)]
 #[as_ref(str)]
-pub struct WfmId(String);
+pub(super) struct WfmId(String);
 
 /// warframe.market URL slug (e.g. `harrow_prime_set`), used to build API
 /// paths. Not a [`GameRef`] and not a display name.
@@ -79,7 +79,7 @@ pub struct WfmId(String);
 #[serde(transparent)]
 #[from(forward)]
 #[as_ref(str)]
-pub struct Slug(String);
+pub(super) struct Slug(String);
 
 impl Slug {
     fn contains(&self, needle: &str) -> bool {
@@ -162,7 +162,7 @@ struct WfmOrderUser {
 // ── Cached item data ──
 
 #[derive(Debug, Clone)]
-pub struct WfmItem {
+pub(super) struct WfmItem {
     pub id: WfmId,
     pub slug: Slug,
     pub game_ref: Option<GameRef>,
@@ -171,7 +171,7 @@ pub struct WfmItem {
     pub ducats: Option<i64>,
 }
 
-pub struct WfmCache {
+pub(super) struct WfmCache {
     // Positions into `items`; the cache is only ever replaced wholesale,
     // so indices stay valid for its lifetime.
     game_ref_index: HashMap<GameRef, usize>,
@@ -239,7 +239,7 @@ impl WfmCache {
 /// Shared, lazily refreshed handle to the WFM item cache. Owned by the
 /// composition root as `Arc<MarketCache>`; handlers take snapshots from it.
 /// Holds a clone of the process-wide HTTP client for all market REST calls.
-pub struct MarketCache {
+pub(super) struct MarketCache {
     http: reqwest::Client,
     cache: arc_swap::ArcSwapOption<WfmCache>,
 }
@@ -343,7 +343,7 @@ async fn fetch_orders(
 // ── Typed order/price summaries ──
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PriceStats {
+pub(super) struct PriceStats {
     pub min: Option<f64>,
     pub max: Option<f64>,
     pub median: Option<f64>,
@@ -351,7 +351,7 @@ pub struct PriceStats {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct OrderSummary {
+pub(super) struct OrderSummary {
     pub sell: PriceStats,
     pub buy: PriceStats,
     pub total_listings: usize,
@@ -359,7 +359,7 @@ pub struct OrderSummary {
 
 /// Market price summary for a single item
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct MarketSummary {
+pub(super) struct MarketSummary {
     pub slug: Slug,
     pub ducats: Option<i64>,
     pub prices: OrderSummary,
@@ -418,7 +418,7 @@ fn price_stats(prices: &[f64]) -> PriceStats {
 
 // ── Inventory count lookup ──
 
-pub fn count_in_inventory(inventory: &Inventory, item_type: &str) -> i64 {
+pub(super) fn count_in_inventory(inventory: &Inventory, item_type: &str) -> i64 {
     // Equipment categories: each entry is 1 owned
     macro_rules! count_vec {
         ($field:expr) => {
@@ -493,14 +493,14 @@ pub fn count_in_inventory(inventory: &Inventory, item_type: &str) -> i64 {
 // ── Handlers ──
 
 #[derive(Debug, Deserialize, Default)]
-pub struct MarketPriceParams {
+pub(super) struct MarketPriceParams {
     pub item_type: Option<String>,
     pub search: Option<String>,
     pub include_parts: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct MarketItemInfo {
+pub(super) struct MarketItemInfo {
     pub name: String,
     pub slug: Slug,
     pub game_ref: Option<GameRef>,
@@ -510,12 +510,12 @@ pub struct MarketItemInfo {
 }
 
 #[derive(Debug, Serialize)]
-pub struct OwnedCount {
+pub(super) struct OwnedCount {
     pub owned: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct SetPartInfo {
+pub(super) struct SetPartInfo {
     pub name: String,
     pub slug: Slug,
     pub game_ref: Option<GameRef>,
@@ -525,7 +525,7 @@ pub struct SetPartInfo {
 }
 
 #[derive(Debug, Serialize)]
-pub struct MarketPriceResponse {
+pub(super) struct MarketPriceResponse {
     pub item: MarketItemInfo,
     pub prices: OrderSummary,
     pub inventory: OwnedCount,
@@ -537,7 +537,7 @@ pub struct MarketPriceResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct MarketRefreshResponse {
+pub(super) struct MarketRefreshResponse {
     pub items_count: usize,
     pub refreshed_at: DateTime<Utc>,
 }
@@ -550,7 +550,7 @@ impl HandleOp for MarketPriceParams {
     }
 }
 
-pub async fn handle_market_price(
+pub(super) async fn handle_market_price(
     market: &MarketCache,
     item_index: &ItemIndex,
     params: MarketPriceParams,
@@ -656,7 +656,7 @@ pub async fn handle_market_price(
     })
 }
 
-pub async fn handle_market_refresh(
+pub(super) async fn handle_market_refresh(
     market: &MarketCache,
 ) -> Result<MarketRefreshResponse, MarketError> {
     let cache = market.refresh().await?;
@@ -669,7 +669,7 @@ pub async fn handle_market_refresh(
 
 /// Fetch market price summary for a single item by game_ref.
 /// Used by inventory-filter enrichment.
-pub async fn fetch_market_summary(
+pub(super) async fn fetch_market_summary(
     market: &MarketCache,
     game_ref: &GameRef,
 ) -> Option<MarketSummary> {

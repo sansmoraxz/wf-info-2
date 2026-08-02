@@ -103,7 +103,7 @@ impl ControlConfig {
 
 #[derive(Default)]
 pub struct ControlServer {
-    pub handles: Vec<JoinHandle<()>>,
+    pub(crate) _handles: Vec<JoinHandle<()>>,
     // Keep guards alive for cleanup on drop
     #[cfg(unix)]
     _unix_guards: Vec<UnixSocketGuard>,
@@ -112,7 +112,7 @@ pub struct ControlServer {
 impl ControlServer {
     pub fn empty() -> Self {
         Self {
-            handles: Vec::new(),
+            _handles: Vec::new(),
             #[cfg(unix)]
             _unix_guards: Vec::new(),
         }
@@ -153,7 +153,7 @@ pub async fn start_control_server(
     }
 
     Ok(ControlServer {
-        handles,
+        _handles: handles,
         #[cfg(unix)]
         _unix_guards: unix_guards,
     })

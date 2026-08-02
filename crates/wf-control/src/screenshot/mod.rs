@@ -15,7 +15,7 @@ use super::events::{DaemonEvent, EventBus, ScreenshotTriggeredEvent};
 use super::requests::{ControlError, HandleOp, Handles};
 
 #[derive(Debug, thiserror::Error)]
-pub enum ScreenshotError {
+pub(super) enum ScreenshotError {
     #[error(transparent)]
     Capture(#[from] CaptureError),
     #[error(transparent)]
@@ -68,21 +68,21 @@ mod unix;
 mod windows;
 
 #[cfg(unix)]
-pub use unix::BackendCacheEntry;
+pub(crate) use unix::BackendCacheEntry;
 #[cfg(unix)]
-pub use unix::{CaptureError, capture_screen};
+pub(crate) use unix::{CaptureError, capture_screen};
 #[cfg(windows)]
 pub(crate) use windows::WindowCacheEntry;
 #[cfg(windows)]
 pub(crate) use windows::{CaptureError, capture_screen};
 
 #[derive(Debug, Deserialize, Default)]
-pub struct ScreenshotParams {
+pub(super) struct ScreenshotParams {
     pub metadata: Option<Value>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct ScreenshotEvent {
+pub(super) struct ScreenshotEvent {
     pub id: String,
     pub timestamp: DateTime<Utc>,
     pub metadata: Option<Value>,
@@ -109,7 +109,7 @@ impl HandleOp for ScreenshotParams {
     }
 }
 
-pub async fn handle_screenshot_trigger(
+pub(super) async fn handle_screenshot_trigger(
     shots: &ScreenshotState,
     events: &EventBus,
     params: ScreenshotParams,

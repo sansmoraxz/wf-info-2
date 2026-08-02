@@ -89,21 +89,6 @@ fn find_all_warframe_pids(system: &System) -> Vec<u32> {
         .collect()
 }
 
-pub async fn wait_for_warframe_start() -> u32 {
-    log::info!("Waiting for Warframe to start...");
-    let mut system = System::new();
-
-    loop {
-        refresh_all_process_commands(&mut system);
-
-        if let Some(pid) = find_warframe_pid(&system) {
-            log::info!("Warframe process detected (PID: {pid}).");
-            return pid;
-        }
-
-        sleep(Duration::from_secs(5)).await;
-    }
-}
 
 fn is_descendant_of(system: &System, pid: u32, ancestor_pid: u32) -> bool {
     let ancestor = sysinfo::Pid::from_u32(ancestor_pid);
@@ -147,7 +132,7 @@ const DEFAULT_HANDOFF_GRACE: Duration = Duration::from_secs(10);
 /// Warframe.x64.exe hands off to the real game process, and on slow systems
 /// the successor may not be up yet. Tradeoff: a genuine quit is only reported
 /// after this window. Tunable via WF_HANDOFF_GRACE_SECS.
-pub fn handoff_grace() -> Duration {
+pub(crate) fn handoff_grace() -> Duration {
     std::env::var("WF_HANDOFF_GRACE_SECS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
@@ -293,21 +278,12 @@ pub fn is_warframe_pid(pid: u32) -> bool {
         .is_some_and(is_warframe_game_process)
 }
 
-pub fn terminate_process(pid: u32) -> bool {
-    let pid = sysinfo::Pid::from_u32(pid);
-    let mut system = System::new();
-    refresh_process_command(&mut system, pid);
-
-    system
-        .process(pid)
-        .is_some_and(|process| process.kill())
-}
 
 /// Authorization query string containing accountId and nonce
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AuthQuery {
     pub account_id: String,
-    pub nonce: String,
+    pub(crate) nonce: String,
 }
 
 #[cfg(feature = "memory")]
@@ -428,18 +404,12 @@ fn add_chunk_candidates(
     previous_tail.extend_from_slice(&searchable[tail_start..]);
 }
 
-impl AuthQuery {
-    /// Returns the full query string for API requests
-    pub fn to_query_string(&self) -> String {
-        format!("?accountId={}&nonce={}", self.account_id, self.nonce)
-    }
-}
 
 /// Scans process memory for authorization data (accountId + nonce).
 /// This reads /proc/{pid}/maps and /proc/{pid}/mem on Linux.
 /// Requires appropriate permissions
 #[cfg(all(feature = "memory", target_os = "linux"))]
-pub fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanError> {
+pub(crate) fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanError> {
     log::info!("Scanning memory for account authorization (PID: {pid})");
 
     // Read memory mappings
@@ -543,7 +513,7 @@ pub fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanError> {
 /// Uses Windows API to enumerate and read process memory regions.
 /// Requires appropriate process access rights (PROCESS_VM_READ | PROCESS_QUERY_INFORMATION)
 #[cfg(all(feature = "memory", target_os = "windows"))]
-pub fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanError> {
+pub(crate) fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanError> {
     use winapi::shared::minwindef::{FALSE, LPVOID};
     use winapi::um::handleapi::CloseHandle;
     use winapi::um::memoryapi::ReadProcessMemory;
@@ -670,7 +640,7 @@ pub fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanError> {
     feature = "memory",
     not(any(target_os = "linux", target_os = "windows"))
 ))]
-pub fn scan_memory_for_auth(_pid: u32) -> Result<Option<AuthQuery>, ScanError> {
+pub(crate) fn scan_memory_for_auth(_pid: u32) -> Result<Option<AuthQuery>, ScanError> {
     Err(ScanError::Unsupported)
 }
 
