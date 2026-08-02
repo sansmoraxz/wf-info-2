@@ -17,12 +17,15 @@ version = "0.1.0"
 # Panics are not acceptable failure handling in the daemon/CLI at runtime;
 # tests are exempt via clippy.toml (allow-*-in-tests).
 [workspace.lints.clippy]
-unwrap_used = "warn"
-expect_used = "warn"
-panic = "warn"
-unreachable = "warn"
-todo = "warn"
-unimplemented = "warn"
+unwrap_used = "forbid"
+expect_used = "forbid"
+panic = "forbid"
+unreachable = "forbid"
+todo = "forbid"
+unimplemented = "forbid"
+
+# Performance lints
+perf = { level = "warn", priority = -1 }
 
 [workspace.dependencies]
 aes = "0.8"
