@@ -237,7 +237,7 @@ fn read_restore_token() -> Option<String> {
     read_restore_token_from_path(restore_token_path().ok()?)
 }
 
-fn read_restore_token_from_path(path: std::path::PathBuf) -> Option<String> {
+fn read_restore_token_from_path(path: impl AsRef<std::path::Path>) -> Option<String> {
     let raw = fs::read_to_string(path).ok()?;
     let stored: StoredPortalToken = serde_json::from_str(&raw).ok()?;
     if stored.restore_token.is_empty() {

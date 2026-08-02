@@ -49,7 +49,7 @@ impl ControlConfig {
         #[cfg(windows)]
         {
             if let Ok(pipe) = std::env::var("WF_INFO_API_NPIPE") {
-                endpoints.push(ControlEndpoint::Npipe(normalize_npipe_path(pipe)));
+                endpoints.push(ControlEndpoint::Npipe(pipe));
             }
         }
 
@@ -98,7 +98,7 @@ pub async fn start_control_server(cfg: ControlConfig, cx: Handles) -> Result<Con
     for endpoint in cfg.endpoints {
         match endpoint {
             ControlEndpoint::Tcp(addr) => {
-                handles.push(spawn_tcp_server(addr, cx.clone()).await?);
+                handles.push(spawn_tcp_server(&addr, cx.clone()).await?);
             }
             #[cfg(unix)]
             ControlEndpoint::Unix(path) => {
@@ -108,7 +108,7 @@ pub async fn start_control_server(cfg: ControlConfig, cx: Handles) -> Result<Con
             }
             #[cfg(windows)]
             ControlEndpoint::Npipe(path) => {
-                handles.push(spawn_npipe_server(path, cx.clone()).await?);
+                handles.push(spawn_npipe_server(&path, cx.clone()).await?);
             }
         }
     }
@@ -120,8 +120,8 @@ pub async fn start_control_server(cfg: ControlConfig, cx: Handles) -> Result<Con
     })
 }
 
-async fn spawn_tcp_server(addr: String, cx: Handles) -> Result<JoinHandle<()>> {
-    let listener = TcpListener::bind(&addr)
+async fn spawn_tcp_server(addr: &str, cx: Handles) -> Result<JoinHandle<()>> {
+    let listener = TcpListener::bind(addr)
         .await
         .with_context(|| format!("Failed to bind TCP control socket at {}", addr))?;
     log::info!("Control API listening on tcp {}", addr);
@@ -147,7 +147,7 @@ async fn spawn_tcp_server(addr: String, cx: Handles) -> Result<JoinHandle<()>> {
 }
 
 #[cfg(windows)]
-async fn spawn_npipe_server(path: String, cx: Handles) -> Result<JoinHandle<()>> {
+async fn spawn_npipe_server(path: &str, cx: Handles) -> Result<JoinHandle<()>> {
     let pipe_path = normalize_npipe_path(path);
     log::info!("Control API listening on npipe {}", pipe_path);
 
@@ -204,7 +204,7 @@ async fn spawn_unix_server(
     let listener = UnixListener::bind(&path)
         .with_context(|| format!("Failed to bind unix control socket {}", path.display()))?;
     log::info!("Control API listening on unix {}", path.display());
-    let guard = UnixSocketGuard { path: path.clone() };
+    let guard = UnixSocketGuard { path };
 
     let handle = tokio::spawn(async move {
         loop {
@@ -389,7 +389,7 @@ fn default_tcp_addr() -> String {
 
 #[cfg(windows)]
 fn default_npipe_path() -> String {
-    normalize_npipe_path("wf-info-2-control")
+    "wf-info-2-control".to_string()
 }
 
 #[cfg(windows)]
