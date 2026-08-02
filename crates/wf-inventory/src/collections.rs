@@ -31,7 +31,7 @@ pub struct QuestKey {
     pub unlock: Option<bool>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents an active booster.
@@ -79,7 +79,7 @@ pub struct CrewShipSalvagedWeapon {
     pub configs: Option<Vec<Value>>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents a Railjack component skin (engines, shields, etc.).
@@ -95,7 +95,7 @@ pub struct CrewShipWeaponSkin {
     pub upgrade_fingerprint: Option<String>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents a Kubrow/Kavat genetic imprint.
@@ -117,7 +117,7 @@ pub struct KubrowPetPrint {
     pub dominant_traits: Option<Value>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents an evolution progress entry (incarnon).
@@ -152,7 +152,7 @@ pub struct SpectreLoadout {
     pub melee: Option<String>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents a challenge instance state.
@@ -169,7 +169,7 @@ pub struct ChallengeInstanceState {
     pub params: Option<Value>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents a collectible series (Kuria, fragments, etc.).
@@ -191,7 +191,7 @@ pub struct CollectibleSeries {
     pub incentive_states: Option<Vec<Value>>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents a completed job chain.
@@ -204,7 +204,7 @@ pub struct CompletedJobChain {
     pub jobs: Option<Vec<Value>>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents a completed job.
@@ -217,7 +217,7 @@ pub struct CompletedJob {
     pub stage_completions: Option<Vec<i64>>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents a discovered marker.
@@ -229,7 +229,7 @@ pub struct DiscoveredMarker {
     pub discovery_state: Option<Vec<i64>>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents a Descent (The Circuit) reward state.
@@ -248,7 +248,7 @@ pub struct DescentReward {
     pub expiry: Option<Value>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents an Endless XP (Steel Path) entry.
@@ -261,7 +261,7 @@ pub struct EndlessXPEntry {
     pub choices: Option<Vec<String>>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents focus loadout preset.
@@ -274,7 +274,7 @@ pub struct FocusLoadout {
     pub preset: Option<Value>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents hub NPC customization.
@@ -290,7 +290,7 @@ pub struct HubNpcCustomization {
     pub pattern: Option<Value>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents a Kahl loadout.
@@ -303,7 +303,7 @@ pub struct KahlLoadOut {
     pub skins: Option<Vec<String>>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents Codex library scan progress.
@@ -332,7 +332,7 @@ pub struct SortieRewardEntry {
     pub store_item: Option<String>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents a nemesis history entry (Lich/Sister).
@@ -351,7 +351,7 @@ pub struct NemesisHistory {
     pub killing_suit: Option<String>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents a pending trade.
@@ -373,7 +373,7 @@ pub struct PendingTrade {
     pub buddy_ready: Option<bool>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents periodic mission completion data.
@@ -400,7 +400,7 @@ pub struct PersonalGoalProgress {
     pub id: Option<ObjectId>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents a dojo research project.
@@ -425,7 +425,7 @@ pub struct PersonalTechProject {
     pub has_contributions: Option<bool>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents a recent vendor purchase history.
@@ -438,7 +438,7 @@ pub struct RecentVendorPurchase {
     pub purchase_history: Option<Vec<Value>>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents a Nightwave season challenge history entry.
@@ -484,7 +484,7 @@ pub struct StepSequencer {
     pub note_packs: Option<Value>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents a taunt history entry.
@@ -516,5 +516,5 @@ pub struct LibraryDailyTaskInfo {
     pub reward_quantity: Option<i64>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }

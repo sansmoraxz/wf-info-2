@@ -31,7 +31,7 @@ pub struct OperatorAmp {
     pub item_name: Option<String>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 #[cfg(test)]

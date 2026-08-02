@@ -413,7 +413,7 @@ pub(super) struct MarketPriceResponse {
     pub inventory: OwnedCount,
     pub cache_age_secs: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub details: Option<ItemDetails>,
+    pub details: Option<Arc<ItemDetails>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub set_parts: Option<Vec<SetPartInfo>>,
 }
@@ -624,7 +624,7 @@ pub(super) async fn handle_market_price(
         .game_ref
         .as_ref()
         .and_then(|gr| item_index.lookup(gr.as_ref(), None))
-        .map(|info| info.details.clone());
+        .map(|info| Arc::clone(&info.details));
 
     // Set parts: detect set items by "set" tag, then fetch detail for setParts
     let include_parts = params.include_parts.unwrap_or(true);

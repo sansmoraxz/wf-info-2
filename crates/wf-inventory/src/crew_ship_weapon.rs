@@ -22,7 +22,7 @@ pub struct CrewShipWeapon {
     pub upgrade_ver: Option<i64>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 #[cfg(test)]

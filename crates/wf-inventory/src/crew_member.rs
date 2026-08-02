@@ -28,7 +28,7 @@ pub struct CrewMember {
     pub powersuit_type: Option<String>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 #[cfg(test)]

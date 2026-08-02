@@ -22,7 +22,7 @@ pub struct Sentinel {
     pub configs: Option<Vec<Value>>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 #[cfg(test)]

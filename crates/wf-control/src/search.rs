@@ -36,7 +36,7 @@ use crate::market::MarketSummary;
 macro_rules! impl_has_other {
     ($($ty:ty),+ $(,)?) => {
         $(impl HasOther for $ty {
-            fn other_mut(&mut self) -> Option<&mut serde_json::Value> {
+            fn other_mut(&mut self) -> Option<&mut serde_json::Map<String, serde_json::Value>> {
                 self.other.as_mut()
             }
         })+
@@ -139,7 +139,7 @@ pub(super) struct ItemEnvelope<T> {
     // skip_deserializing keeps a stray same-named key in the item's catch-all
     // from being parsed as these types.
     #[serde(default, skip_serializing_if = "Option::is_none", skip_deserializing)]
-    pub details: Option<ItemDetails>,
+    pub details: Option<Arc<ItemDetails>>,
     #[serde(default, skip_serializing_if = "Option::is_none", skip_deserializing)]
     pub market: Option<MarketSummary>,
     #[serde(flatten)]
@@ -235,7 +235,7 @@ pub(super) enum InventoryItemEnvelope {
 #[enum_dispatch::enum_dispatch]
 pub(super) trait EnvelopeAccess {
     fn item_type(&self) -> &str;
-    fn set_details(&mut self, details: ItemDetails);
+    fn set_details(&mut self, details: Arc<ItemDetails>);
     fn set_market(&mut self, market: MarketSummary);
 }
 
@@ -243,7 +243,7 @@ impl<T: HasOther> EnvelopeAccess for ItemEnvelope<T> {
     fn item_type(&self) -> &str {
         self.item_type.as_ref()
     }
-    fn set_details(&mut self, details: ItemDetails) {
+    fn set_details(&mut self, details: Arc<ItemDetails>) {
         self.details = Some(details);
     }
     fn set_market(&mut self, market: MarketSummary) {
@@ -286,7 +286,7 @@ impl InventoryItemEnvelope {
 }
 
 trait HasOther {
-    fn other_mut(&mut self) -> Option<&mut serde_json::Value>;
+    fn other_mut(&mut self) -> Option<&mut serde_json::Map<String, serde_json::Value>>;
 }
 
 impl_has_other!(
@@ -344,7 +344,7 @@ pub(super) fn collect_inventory_items<'a>(
         T: Clone + HasOther,
     {
         let mut item = item.clone();
-        if let Some(serde_json::Value::Object(map)) = item.other_mut() {
+        if let Some(map) = item.other_mut() {
             for key in RESERVED_ENVELOPE_KEYS {
                 map.remove(key);
             }
@@ -682,7 +682,7 @@ mod tests {
         extra.insert("market".into(), Value::String("evil".into()));
         extra.insert("details".into(), Value::String("evil".into()));
         extra.insert("KeptKey".into(), Value::String("kept".into()));
-        suit.other = Some(Value::Object(extra));
+        suit.other = Some(extra);
 
         let mut poisoned = inventory.clone();
         poisoned.suits = vec![suit];

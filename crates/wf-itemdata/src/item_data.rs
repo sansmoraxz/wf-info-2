@@ -1,6 +1,7 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fs;
+use std::sync::Arc;
 
 use serde::Serialize;
 
@@ -55,11 +56,13 @@ pub struct ItemInfo {
     pub unique_name: UniqueName,
     pub product_category: Option<String>,
     pub description: Option<String>,
-    pub details: ItemDetails,
+    /// Shared: the same payload appears under multiple product categories,
+    /// and consumers attach it to response envelopes without deep-cloning.
+    pub details: Arc<ItemDetails>,
 }
 
 impl ItemInfo {
-    fn new(details: ItemDetails, product_category: Option<String>) -> Self {
+    fn new(details: Arc<ItemDetails>, product_category: Option<String>) -> Self {
         Self {
             name: Some(details.name().to_owned()),
             unique_name: UniqueName(details.unique_name().to_owned()),
@@ -121,7 +124,7 @@ fn build_item_index() -> HashMap<UniqueName, Vec<ItemInfo>> {
             .and_then(|p| fs::read_to_string(p).ok())
     };
 
-    let mut push_info = |details: ItemDetails, product_category: Option<String>| {
+    let mut push_info = |details: Arc<ItemDetails>, product_category: Option<String>| {
         let info = ItemInfo::new(details, product_category);
         index
             .entry(info.unique_name.clone())
@@ -134,7 +137,7 @@ fn build_item_index() -> HashMap<UniqueName, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<warframe::Root>(&raw)
     {
         for item in arr {
-            push_info(ItemDetails::Warframe(item), Some("Suits".to_owned()));
+            push_info(Arc::new(ItemDetails::Warframe(item)), Some("Suits".to_owned()));
         }
     }
     // Primary
@@ -143,7 +146,7 @@ fn build_item_index() -> HashMap<UniqueName, Vec<ItemInfo>> {
     {
         for item in arr {
             let pc = Some(item.product_category.as_ref().to_owned());
-            push_info(ItemDetails::Primary(item), pc);
+            push_info(Arc::new(ItemDetails::Primary(item)), pc);
         }
     }
     // Secondary
@@ -152,7 +155,7 @@ fn build_item_index() -> HashMap<UniqueName, Vec<ItemInfo>> {
     {
         for item in arr {
             let pc = Some(item.product_category.as_ref().to_owned());
-            push_info(ItemDetails::Secondary(item), pc);
+            push_info(Arc::new(ItemDetails::Secondary(item)), pc);
         }
     }
     // Melee
@@ -161,7 +164,7 @@ fn build_item_index() -> HashMap<UniqueName, Vec<ItemInfo>> {
     {
         for item in arr {
             let pc = Some(item.product_category.as_ref().to_owned());
-            push_info(ItemDetails::Melee(item), pc);
+            push_info(Arc::new(ItemDetails::Melee(item)), pc);
         }
     }
     // Archwing suits
@@ -170,7 +173,7 @@ fn build_item_index() -> HashMap<UniqueName, Vec<ItemInfo>> {
     {
         for item in arr {
             let pc = Some(item.product_category.as_ref().to_owned());
-            push_info(ItemDetails::Archwing(item), pc);
+            push_info(Arc::new(ItemDetails::Archwing(item)), pc);
         }
     }
     // Arch-guns
@@ -179,7 +182,7 @@ fn build_item_index() -> HashMap<UniqueName, Vec<ItemInfo>> {
     {
         for item in arr {
             let pc = Some(item.product_category.as_ref().to_owned());
-            push_info(ItemDetails::ArchGun(item), pc);
+            push_info(Arc::new(ItemDetails::ArchGun(item)), pc);
         }
     }
     // Arch-melee
@@ -188,7 +191,7 @@ fn build_item_index() -> HashMap<UniqueName, Vec<ItemInfo>> {
     {
         for item in arr {
             let pc = Some(item.product_category.as_ref().to_owned());
-            push_info(ItemDetails::ArchMelee(item), pc);
+            push_info(Arc::new(ItemDetails::ArchMelee(item)), pc);
         }
     }
     // Mods (covers Upgrades/RawUpgrades)
@@ -196,8 +199,11 @@ fn build_item_index() -> HashMap<UniqueName, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<mods::Root>(&raw)
     {
         for item in arr {
-            for pc in item.get_product_categories() {
-                push_info(ItemDetails::Mod(item.clone()), Some(pc));
+            // One shared payload regardless of how many categories list it
+            let categories = item.get_product_categories();
+            let details = Arc::new(ItemDetails::Mod(item));
+            for pc in categories {
+                push_info(Arc::clone(&details), Some(pc));
             }
         }
     }
@@ -264,7 +270,10 @@ mod tests {
     fn item_info_extracts_fields_from_details() {
         let item: warframe::WarframeEntry =
             serde_json::from_str(&fixture("warframe_test.json")).unwrap();
-        let info = ItemInfo::new(ItemDetails::Warframe(item), Some("Suits".to_owned()));
+        let info = ItemInfo::new(
+            Arc::new(ItemDetails::Warframe(item)),
+            Some("Suits".to_owned()),
+        );
         assert_eq!(
             info.unique_name.as_ref(),
             "/Lotus/Powersuits/Priest/HarrowPrime"

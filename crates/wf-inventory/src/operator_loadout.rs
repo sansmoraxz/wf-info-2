@@ -22,7 +22,7 @@ pub struct OperatorLoadOut {
     pub ability_override: Option<Value>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents an Adult Operator (Drifter) loadout configuration.
@@ -38,7 +38,7 @@ pub struct AdultOperatorLoadOut {
     pub upgrades: Option<Vec<String>>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 #[cfg(test)]

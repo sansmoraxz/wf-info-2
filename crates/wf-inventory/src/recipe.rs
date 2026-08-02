@@ -12,7 +12,7 @@ pub struct Recipe {
     pub item_count: i64,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -33,5 +33,5 @@ pub struct PendingRecipe {
     pub completion_date: DateWrapper,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }

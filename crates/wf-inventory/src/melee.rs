@@ -33,7 +33,7 @@ pub struct Melee {
     pub is_new: Option<bool>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 #[cfg(test)]

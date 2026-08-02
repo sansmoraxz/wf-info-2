@@ -129,15 +129,17 @@ enum OutputFormat {
 }
 
 impl OutputFormat {
-    fn print_json_line(self, raw: &str) -> anyhow::Result<()> {
+    fn print_json_line(self, raw: &str) {
         match self {
-            Self::Pretty => match serde_json::from_str::<Value>(raw) {
-                Ok(value) => println!("{}", serde_json::to_string_pretty(&value)?),
+            // Stream-transcode text -> pretty text: payloads can embed
+            // megabytes of base64 (screenshots), so never materialize a
+            // Value tree just to re-indent.
+            Self::Pretty => match pretty_print_json(raw) {
+                Ok(pretty) => println!("{pretty}"),
                 Err(_) => println!("{raw}"),
             },
             Self::Compact => println!("{raw}"),
         }
-        Ok(())
     }
 }
 
@@ -313,6 +315,16 @@ fn parse_json_value(raw: &str) -> Result<Box<RawValue>, String> {
     RawValue::from_string(raw.to_owned()).map_err(|e| format!("Invalid JSON: {e}"))
 }
 
+fn pretty_print_json(raw: &str) -> Result<String, serde_json::Error> {
+    let mut deserializer = serde_json::Deserializer::from_str(raw);
+    let mut out = Vec::with_capacity(raw.len());
+    let mut serializer = serde_json::Serializer::pretty(&mut out);
+    serde_transcode::transcode(&mut deserializer, &mut serializer)?;
+    deserializer.end()?;
+    // serde_json never emits invalid UTF-8
+    Ok(String::from_utf8_lossy(&out).into_owned())
+}
+
 fn request_mode(op: ControlOp, params: Option<impl Serialize>) -> anyhow::Result<CliMode> {
     Ok(CliMode::Request {
         op: op.to_string(),
@@ -338,7 +350,7 @@ async fn main() -> anyhow::Result<()> {
     match cli.command.into_cli_mode()? {
         CliMode::Request { op, params } => {
             let response = send_request(&cfg, op, params).await?;
-            cfg.output.print_json_line(response.trim_end())?;
+            cfg.output.print_json_line(response.trim_end());
         }
         CliMode::Watch(params) => {
             run_watch(&cfg, params).await?;
@@ -474,7 +486,7 @@ where
             continue;
         }
 
-        output.print_json_line(trimmed)?;
+        output.print_json_line(trimmed);
     }
 
     Ok(())

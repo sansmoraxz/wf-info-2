@@ -134,8 +134,9 @@ notify-debouncer-mini = "0.7"
 rand = "0.9"
 reqwest = { version = "0.13", features = ["json", "query"] }
 scopeguard = "1.2"
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
+serde_transcode = { package = "serde-transcode", version = "1.1" }
 serde_repr = "0.1.20"
 serde_with = { version = "3.16.1", features = ["chrono", "json"] }
 strum = { version = "0.27", features = ["derive"] }

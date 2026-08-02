@@ -13,7 +13,7 @@ pub struct CountableItem {
     pub item_count: i64,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Type-only item (FlavourItems, FocusUpgrades, etc.)
@@ -23,7 +23,7 @@ pub struct TypeOnlyItem {
     pub item_type: ItemType,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Weapon skin reference (ItemType + ItemId)
@@ -36,7 +36,7 @@ pub struct WeaponSkin {
     pub item_id: ObjectId,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Inventory slot bin (Extra + Slots)

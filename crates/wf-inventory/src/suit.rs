@@ -55,7 +55,7 @@ pub struct Suit {
     pub is_new: Option<bool>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 #[cfg(test)]
@@ -74,5 +74,37 @@ mod test {
 
         assert_eq!(suit.item_type, "/Lotus/Powersuits/Trinity/TrinityPrime");
         assert_eq!(suit.xp.unwrap(), 3_106_125);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The flatten catch-all is a string-keyed Map, so numeric-looking JSON
+    /// keys are plain strings and must survive the roundtrip. (Flatten only
+    /// breaks on maps with non-string key types, which buffer through
+    /// serde's internal representation.)
+    #[test]
+    fn numeric_looking_keys_roundtrip_through_map_catch_all() {
+        let raw = r#"{"ItemType":"/Lotus/Test","ItemId":{"$oid":"abc"},"123":45,"":"empty-key","9.5":[1,2]}"#;
+        let suit: Suit = serde_json::from_str(raw).unwrap();
+        let other = suit.other.as_ref().unwrap();
+        assert_eq!(other.get("123").unwrap(), 45_i32);
+        assert_eq!(other.get("").unwrap(), "empty-key");
+        assert!(other.get("9.5").unwrap().is_array());
+        let back = serde_json::to_value(&suit).unwrap();
+        assert_eq!(back["123"], 45_i32);
+        assert_eq!(back["9.5"], serde_json::json!([1_i32, 2_i32]));
+    }
+
+    /// Unquoted keys (`{1:"hello"}`) are invalid JSON: rejected by the
+    /// parser itself, identically for a `Map` catch-all and the previous
+    /// `Value` one.
+    #[test]
+    fn unquoted_numeric_key_is_a_parse_error_regardless_of_catch_all_type() {
+        let raw = r#"{"ItemType":"/Lotus/Test","ItemId":{"$oid":"abc"},1:"hello"}"#;
+        serde_json::from_str::<Suit>(raw).unwrap_err();
+        serde_json::from_str::<serde_json::Value>(raw).unwrap_err();
     }
 }

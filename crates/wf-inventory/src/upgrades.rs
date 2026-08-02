@@ -17,7 +17,7 @@ pub struct RawUpgrade {
     pub item_count: i64,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represent upgraded mods
@@ -40,7 +40,7 @@ pub struct Upgrade {
     pub upgrade_fingerprint: UpgradeFingerprint,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -69,7 +69,7 @@ pub struct RivenFingerprint {
     pub buffs: Vec<Buff>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

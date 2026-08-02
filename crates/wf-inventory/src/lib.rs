@@ -172,7 +172,7 @@ pub struct Polarity {
     pub value: Option<String>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -970,7 +970,7 @@ pub struct Inventory {
 
     // ── Catch-all for remaining fields ──
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 pub fn deserialize_mongo_date_option<'de, D>(
@@ -979,63 +979,65 @@ pub fn deserialize_mongo_date_option<'de, D>(
 where
     D: Deserializer<'de>,
 {
-    let v = Value::deserialize(deserializer).map_err(de::Error::custom)?;
-    if v.is_null() {
-        return Ok(None);
+    /// Every shape a Mongo-ish date shows up as on the game wire; deserialized
+    /// directly instead of buffering into a `serde_json::Value` first.
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum MongoDate {
+        Millis(i64),
+        Text(String),
+        Extended {
+            #[serde(rename = "$numberLong")]
+            number_long: Option<MongoLong>,
+            #[serde(rename = "$date")]
+            date: Option<String>,
+        },
     }
 
-    if let Value::Number(n) = &v
-        && let Some(ms) = n.as_i64()
+    /// `$numberLong` arrives as either a JSON string or a bare number.
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum MongoLong {
+        Millis(i64),
+        Text(String),
+    }
+
+    fn from_ms<E>(ms: i64) -> Result<Option<DateTime<Utc>>, E>
+    where
+        E: de::Error,
     {
-        if let Some(dt) = ms_to_dt(ms) {
-            return Ok(Some(dt));
-        }
-        return Err(de::Error::custom("invalid timestamp"));
+        ms_to_dt(ms)
+            .map(Some)
+            .ok_or_else(|| de::Error::custom("invalid timestamp"))
     }
 
-    if let Value::String(s) = &v {
+    /// Millisecond epoch or RFC 3339, matching the old string handling.
+    fn from_text<E>(s: &str) -> Result<Option<DateTime<Utc>>, E>
+    where
+        E: de::Error,
+    {
         if let Ok(ms) = s.parse::<i64>() {
-            if let Some(dt) = ms_to_dt(ms) {
-                return Ok(Some(dt));
-            }
-            return Err(de::Error::custom("invalid timestamp"));
+            return from_ms(ms);
         }
-        if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
-            return Ok(Some(dt.with_timezone(&Utc)));
-        }
+        DateTime::parse_from_rfc3339(s)
+            .map(|dt| Some(dt.with_timezone(&Utc)))
+            .map_err(|_| de::Error::custom("unsupported date format"))
     }
 
-    if let Value::Object(map) = &v {
-        if let Some(Value::String(num_s)) = map.get("$numberLong")
-            && let Ok(ms) = num_s.parse::<i64>()
-        {
-            if let Some(dt) = ms_to_dt(ms) {
-                return Ok(Some(dt));
-            }
-            return Err(de::Error::custom("invalid timestamp"));
-        }
-        if let Some(Value::Number(num)) = map.get("$numberLong")
-            && let Some(ms) = num.as_i64()
-        {
-            if let Some(dt) = ms_to_dt(ms) {
-                return Ok(Some(dt));
-            }
-            return Err(de::Error::custom("invalid timestamp"));
-        }
-        if let Some(Value::String(s)) = map.get("$date") {
-            if let Ok(ms) = s.parse::<i64>() {
-                if let Some(dt) = ms_to_dt(ms) {
-                    return Ok(Some(dt));
-                }
-                return Err(de::Error::custom("invalid timestamp"));
-            }
-            if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
-                return Ok(Some(dt.with_timezone(&Utc)));
-            }
-        }
+    match Option::<MongoDate>::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(MongoDate::Millis(ms)) => from_ms(ms),
+        Some(MongoDate::Text(s)) => from_text(&s),
+        Some(MongoDate::Extended { number_long, date }) => match (number_long, date) {
+            (Some(MongoLong::Millis(ms)), _) => from_ms(ms),
+            (Some(MongoLong::Text(s)), _) => s
+                .parse::<i64>()
+                .map_err(|_| de::Error::custom("unsupported date format"))
+                .and_then(from_ms),
+            (None, Some(s)) => from_text(&s),
+            (None, None) => Err(de::Error::custom("unsupported date format")),
+        },
     }
-
-    Err(de::Error::custom("unsupported date format"))
 }
 
 fn ms_to_dt(ms: i64) -> Option<DateTime<Utc>> {

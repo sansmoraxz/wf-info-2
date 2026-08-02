@@ -414,6 +414,7 @@ pub(super) async fn handle_inventory_load(
         source,
     } = LoadInventoryRequest::try_from(params)?;
     let inventory = input.load().await?;
+    let summary = inventory_summary(&inventory);
 
     if save {
         storage::save_inventory(&inventory)?;
@@ -425,7 +426,7 @@ pub(super) async fn handle_inventory_load(
         events.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
             timestamp: Utc::now(),
             source,
-            summary: inventory_summary(&inventory),
+            summary: summary.clone(),
         }));
     }
 
@@ -433,7 +434,7 @@ pub(super) async fn handle_inventory_load(
 
     Ok(InventoryLoadResponse {
         saved: save,
-        summary: inventory_summary(&inventory),
+        summary,
         meta,
     })
 }
@@ -544,7 +545,7 @@ pub(super) async fn handle_inventory_filter(
             && let Some(info) =
                 item_index.lookup(envelope.item_type(), Some(envelope.category().as_ref()))
         {
-            envelope.set_details(info.details.clone());
+            envelope.set_details(Arc::clone(&info.details));
         }
 
         filtered_items.push(envelope);
@@ -600,6 +601,7 @@ pub(crate) async fn handle_inventory_refresh(
 
     let save = params.save.unwrap_or(true);
     let source = params.source.unwrap_or(Source::LiveRefresh);
+    let summary = inventory_summary(&inventory);
     if save {
         storage::save_inventory(&inventory)?;
         if let Err(e) = storage::touch_inventory_updated(Some(&source.to_string())) {
@@ -610,7 +612,7 @@ pub(crate) async fn handle_inventory_refresh(
         events.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
             timestamp: Utc::now(),
             source,
-            summary: inventory_summary(&inventory),
+            summary: summary.clone(),
         }));
     }
 
@@ -618,7 +620,7 @@ pub(crate) async fn handle_inventory_refresh(
 
     Ok(InventoryLoadResponse {
         saved: save,
-        summary: inventory_summary(&inventory),
+        summary,
         meta,
     })
 }
