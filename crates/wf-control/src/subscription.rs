@@ -91,7 +91,7 @@ mod tests {
     #[test]
     fn lifecycle_events_can_be_selected_by_wire_name() {
         let filter = EventFilter::from(SubscribeParams {
-            events: Some(vec!["system_quit".to_string()]),
+            events: Some(vec!["system_quit".to_owned()]),
         });
         let event = DaemonEvent::SystemQuit(SystemQuitEvent {
             timestamp: Utc::now(),

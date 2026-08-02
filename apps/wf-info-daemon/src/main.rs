@@ -1,28 +1,35 @@
 use clap::{Args, Parser};
+use std::collections::HashSet;
+use std::env;
 #[cfg(unix)]
 use std::ffi::OsString;
+use std::io;
 #[cfg(unix)]
 use std::path::PathBuf;
 #[cfg(windows)]
 use std::pin::Pin;
 #[cfg(unix)]
 use std::process::Stdio;
+use std::process::{ExitStatus, exit};
 use std::sync::Arc;
 #[cfg(windows)]
 use std::time::Duration;
 use std::time::SystemTime;
 use tokio::process::Command;
 use tokio::signal;
+use tokio::sync::broadcast::error::RecvError;
+#[cfg(unix)]
+use tokio::task::JoinError;
 #[cfg(windows)]
 use tokio::task::JoinHandle;
 #[cfg(windows)]
 use tokio::time::{Sleep, sleep};
 
-use wf_control::watcher::{AutoCallbacks, GameLifecycleTracker};
-use wf_control::wfm_auth::WfmHandle;
+use wf_control::watcher::{self, AutoCallbacks, GameLifecycleTracker};
+use wf_control::wfm_auth::{Status, WfmHandle, set_status_if_connected, try_restore_session};
 use wf_control::{
-    self, ControlConfig, ControlEndpoint, DaemonEvent, EventBus, GameStartEvent, Handles,
-    ScreenshotConfig, SystemQuitEvent, WaylandCapture,
+    self, ControlConfig, ControlEndpoint, ControlServer, DaemonEvent, EventBus, GameStartEvent,
+    Handles, ScreenshotConfig, SystemQuitEvent, WaylandCapture,
 };
 #[cfg(windows)]
 use wf_core::logs::DbwinLogSource;
@@ -102,7 +109,7 @@ impl ServerArgs {
 }
 
 fn auto_callbacks_from_env() -> AutoCallbacks {
-    if std::env::var("WF_SKIP_AUTO_CALLBACK").is_ok_and(|v| v.eq_ignore_ascii_case("TRUE")) {
+    if env::var("WF_SKIP_AUTO_CALLBACK").is_ok_and(|v| v.eq_ignore_ascii_case("TRUE")) {
         AutoCallbacks::Skip
     } else {
         AutoCallbacks::Enabled
@@ -144,27 +151,24 @@ async fn handle_game_exit(
     }));
 
     if auto_callbacks == AutoCallbacks::Enabled {
-        wf_control::wfm_auth::set_status_if_connected(wfm, wf_control::wfm_auth::Status::Invisible)
-            .await;
+        set_status_if_connected(wfm, Status::Invisible).await;
     }
 }
 
 #[cfg(unix)]
-fn exit_from_child_result(
-    result: Result<Result<std::process::ExitStatus, std::io::Error>, tokio::task::JoinError>,
-) -> ! {
+fn exit_from_child_result(result: Result<Result<ExitStatus, io::Error>, JoinError>) -> ! {
     match result {
         Ok(Ok(status)) => {
             log::info!("Warframe process exited with status: {status}");
-            std::process::exit(status.code().unwrap_or(0));
+            exit(status.code().unwrap_or(0));
         }
         Ok(Err(e)) => {
             log::error!("Error waiting for Warframe process: {e}");
-            std::process::exit(1);
+            exit(1);
         }
         Err(e) => {
             log::error!("Child process task failed: {e}");
-            std::process::exit(1);
+            exit(1);
         }
     }
 }
@@ -184,7 +188,7 @@ fn merged_winedebug_value(existing: Option<OsString>) -> OsString {
 #[cfg(windows)]
 async fn wait_for_game_start_or_launcher_exit(
     launcher: process::Launcher,
-    child_handle: &mut JoinHandle<Result<std::process::ExitStatus, std::io::Error>>,
+    child_handle: &mut JoinHandle<Result<ExitStatus, io::Error>>,
 ) -> process::RunningGame {
     let game_started = launcher.game_started();
     tokio::pin!(game_started);
@@ -204,11 +208,11 @@ async fn wait_for_game_start_or_launcher_exit(
                     }
                     Ok(Err(e)) => {
                         log::error!("Error waiting for Warframe launcher process: {}", e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                     Err(e) => {
                         log::error!("Warframe launcher task failed: {}", e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 }
             }
@@ -218,7 +222,7 @@ async fn wait_for_game_start_or_launcher_exit(
                 }
             }, if timeout.is_some() => {
                 log::error!("Timed out waiting for the Warframe game process after the launcher exited");
-                std::process::exit(1);
+                exit(1);
             }
         }
     }
@@ -244,59 +248,63 @@ async fn main() {
         log::warn!("Failed to update item data cache: {e}");
     }
 
-    wf_control::wfm_auth::try_restore_session(&cx.wfm).await;
+    try_restore_session(&cx.wfm).await;
 
-    let _control_server = match cli.server.into_control_config() {
-        Some(cfg) => match wf_control::start_control_server(cfg, cx.clone()).await {
+    let _control_server = if let Some(cfg) = cli.server.into_control_config() {
+        match wf_control::start_control_server(cfg, cx.clone()).await {
             Ok(server) => server,
             Err(e) => {
                 log::error!("Failed to start control API: {e}");
-                wf_control::ControlServer::empty()
+                ControlServer::empty()
             }
-        },
-        None => {
-            log::warn!("No control API endpoints configured");
-            wf_control::ControlServer::empty()
         }
+    } else {
+        log::warn!("No control API endpoints configured");
+        ControlServer::empty()
     };
 
     #[cfg(windows)]
     let mut log_source = DbwinLogSource::new().unwrap_or_else(|e| {
         eprintln!("Error: Failed to start DBWIN monitor: {}", e);
-        std::process::exit(1);
+        exit(1);
     });
 
-    let existing_warframe_pids: std::collections::HashSet<u32> =
+    let existing_warframe_pids: HashSet<u32> =
         process::get_all_warframe_pids().into_iter().collect();
 
     log::info!(
         "Launching Warframe as child process: {:?}",
         cli.warframe_cmd
     );
-    let mut command = Command::new(&cli.warframe_cmd[0]);
-    command.args(&cli.warframe_cmd[1..]);
+    let Some((program, program_args)) = cli.warframe_cmd.split_first() else {
+        // Unreachable in practice: clap marks the launch command as required.
+        eprintln!("Error: Missing Warframe launch command.");
+        exit(1);
+    };
+    let mut command = Command::new(program);
+    command.args(program_args);
     #[cfg(unix)]
     {
         command.stderr(Stdio::piped());
         command.env(
             "WINEDEBUG",
-            merged_winedebug_value(std::env::var_os("WINEDEBUG")),
+            merged_winedebug_value(env::var_os("WINEDEBUG")),
         );
     }
     let mut child = command.spawn().unwrap_or_else(|e| {
         eprintln!("Error: Failed to launch Warframe: {e}");
-        std::process::exit(1);
+        exit(1);
     });
 
     #[cfg(unix)]
     let log_source = WineDebugLogSource::new(child.stderr.take().unwrap_or_else(|| {
         eprintln!("Error: Failed to capture Wine debug stderr.");
-        std::process::exit(1);
+        exit(1);
     }));
 
     let launcher_pid = child.id().unwrap_or_else(|| {
         eprintln!("Error: Warframe launched without a PID.");
-        std::process::exit(1);
+        exit(1);
     });
     log::info!("Warframe launcher spawned with PID: {launcher_pid}");
 
@@ -342,24 +350,16 @@ async fn main() {
             loop {
                 match rx.recv().await {
                     Ok(DaemonEvent::AccountLogin(_)) => {
-                        wf_control::wfm_auth::set_status_if_connected(
-                            &wfm,
-                            wf_control::wfm_auth::Status::Ingame,
-                        )
-                        .await;
+                        set_status_if_connected(&wfm, Status::Ingame).await;
                     }
                     Ok(DaemonEvent::AccountLogout(_)) => {
-                        wf_control::wfm_auth::set_status_if_connected(
-                            &wfm,
-                            wf_control::wfm_auth::Status::Invisible,
-                        )
-                        .await;
+                        set_status_if_connected(&wfm, Status::Invisible).await;
                     }
                     Ok(_) => {}
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    Err(RecvError::Lagged(n)) => {
                         log::warn!("WFM auto-status missed {n} events");
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    Err(RecvError::Closed) => break,
                 }
             }
         });
@@ -372,7 +372,7 @@ async fn main() {
     let watcher_screenshot = Arc::clone(&cx.screenshot);
     let game_pid = game.pid();
     let mut log_watcher = tokio::spawn(async move {
-        if let Err(e) = wf_control::watcher::observe_warframe_activity_with_lifecycle(
+        if let Err(e) = watcher::observe_warframe_activity_with_lifecycle(
             watcher_events,
             watcher_http,
             watcher_screenshot,
@@ -423,7 +423,7 @@ mod tests {
 
     #[test]
     fn launch_command_is_required() {
-        assert!(Cli::try_parse_from(["wf-info-daemon"]).is_err());
+        Cli::try_parse_from(["wf-info-daemon"]).unwrap_err();
     }
 
     #[test]

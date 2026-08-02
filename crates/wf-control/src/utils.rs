@@ -16,10 +16,10 @@ pub(super) enum ParamsError {
 }
 
 /// GET a v2 WFM API path (relative to [`WFM_API_BASE`]) and parse the JSON body.
-pub(super) async fn wfm_get<T: DeserializeOwned>(
-    client: &reqwest::Client,
-    path: &str,
-) -> Result<T, reqwest::Error> {
+pub(super) async fn wfm_get<T>(client: &reqwest::Client, path: &str) -> Result<T, reqwest::Error>
+where
+    T: DeserializeOwned,
+{
     let url = format!("{WFM_API_BASE}/{path}");
     client.get(&url).send().await?.json().await
 }
@@ -35,7 +35,10 @@ where
 }
 
 /// Like [`parse_params`], but params must be present (no default).
-pub(super) fn parse_required_params<T: DeserializeOwned>(params: Option<Value>) -> Result<T, ParamsError> {
+pub(super) fn parse_required_params<T>(params: Option<Value>) -> Result<T, ParamsError>
+where
+    T: DeserializeOwned,
+{
     let value = params.ok_or(ParamsError::Missing)?;
     serde_json::from_value(value).map_err(ParamsError::Invalid)
 }

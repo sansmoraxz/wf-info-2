@@ -1,15 +1,16 @@
-use image::{DynamicImage, ImageReader};
+mod ocr;
+
+use image::{DynamicImage, ImageReader, imageops::FilterType};
 use ocr_rs::{OcrEngine, engine::OcrResult_};
 use std::io::Cursor;
 
-mod ocr;
-
 pub use ocr::{OcrInitError, new_default_ocr_engine};
 
-pub fn load_image(bytes: &[u8]) -> Result<image::DynamicImage, image::ImageError> {
-    ImageReader::new(Cursor::new(bytes))
-        .with_guessed_format()?
-        .decode()
+#[derive(Debug)]
+pub struct RelicRecogizeText {
+    pub(crate) x: u32,
+    pub(crate) y: u32,
+    pub text: String,
 }
 
 pub struct RelicRecognizer {
@@ -31,20 +32,6 @@ impl From<OcrEngine> for RelicRecognizer {
             box_h: 91,
         }
     }
-}
-
-#[derive(Debug)]
-pub struct RelicRecogizeText {
-    pub(crate) x: u32,
-    pub(crate) y: u32,
-    pub text: String,
-}
-
-/// Saturating f64 -> u32: inputs are u32/positive-scale quotients, so the
-/// clamp only guards degenerate (tiny-image) scales.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn to_px(v: f64) -> u32 {
-    v.clamp(0.0, f64::from(u32::MAX)) as u32
 }
 
 impl RelicRecognizer {
@@ -82,12 +69,14 @@ impl RelicRecognizer {
             src_w.min(img.width().saturating_sub(src_x)),
             src_h.min(img.height().saturating_sub(src_y)),
         )
-        .resize_exact(
-            self.box_w,
-            self.box_h,
-            image::imageops::FilterType::Lanczos3,
-        )
+        .resize_exact(self.box_w, self.box_h, FilterType::Lanczos3)
     }
+}
+
+pub fn load_image(bytes: &[u8]) -> Result<image::DynamicImage, image::ImageError> {
+    ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()?
+        .decode()
 }
 
 /// Group horizontally overlapping OCR hits into one entry per column,
@@ -101,22 +90,32 @@ fn merge_overlapping_columns(hits: Vec<OcrResult_>) -> Vec<RelicRecogizeText> {
         let overlapping = bounds
             .iter()
             .position(|(l, r)| left.max(*l) < right.min(*r));
-        match overlapping {
-            Some(i) => {
-                merged[i].text.push(' ');
-                merged[i].text.push_str(&hit.text);
-            }
-            None => {
-                bounds.push((left, right));
-                merged.push(RelicRecogizeText {
-                    text: hit.text,
-                    x: u32::try_from(left).unwrap_or(0),
-                    y: u32::try_from(hit.bbox.rect.top()).unwrap_or(0),
-                });
-            }
+        // `bounds` and `merged` are pushed in lockstep, so an index found in
+        // `bounds` is always present in `merged`.
+        if let Some(group) = overlapping.and_then(|i| merged.get_mut(i)) {
+            group.text.push(' ');
+            group.text.push_str(&hit.text);
+        } else {
+            bounds.push((left, right));
+            merged.push(RelicRecogizeText {
+                text: hit.text,
+                x: u32::try_from(left).unwrap_or(0),
+                y: u32::try_from(hit.bbox.rect.top()).unwrap_or(0),
+            });
         }
     }
     merged
+}
+
+/// Saturating f64 -> u32: inputs are u32/positive-scale quotients, so the
+/// clamp only guards degenerate (tiny-image) scales.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "value is clamped to [0, u32::MAX] before the cast"
+)]
+fn to_px(v: f64) -> u32 {
+    v.clamp(0.0, f64::from(u32::MAX)) as u32
 }
 
 fn trim_in_place(s: &mut String) {

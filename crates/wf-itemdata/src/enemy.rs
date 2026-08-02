@@ -40,7 +40,7 @@ pub struct Enemy {
 
 impl ProductCategory for Enemy {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["Enemy".to_string()]
+        vec!["Enemy".to_owned()]
     }
 }
 

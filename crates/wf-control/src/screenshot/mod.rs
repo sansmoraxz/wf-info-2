@@ -1,8 +1,15 @@
+#[cfg(unix)]
+mod unix;
+#[cfg(windows)]
+mod windows;
+
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io;
+use std::io::Write as _;
 use std::time::Instant;
 
-use base64::Engine;
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use chrono::{DateTime, Utc};
 use rand::random;
 use serde::Deserialize;
@@ -14,6 +21,15 @@ use wf_core::storage;
 use super::events::{DaemonEvent, EventBus, ScreenshotTriggeredEvent};
 use super::requests::{ControlError, HandleOp, Handles};
 
+#[cfg(unix)]
+pub(crate) use unix::BackendCacheEntry;
+#[cfg(unix)]
+pub(crate) use unix::{CaptureError, capture_screen};
+#[cfg(windows)]
+pub(crate) use windows::WindowCacheEntry;
+#[cfg(windows)]
+pub(crate) use windows::{CaptureError, capture_screen};
+
 #[derive(Debug, thiserror::Error)]
 pub(super) enum ScreenshotError {
     #[error(transparent)]
@@ -21,9 +37,9 @@ pub(super) enum ScreenshotError {
     #[error(transparent)]
     Storage(#[from] storage::StorageError),
     #[error("Failed to open screenshot events log")]
-    OpenLog(#[source] std::io::Error),
+    OpenLog(#[source] io::Error),
     #[error("Failed to append screenshot event")]
-    AppendLog(#[source] std::io::Error),
+    AppendLog(#[source] io::Error),
     #[error("Failed to serialize screenshot event log entry")]
     SerializeLogEntry(#[source] serde_json::Error),
 }
@@ -43,7 +59,10 @@ pub struct ScreenshotConfig {
 }
 
 #[derive(Default)]
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "each platform cfg only reads its own cache field; the others are dead on that platform"
+)]
 pub struct ScreenshotState {
     pub(crate) config: ScreenshotConfig,
     #[cfg(unix)]
@@ -61,20 +80,6 @@ impl From<ScreenshotConfig> for ScreenshotState {
         }
     }
 }
-
-#[cfg(unix)]
-mod unix;
-#[cfg(windows)]
-mod windows;
-
-#[cfg(unix)]
-pub(crate) use unix::BackendCacheEntry;
-#[cfg(unix)]
-pub(crate) use unix::{CaptureError, capture_screen};
-#[cfg(windows)]
-pub(crate) use windows::WindowCacheEntry;
-#[cfg(windows)]
-pub(crate) use windows::{CaptureError, capture_screen};
 
 #[derive(Debug, Deserialize, Default)]
 pub(super) struct ScreenshotParams {
@@ -126,7 +131,7 @@ pub(super) async fn handle_screenshot_trigger(
     );
 
     let base64_start = Instant::now();
-    let base64_content = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    let base64_content = STANDARD.encode(&bytes);
     log::trace!(
         "Screenshot base64 encoding produced {} bytes in {:?}",
         base64_content.len(),

@@ -1,16 +1,19 @@
+use std::io;
 use std::sync::Arc;
 #[cfg(feature = "memory")]
 use std::time::Duration;
 
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, TimeZone as _, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tantivy::Term;
-use tantivy::query::{Occur, QueryParser, TermQuery};
+use tantivy::query::{Occur, Query, QueryParser, QueryParserError, TermQuery};
 use tantivy::schema::IndexRecordOption;
+use tokio::fs;
 
 use wf_core::storage;
 use wf_inventory::Inventory;
+use wf_itemdata::item_data::ItemIndex;
 
 use super::events::{
     DaemonEvent, EventBus, InventoryFetchedEvent, InventoryStaleEvent, InventorySummary, Source,
@@ -18,7 +21,7 @@ use super::events::{
 use super::market::{MarketCache, fetch_market_summary};
 use super::requests::{ControlError, HandleOp, Handles};
 use super::search::{
-    Category, EnvelopeAccess, IndexedInventory, InventoryIndexCache, InventoryItemEnvelope,
+    Category, EnvelopeAccess as _, IndexedInventory, InventoryIndexCache, InventoryItemEnvelope,
     SearchError, count_inventory_items, search_inventory,
 };
 use wf_itemdata::traits::Item as _;
@@ -34,7 +37,7 @@ pub(super) enum InventoryError {
     ReadFile {
         path: String,
         #[source]
-        source: std::io::Error,
+        source: io::Error,
     },
     #[error("Failed to parse inventory JSON")]
     ParseJson(#[source] serde_json::Error),
@@ -61,7 +64,7 @@ pub(super) enum InventoryError {
     #[error(transparent)]
     Tantivy(#[from] tantivy::TantivyError),
     #[error(transparent)]
-    QueryParser(#[from] tantivy::query::QueryParserError),
+    QueryParser(#[from] QueryParserError),
 }
 
 /// Wire mirror for inventory.load params; converted to [`LoadInventoryRequest`]
@@ -90,15 +93,16 @@ impl InventoryInput {
         match self {
             Self::Path { path, encrypted } => {
                 if encrypted {
-                    let data = tokio::fs::read(&path)
-                        .await
-                        .map_err(|source| InventoryError::ReadFile {
-                            path: path.clone(),
-                            source,
-                        })?;
+                    let data =
+                        fs::read(&path)
+                            .await
+                            .map_err(|source| InventoryError::ReadFile {
+                                path: path.clone(),
+                                source,
+                            })?;
                     Ok(storage::decrypt_inventory_bytes(&data)?)
                 } else {
-                    let raw = tokio::fs::read_to_string(&path).await.map_err(|source| {
+                    let raw = fs::read_to_string(&path).await.map_err(|source| {
                         InventoryError::ReadFile {
                             path: path.clone(),
                             source,
@@ -164,38 +168,6 @@ impl HandleOp for LoadInventoryParams {
     }
 }
 
-pub(super) async fn handle_inventory_load(
-    events: &EventBus,
-    params: LoadInventoryParams,
-) -> Result<InventoryLoadResponse, InventoryError> {
-    let LoadInventoryRequest {
-        input,
-        save,
-        source,
-    } = LoadInventoryRequest::try_from(params)?;
-    let inventory = input.load().await?;
-
-    if save {
-        storage::save_inventory(&inventory)?;
-        let _ = storage::touch_inventory_updated(Some(&source.to_string()));
-
-        // Emit inventory fetched event
-        events.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
-            timestamp: Utc::now(),
-            source,
-            summary: inventory_summary(&inventory),
-        }));
-    }
-
-    let meta = storage::read_inventory_meta().unwrap_or_default();
-
-    Ok(InventoryLoadResponse {
-        saved: save,
-        summary: inventory_summary(&inventory),
-        meta,
-    })
-}
-
 #[derive(Debug, Deserialize, Default)]
 pub(super) struct FilterParams {
     pub category: Option<String>,
@@ -236,10 +208,113 @@ impl HandleOp for FilterParams {
     }
 }
 
+#[derive(Debug, Deserialize, Default)]
+#[cfg_attr(
+    not(feature = "memory"),
+    allow(
+        dead_code,
+        reason = "fields are only read by the memory-feature refresh handler"
+    )
+)]
+pub(super) struct RefreshParams {
+    pub scan_retries: Option<u32>,
+    pub scan_delay_ms: Option<u64>,
+    pub save: Option<bool>,
+    pub source: Option<Source>,
+}
+
+impl HandleOp for RefreshParams {
+    type Response = InventoryLoadResponse;
+
+    #[cfg(feature = "memory")]
+    async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError> {
+        Ok(handle_inventory_refresh(&cx.http, &cx.events, self).await?)
+    }
+
+    #[cfg(not(feature = "memory"))]
+    async fn handle(self, _cx: &Handles) -> Result<Self::Response, ControlError> {
+        Err(InventoryError::MemoryFeatureDisabled.into())
+    }
+}
+
+/// Timestamp accepted as a numeric epoch (seconds or milliseconds) or a
+/// string holding RFC3339 or a stringified epoch.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub(super) enum TimestampParam {
+    Epoch(i64),
+    Text(String),
+}
+
+impl TimestampParam {
+    fn to_datetime(&self) -> Result<DateTime<Utc>, InventoryError> {
+        match self {
+            Self::Text(s) => {
+                if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
+                    return Ok(dt.with_timezone(&Utc));
+                }
+                if let Ok(num) = s.parse::<i64>() {
+                    return Ok(epoch_to_datetime(num));
+                }
+                Err(InventoryError::UnsupportedTimestamp)
+            }
+            Self::Epoch(num) => Ok(epoch_to_datetime(*num)),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub(super) struct StaleParams {
+    pub timestamp: Option<TimestampParam>,
+    pub reason: Option<String>,
+}
+
+impl HandleOp for StaleParams {
+    type Response = storage::InventoryMeta;
+
+    async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError> {
+        Ok(handle_inventory_stale_update(&cx.events, self)?)
+    }
+}
+
+pub(super) async fn handle_inventory_load(
+    events: &EventBus,
+    params: LoadInventoryParams,
+) -> Result<InventoryLoadResponse, InventoryError> {
+    let LoadInventoryRequest {
+        input,
+        save,
+        source,
+    } = LoadInventoryRequest::try_from(params)?;
+    let inventory = input.load().await?;
+
+    if save {
+        storage::save_inventory(&inventory)?;
+        if let Err(e) = storage::touch_inventory_updated(Some(&source.to_string())) {
+            log::warn!("Failed to update inventory meta timestamp: {e}");
+        }
+
+        // Emit inventory fetched event
+        events.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
+            timestamp: Utc::now(),
+            source,
+            summary: inventory_summary(&inventory),
+        }));
+    }
+
+    let meta = storage::read_inventory_meta().unwrap_or_default();
+
+    Ok(InventoryLoadResponse {
+        saved: save,
+        summary: inventory_summary(&inventory),
+        meta,
+    })
+}
+
 pub(super) async fn handle_inventory_filter(
     index: &InventoryIndexCache,
     market: &MarketCache,
-    item_index: &wf_itemdata::item_data::ItemIndex,
+    item_index: &ItemIndex,
     mut params: FilterParams,
 ) -> Result<InventoryFilterResponse, InventoryError> {
     let custom_path = params.path.take().map(|path| InventoryInput::Path {
@@ -252,7 +327,7 @@ pub(super) async fn handle_inventory_filter(
         Some(raw) if raw.eq_ignore_ascii_case("all") => None,
         Some(raw) => Some(
             raw.parse::<Category>()
-                .map_err(|_| InventoryError::UnknownCategory(raw.to_string()))?,
+                .map_err(|_| InventoryError::UnknownCategory(raw.to_owned()))?,
         ),
     };
     let include_details = params.include_details.unwrap_or(false);
@@ -274,7 +349,7 @@ pub(super) async fn handle_inventory_filter(
     // Count items in selected category for reporting
     let total = count_inventory_items(&indexed.inventory, category);
 
-    let mut clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
+    let mut clauses: Vec<(Occur, Box<dyn Query>)> = Vec::new();
 
     if let Some(cat) = category {
         let term = Term::from_field_text(search_index.category, cat.as_ref());
@@ -379,29 +454,6 @@ pub(super) fn handle_inventory_meta_get() -> storage::InventoryMeta {
     storage::read_inventory_meta().unwrap_or_default()
 }
 
-#[derive(Debug, Deserialize, Default)]
-#[cfg_attr(not(feature = "memory"), allow(dead_code))]
-pub(super) struct RefreshParams {
-    pub scan_retries: Option<u32>,
-    pub scan_delay_ms: Option<u64>,
-    pub save: Option<bool>,
-    pub source: Option<Source>,
-}
-
-impl HandleOp for RefreshParams {
-    type Response = InventoryLoadResponse;
-
-    #[cfg(feature = "memory")]
-    async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError> {
-        Ok(handle_inventory_refresh(&cx.http, &cx.events, self).await?)
-    }
-
-    #[cfg(not(feature = "memory"))]
-    async fn handle(self, _cx: &Handles) -> Result<Self::Response, ControlError> {
-        Err(InventoryError::MemoryFeatureDisabled.into())
-    }
-}
-
 #[cfg(feature = "memory")]
 pub(crate) async fn handle_inventory_refresh(
     client: &reqwest::Client,
@@ -423,7 +475,9 @@ pub(crate) async fn handle_inventory_refresh(
     let source = params.source.unwrap_or(Source::LiveRefresh);
     if save {
         storage::save_inventory(&inventory)?;
-        let _ = storage::touch_inventory_updated(Some(&source.to_string()));
+        if let Err(e) = storage::touch_inventory_updated(Some(&source.to_string())) {
+            log::warn!("Failed to update inventory meta timestamp: {e}");
+        }
 
         // Emit inventory fetched event
         events.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
@@ -440,46 +494,6 @@ pub(crate) async fn handle_inventory_refresh(
         summary: inventory_summary(&inventory),
         meta,
     })
-}
-
-/// Timestamp accepted as a numeric epoch (seconds or milliseconds) or a
-/// string holding RFC3339 or a stringified epoch.
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-pub(super) enum TimestampParam {
-    Epoch(i64),
-    Text(String),
-}
-
-impl TimestampParam {
-    fn to_datetime(&self) -> Result<DateTime<Utc>, InventoryError> {
-        match self {
-            Self::Text(s) => {
-                if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
-                    return Ok(dt.with_timezone(&Utc));
-                }
-                if let Ok(num) = s.parse::<i64>() {
-                    return Ok(epoch_to_datetime(num));
-                }
-                Err(InventoryError::UnsupportedTimestamp)
-            }
-            Self::Epoch(num) => Ok(epoch_to_datetime(*num)),
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub(super) struct StaleParams {
-    pub timestamp: Option<TimestampParam>,
-    pub reason: Option<String>,
-}
-
-impl HandleOp for StaleParams {
-    type Response = storage::InventoryMeta;
-
-    async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError> {
-        Ok(handle_inventory_stale_update(&cx.events, self)?)
-    }
 }
 
 pub(super) fn handle_inventory_stale_update(
@@ -533,19 +547,20 @@ fn epoch_to_datetime(value: i64) -> DateTime<Utc> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::search::collect_inventory_items;
     use serde_json::json;
 
     #[test]
     fn load_request_requires_exactly_one_source() {
         let none = LoadInventoryRequest::try_from(LoadInventoryParams::default());
-        assert!(none.is_err());
+        none.unwrap_err();
 
         let two = LoadInventoryRequest::try_from(LoadInventoryParams {
             path: Some("a.json".into()),
             raw: Some("{}".into()),
             ..Default::default()
         });
-        assert!(two.is_err());
+        two.unwrap_err();
 
         let one = LoadInventoryRequest::try_from(LoadInventoryParams {
             path: Some("a.json".into()),
@@ -588,12 +603,8 @@ mod tests {
             })
         );
 
-        let item_index = wf_itemdata::item_data::ItemIndex::default();
-        let items = crate::search::collect_inventory_items(
-            &inventory,
-            Some(Category::Suits),
-            &item_index,
-        );
+        let item_index = ItemIndex::default();
+        let items = collect_inventory_items(&inventory, Some(Category::Suits), &item_index);
         let envelopes: Vec<_> = items.into_iter().map(|v| v.envelope).collect();
         let filter = InventoryFilterResponse {
             total: 48,
@@ -607,10 +618,10 @@ mod tests {
         assert_eq!(
             value,
             json!({
-                "total": 48,
+                "total": 48_i64,
                 "filtered": value["filtered"],
-                "offset": 0,
-                "limit": 10,
+                "offset": 0_i64,
+                "limit": 10_i64,
                 "items": value["items"],
                 "meta": meta_value,
             })

@@ -3,7 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ProductCategory;
-use crate::common::{Drop, Patchlog};
+use crate::common::{Drop, Introduced, Patchlog};
+use crate::components::Component;
 use crate::damage::{Attack, DamageBreakdown};
 use crate::enums::{MeleeProductCategory, MeleeType, Polarity, Slot};
 use crate::props::{
@@ -63,7 +64,7 @@ pub struct Melee {
 
 impl ProductCategory for Melee {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.as_ref().to_string()]
+        vec![self.product_category.as_ref().to_owned()]
     }
 }
 
@@ -128,7 +129,7 @@ impl Buildable for Melee {
     fn bp_cost(&self) -> Option<i64> {
         self.build.bp_cost
     }
-    fn components(&self) -> &[crate::components::Component] {
+    fn components(&self) -> &[Component] {
         &self.build.components
     }
 }
@@ -158,7 +159,7 @@ impl WikiaLinked for Melee {
     fn wikia_thumbnail(&self) -> Option<&str> {
         self.wikia.wikia_thumbnail.as_deref()
     }
-    fn introduced(&self) -> Option<&crate::common::Introduced> {
+    fn introduced(&self) -> Option<&Introduced> {
         self.wikia.introduced.as_ref()
     }
     fn release_date(&self) -> Option<&str> {
@@ -257,8 +258,8 @@ mod tests {
         assert!(rec.trade.masterable);
 
         // Weapon stats
-        assert!((rec.weapon.critical_chance - 0.2).abs() < 0.01);
-        assert!((rec.weapon.total_damage - 149.0).abs() < 0.01);
+        assert!((rec.weapon.critical_chance - 0.2).abs() < 0.01_f64);
+        assert!((rec.weapon.total_damage - 149.0).abs() < 0.01_f64);
         assert_eq!(rec.weapon.damage_per_shot.len(), 20);
 
         // Melee stats
@@ -282,8 +283,8 @@ mod tests {
         let rec: Melee = from_str(json_data).unwrap();
 
         assert_eq!(rec.identity.name, "Nikana Prime");
-        assert!((rec.weapon.total_damage - 198.0).abs() < 0.01);
-        assert!((rec.weapon.critical_chance - 0.28).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 198.0).abs() < 0.01_f64);
+        assert!((rec.weapon.critical_chance - 0.28).abs() < 0.01_f64);
         assert_eq!(rec.melee.blocking_angle, Some(55));
         assert!(rec.prime.is_prime);
         assert_eq!(rec.prime.vaulted, Some(true));
@@ -298,7 +299,7 @@ mod tests {
         let rec: Melee = from_str(json_data).unwrap();
 
         assert_eq!(rec.identity.name, "Skana");
-        assert!((rec.weapon.total_damage - 120.0).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 120.0).abs() < 0.01_f64);
         assert_eq!(rec.melee.blocking_angle, Some(55));
         assert!(!rec.prime.is_prime);
     }

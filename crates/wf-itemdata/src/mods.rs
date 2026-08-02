@@ -9,7 +9,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ProductCategory;
-use crate::common::{Drop, LevelStat, Patchlog};
+use crate::common::{Drop, Introduced, LevelStat, Patchlog};
 use crate::enums::{ModCategory, ModType, Polarity, Rarity};
 use crate::props::{ItemDetailProps, ItemIdentityProps, TradableProps, WikiaProps};
 use crate::traits::{Droppable, Item, WikiaLinked};
@@ -174,15 +174,16 @@ pub struct RivenModData {
 impl ProductCategory for ModEntry {
     fn get_product_categories(&self) -> Vec<String> {
         vec![
-            "Upgrades".to_string(),
-            "RawUpgrades".to_string(),
-            "FocusUpgrades".to_string(),
+            "Upgrades".to_owned(),
+            "RawUpgrades".to_owned(),
+            "FocusUpgrades".to_owned(),
         ]
     }
 }
 
 impl ModEntry {
     /// Get the computed mod category classification.
+    #[must_use]
     pub fn mod_category(&self) -> ModCategory {
         match self {
             Self::Riven(_) => ModCategory::Riven,
@@ -196,6 +197,7 @@ impl ModEntry {
         }
     }
 
+    #[must_use]
     pub fn is_set(&self) -> bool {
         self.is_set_member() || self.is_set_definition()
     }
@@ -311,7 +313,7 @@ impl WikiaLinked for ModEntry {
             Self::Regular(m) => m.wikia.wikia_thumbnail.as_deref(),
         }
     }
-    fn introduced(&self) -> Option<&crate::common::Introduced> {
+    fn introduced(&self) -> Option<&Introduced> {
         match self {
             Self::Riven(m) => m.wikia.introduced.as_ref(),
             Self::SetMember(m) => m.wikia.introduced.as_ref(),
@@ -426,7 +428,7 @@ mod tests {
         assert!(!regular.is_set());
 
         let set_member = ModEntry::SetMember(SetMemberModData {
-            mod_set: "/Lotus/Test".to_string(),
+            mod_set: "/Lotus/Test".to_owned(),
             ..Default::default()
         });
         assert!(set_member.is_set());
@@ -449,8 +451,8 @@ mod tests {
 
         let riven = ModEntry::Riven(RivenModData {
             available_challenges: vec![AvailableChallenge {
-                full_name: "Test".to_string(),
-                description: "Test".to_string(),
+                full_name: "Test".to_owned(),
+                description: "Test".to_owned(),
                 complications: vec![],
             }],
             ..Default::default()

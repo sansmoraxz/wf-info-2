@@ -85,8 +85,8 @@ pub(crate) async fn capture_screen(
         }
     };
 
-    let img = RgbaImage::from_raw(buf.width, buf.height, buf.pixels)
-        .ok_or(CaptureError::ImageBuffer)?;
+    let img =
+        RgbaImage::from_raw(buf.width, buf.height, buf.pixels).ok_or(CaptureError::ImageBuffer)?;
     let rgb = DynamicImage::ImageRgba8(img).to_rgb8();
 
     let mut bmp_bytes = Vec::new();

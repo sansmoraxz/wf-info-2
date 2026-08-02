@@ -31,7 +31,7 @@ pub struct Fish {
 
 impl ProductCategory for Fish {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["MiscItems".to_string()]
+        vec!["MiscItems".to_owned()]
     }
 }
 

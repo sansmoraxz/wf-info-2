@@ -1,5 +1,6 @@
 use std::future::Future;
 use std::io;
+use std::mem;
 use std::pin::Pin;
 #[cfg(windows)]
 use std::sync::{
@@ -12,7 +13,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 #[cfg(unix)]
-use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader, Lines};
+use tokio::io::{AsyncBufReadExt as _, AsyncRead, BufReader, Lines};
 #[cfg(windows)]
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
@@ -42,7 +43,7 @@ impl LineAssembler {
 
         let split_at = last_newline + 1;
         let trailing = self.pending.split_off(split_at);
-        let complete = std::mem::take(&mut self.pending);
+        let complete = mem::take(&mut self.pending);
         self.pending = trailing;
         complete
     }
@@ -258,13 +259,13 @@ fn decode_wine_debug_payload(payload: &str) -> Option<String> {
                         decoded.push(value);
                     }
                     other => {
-                        let mut buf = [0u8; 4];
+                        let mut buf = [0_u8; 4];
                         decoded.extend_from_slice(other.encode_utf8(&mut buf).as_bytes());
                     }
                 }
             }
             other => {
-                let mut buf = [0u8; 4];
+                let mut buf = [0_u8; 4];
                 decoded.extend_from_slice(other.encode_utf8(&mut buf).as_bytes());
             }
         }

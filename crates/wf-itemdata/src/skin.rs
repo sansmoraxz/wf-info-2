@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ProductCategory;
 use crate::common::{Drop, Patchlog};
+use crate::components::Component;
 use crate::enums::SkinType;
 use crate::props::{BuildableProps, ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::traits::{Buildable, Droppable, Item};
@@ -47,10 +48,10 @@ pub struct Skin {
 impl ProductCategory for Skin {
     fn get_product_categories(&self) -> Vec<String> {
         vec![
-            "WeaponSkins".to_string(),
-            "ShipDecorations".to_string(),
-            "FlavourItems".to_string(),
-            "CrewShipWeaponSkins".to_string(),
+            "WeaponSkins".to_owned(),
+            "ShipDecorations".to_owned(),
+            "FlavourItems".to_owned(),
+            "CrewShipWeaponSkins".to_owned(),
         ]
     }
 }
@@ -113,7 +114,7 @@ impl Buildable for Skin {
     fn bp_cost(&self) -> Option<i64> {
         self.build.bp_cost
     }
-    fn components(&self) -> &[crate::components::Component] {
+    fn components(&self) -> &[Component] {
         &self.build.components
     }
 }

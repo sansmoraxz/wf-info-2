@@ -49,7 +49,15 @@ pub(crate) struct BackendCacheEntry {
     resolution: BackendResolution,
 }
 
-pub(crate) async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, String), CaptureError> {
+impl BackendResolution {
+    fn is_x11_window(&self) -> bool {
+        matches!(self.capture_backend, CaptureBackend::X11Window { .. })
+    }
+}
+
+pub(crate) async fn capture_screen(
+    state: &ScreenshotState,
+) -> Result<(Vec<u8>, String), CaptureError> {
     let total_start = Instant::now();
     let pid_start = Instant::now();
     let (warframe_pid, pid_cache_status) =
@@ -109,10 +117,12 @@ pub(crate) async fn capture_screen(state: &ScreenshotState) -> Result<(Vec<u8>, 
     }
 }
 
-// async only used by the portal branch under native-wayland-screenshot
 #[cfg_attr(
     not(feature = "native-wayland-screenshot"),
-    allow(clippy::unused_async)
+    allow(
+        clippy::unused_async,
+        reason = "async is only awaited by the portal branch under native-wayland-screenshot; the signature must stay uniform across features"
+    )
 )]
 async fn capture_with_backend(
     _warframe_pid: u32,
@@ -128,7 +138,7 @@ async fn capture_with_backend(
                 bytes.len(),
                 start.elapsed()
             );
-            Ok((bytes, "image/bmp".to_string()))
+            Ok((bytes, "image/bmp".to_owned()))
         }
         #[cfg(feature = "native-wayland-screenshot")]
         CaptureBackend::WaylandScreenCastPortal => {
@@ -147,9 +157,7 @@ async fn capture_with_backend(
             );
             Ok((bytes, "image/bmp".to_string()))
         }
-        CaptureBackend::Unsupported { reason } => {
-            Err(CaptureError::Unsupported(reason.clone()))
-        }
+        CaptureBackend::Unsupported { reason } => Err(CaptureError::Unsupported(reason.clone())),
     }
 }
 
@@ -212,10 +220,10 @@ fn resolve_backend_from_probe(
     // monitor capture; the portal must provide a window PipeWire stream.
     let capture_backend = match detected_environment {
         EnvironmentKind::X11 => CaptureBackend::Unsupported {
-            reason: "X11 was detected but no Warframe X11/XWayland window was found".to_string(),
+            reason: "X11 was detected but no Warframe X11/XWayland window was found".to_owned(),
         },
         EnvironmentKind::XWayland => CaptureBackend::Unsupported {
-            reason: "XWayland was detected but no Warframe X11/XWayland window was found".to_string(),
+            reason: "XWayland was detected but no Warframe X11/XWayland window was found".to_owned(),
         },
         EnvironmentKind::Wayland => {
             #[cfg(feature = "native-wayland-screenshot")]
@@ -225,24 +233,18 @@ fn resolve_backend_from_probe(
             #[cfg(not(feature = "native-wayland-screenshot"))]
             {
                 CaptureBackend::Unsupported {
-                    reason: "Native Wayland screenshot capture requires building with the 'native-wayland-screenshot' feature, or run Warframe under XWayland/X11".to_string(),
+                    reason: "Native Wayland screenshot capture requires building with the 'native-wayland-screenshot' feature, or run Warframe under XWayland/X11".to_owned(),
                 }
             }
         }
         EnvironmentKind::Unknown => CaptureBackend::Unsupported {
-            reason: "Unsupported Unix display environment; run Warframe under XWayland/X11 or use a Wayland session with xdg-desktop-portal ScreenCast window capture".to_string(),
+            reason: "Unsupported Unix display environment; run Warframe under XWayland/X11 or use a Wayland session with xdg-desktop-portal ScreenCast window capture".to_owned(),
         },
     };
 
     BackendResolution {
         environment: detected_environment,
         capture_backend,
-    }
-}
-
-impl BackendResolution {
-    fn is_x11_window(&self) -> bool {
-        matches!(self.capture_backend, CaptureBackend::X11Window { .. })
     }
 }
 
@@ -303,13 +305,13 @@ mod tests {
     #[test]
     fn wayland_with_x11_window_uses_xwayland_x11_capture() {
         let resolution =
-            resolve_backend_from_probe(EnvironmentKind::Wayland, Some("123".to_string()));
+            resolve_backend_from_probe(EnvironmentKind::Wayland, Some("123".to_owned()));
 
         assert_eq!(resolution.environment, EnvironmentKind::XWayland);
         assert_eq!(
             resolution.capture_backend,
             CaptureBackend::X11Window {
-                window_id: "123".to_string()
+                window_id: "123".to_owned()
             }
         );
     }
@@ -340,13 +342,13 @@ mod tests {
 
     #[test]
     fn x11_with_x11_window_uses_x11_capture() {
-        let resolution = resolve_backend_from_probe(EnvironmentKind::X11, Some("456".to_string()));
+        let resolution = resolve_backend_from_probe(EnvironmentKind::X11, Some("456".to_owned()));
 
         assert_eq!(resolution.environment, EnvironmentKind::X11);
         assert_eq!(
             resolution.capture_backend,
             CaptureBackend::X11Window {
-                window_id: "456".to_string()
+                window_id: "456".to_owned()
             }
         );
     }

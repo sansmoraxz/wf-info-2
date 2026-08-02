@@ -200,6 +200,7 @@ impl Default for Disposition {
 
 impl Disposition {
     /// Convert disposition to numeric value (1-5), returns 0 for Unknown
+    #[must_use]
     pub fn as_u8(&self) -> u8 {
         match self {
             Self::One => 1,
@@ -1247,14 +1248,17 @@ pub enum VaultStatus {
 }
 
 impl VaultStatus {
+    #[must_use]
     pub fn is_prime(&self) -> bool {
         !self.is_not_prime()
     }
 
+    #[must_use]
     pub fn is_accessible(&self) -> bool {
         !self.is_vaulted()
     }
 
+    #[must_use]
     pub fn vault_date(&self) -> Option<&str> {
         match self {
             Self::Vaulted { date } => date.as_deref(),
@@ -1262,6 +1266,7 @@ impl VaultStatus {
         }
     }
 
+    #[must_use]
     pub fn estimated_vault_date(&self) -> Option<&str> {
         match self {
             Self::EstimatedVault { estimated_date } => Some(estimated_date),
@@ -1287,10 +1292,12 @@ pub enum ModCategory {
 }
 
 impl ModCategory {
+    #[must_use]
     pub fn is_set(&self) -> bool {
         self.is_set_member() || self.is_set_definition()
     }
 
+    #[must_use]
     pub fn mod_set(&self) -> Option<&str> {
         match self {
             Self::SetMember { mod_set } => Some(mod_set),
@@ -1298,6 +1305,7 @@ impl ModCategory {
         }
     }
 
+    #[must_use]
     pub fn num_upgrades_in_set(&self) -> Option<i64> {
         match self {
             Self::SetDefinition {
@@ -1312,6 +1320,20 @@ impl ModCategory {
 mod tests {
     use super::*;
 
+    macro_rules! test_unknown_roundtrip {
+        ($name:ident, $enum_type:ty, $unknown_val:expr) => {
+            #[test]
+            fn $name() {
+                let val = <$enum_type>::Unknown($unknown_val.to_string());
+                let json = serde_json::to_string(&val).unwrap();
+                assert_eq!(json, format!("\"{}\"", $unknown_val));
+
+                let roundtrip: $enum_type = serde_json::from_str(&json).unwrap();
+                assert_eq!(roundtrip, <$enum_type>::Unknown($unknown_val.to_string()));
+            }
+        };
+    }
+
     #[test]
     fn test_trigger_deserialize() {
         let trigger: Trigger = serde_json::from_str(r#""Auto Burst""#).unwrap();
@@ -1322,12 +1344,12 @@ mod tests {
 
         // Unknown variant captures value
         let trigger: Trigger = serde_json::from_str(r#""NewTriggerType""#).unwrap();
-        assert_eq!(trigger, Trigger::Unknown("NewTriggerType".to_string()));
+        assert_eq!(trigger, Trigger::Unknown("NewTriggerType".to_owned()));
     }
 
     #[test]
     fn test_trigger_serialize_unknown() {
-        let trigger = Trigger::Unknown("NewTriggerType".to_string());
+        let trigger = Trigger::Unknown("NewTriggerType".to_owned());
         let json = serde_json::to_string(&trigger).unwrap();
         assert_eq!(json, r#""NewTriggerType""#);
     }
@@ -1343,12 +1365,12 @@ mod tests {
 
     #[test]
     fn test_polarity_serialize_unknown() {
-        let polarity = Polarity::Unknown("newpolarity".to_string());
+        let polarity = Polarity::Unknown("newpolarity".to_owned());
         let json = serde_json::to_string(&polarity).unwrap();
         assert_eq!(json, r#""newpolarity""#);
 
         let roundtrip: Polarity = serde_json::from_str(&json).unwrap();
-        assert_eq!(roundtrip, Polarity::Unknown("newpolarity".to_string()));
+        assert_eq!(roundtrip, Polarity::Unknown("newpolarity".to_owned()));
     }
 
     #[test]
@@ -1362,18 +1384,18 @@ mod tests {
 
     #[test]
     fn test_rarity_serialize_unknown() {
-        let rarity = Rarity::Unknown("Mythic".to_string());
+        let rarity = Rarity::Unknown("Mythic".to_owned());
         let json = serde_json::to_string(&rarity).unwrap();
         assert_eq!(json, r#""Mythic""#);
 
         let roundtrip: Rarity = serde_json::from_str(&json).unwrap();
-        assert_eq!(roundtrip, Rarity::Unknown("Mythic".to_string()));
+        assert_eq!(roundtrip, Rarity::Unknown("Mythic".to_owned()));
     }
 
     #[test]
     fn test_disposition_as_u8() {
         assert_eq!(Disposition::Three.as_u8(), 3);
-        assert_eq!(Disposition::Unknown("?".to_string()).as_u8(), 0);
+        assert_eq!(Disposition::Unknown("?".to_owned()).as_u8(), 0);
     }
 
     #[test]
@@ -1395,7 +1417,7 @@ mod tests {
     #[test]
     fn test_vault_status_vaulted_prime() {
         let status = VaultStatus::Vaulted {
-            date: Some("2021-09-08".to_string()),
+            date: Some("2021-09-08".to_owned()),
         };
         assert!(status.is_prime());
         assert!(status.is_vaulted());
@@ -1410,7 +1432,7 @@ mod tests {
     #[test]
     fn test_vault_status_estimated_vault() {
         let status = VaultStatus::EstimatedVault {
-            estimated_date: "2023-03-14".to_string(),
+            estimated_date: "2023-03-14".to_owned(),
         };
         assert!(status.is_prime());
         assert!(!status.is_vaulted());
@@ -1439,7 +1461,7 @@ mod tests {
     #[test]
     fn test_mod_category_set_member() {
         let cat = ModCategory::SetMember {
-            mod_set: "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod".to_string(),
+            mod_set: "/Lotus/Upgrades/Mods/Sets/Amar/AmarSetMod".to_owned(),
         };
         assert!(cat.is_set());
         assert!(cat.is_set_member());
@@ -1464,20 +1486,6 @@ mod tests {
     }
 
     // Unknown(String) serialize/deserialize roundtrip tests for all type enums
-
-    macro_rules! test_unknown_roundtrip {
-        ($name:ident, $enum_type:ty, $unknown_val:expr) => {
-            #[test]
-            fn $name() {
-                let val = <$enum_type>::Unknown($unknown_val.to_string());
-                let json = serde_json::to_string(&val).unwrap();
-                assert_eq!(json, format!("\"{}\"", $unknown_val));
-
-                let roundtrip: $enum_type = serde_json::from_str(&json).unwrap();
-                assert_eq!(roundtrip, <$enum_type>::Unknown($unknown_val.to_string()));
-            }
-        };
-    }
 
     test_unknown_roundtrip!(test_warframe_type_unknown, WarframeType, "NewWarframeType");
     test_unknown_roundtrip!(test_arcane_type_unknown, ArcaneType, "New Arcane");

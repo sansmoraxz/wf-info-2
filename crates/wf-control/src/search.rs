@@ -5,17 +5,49 @@ use serde::{Deserialize, Serialize};
 use tantivy::Index;
 use tantivy::collector::{Count, TopDocs};
 use tantivy::doc;
-use tantivy::query::{AllQuery, BooleanQuery, Occur};
+use tantivy::query::{AllQuery, BooleanQuery, Occur, Query};
 use tantivy::schema::{
     Field, IndexRecordOption, STORED, STRING, SchemaBuilder, TextFieldIndexing, TextOptions,
-    Value as TantivyValue,
+    Value as _,
 };
 use tantivy::tokenizer::NgramTokenizer;
 
 use wf_core::storage;
+use wf_inventory::long_gun::LongGun;
+use wf_inventory::melee::Melee;
+use wf_inventory::pistol::Pistol;
+use wf_inventory::recipe::{PendingRecipe, Recipe};
+use wf_inventory::space_gun::SpaceGun;
+use wf_inventory::space_melee::SpaceMelee;
+use wf_inventory::space_suit::SpaceSuit;
+use wf_inventory::suit::Suit;
+use wf_inventory::upgrades::{RawUpgrade, Upgrade};
 use wf_inventory::{Inventory, ItemType};
 
-use wf_itemdata::item_data::ItemIndex;
+use wf_itemdata::item_data::{ItemDetails, ItemIndex};
+
+use crate::market::MarketSummary;
+
+// The wf-inventory item types are unrelated structs that each happen to have
+// a `pub other: Option<Value>` catch-all; Rust has no structural typing, so a
+// blanket impl is impossible and the alternatives (a trait+impls in
+// wf-inventory, or a derive crate) are strictly more code for the same 11
+// impls. A field-accessor macro is the cheapest correct form here.
+macro_rules! impl_has_other {
+    ($($ty:ty),+ $(,)?) => {
+        $(impl HasOther for $ty {
+            fn other_mut(&mut self) -> Option<&mut serde_json::Value> {
+                self.other.as_mut()
+            }
+        })+
+    };
+}
+
+/// Keys the envelope itself emits. A game item whose catch-all carried one of
+/// these would serialize as a duplicate JSON key (breaking re-parse) or shadow
+/// the injected value, so they are stripped at envelope construction — the
+/// same overwrite semantics the old map-insertion code had.
+const RESERVED_ENVELOPE_KEYS: [&str; 5] = ["category", "item_type", "item_id", "details", "market"];
 
 #[derive(Debug, thiserror::Error)]
 pub(super) enum SearchError {
@@ -104,18 +136,12 @@ pub(super) struct ItemEnvelope<T> {
     // of the stored raw_json; skip_deserializing keeps a stray same-named key
     // in the item's catch-all from being parsed as these types.
     #[serde(default, skip_serializing_if = "Option::is_none", skip_deserializing)]
-    pub details: Option<wf_itemdata::item_data::ItemDetails>,
+    pub details: Option<ItemDetails>,
     #[serde(default, skip_serializing_if = "Option::is_none", skip_deserializing)]
-    pub market: Option<crate::market::MarketSummary>,
+    pub market: Option<MarketSummary>,
     #[serde(flatten)]
     pub item: T,
 }
-
-/// Keys the envelope itself emits. A game item whose catch-all carried one of
-/// these would serialize as a duplicate JSON key (breaking re-parse) or shadow
-/// the injected value, so they are stripped at envelope construction — the
-/// same overwrite semantics the old map-insertion code had.
-const RESERVED_ENVELOPE_KEYS: [&str; 5] = ["category", "item_type", "item_id", "details", "market"];
 
 /// An inventory category. `Display` emits the wire names used as serde tags
 /// on [`InventoryItemEnvelope`]; `FromStr` additionally accepts the user-facing
@@ -187,17 +213,17 @@ pub(super) enum Category {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "category", rename_all = "snake_case")]
 pub(super) enum InventoryItemEnvelope {
-    Suits(ItemEnvelope<wf_inventory::suit::Suit>),
-    LongGuns(ItemEnvelope<wf_inventory::long_gun::LongGun>),
-    Pistols(ItemEnvelope<wf_inventory::pistol::Pistol>),
-    Melee(ItemEnvelope<wf_inventory::melee::Melee>),
-    SpaceSuits(ItemEnvelope<wf_inventory::space_suit::SpaceSuit>),
-    SpaceGuns(ItemEnvelope<wf_inventory::space_gun::SpaceGun>),
-    SpaceMelee(ItemEnvelope<wf_inventory::space_melee::SpaceMelee>),
-    RawUpgrades(ItemEnvelope<wf_inventory::upgrades::RawUpgrade>),
-    Upgrades(ItemEnvelope<wf_inventory::upgrades::Upgrade>),
-    Recipes(ItemEnvelope<wf_inventory::recipe::Recipe>),
-    PendingRecipes(ItemEnvelope<wf_inventory::recipe::PendingRecipe>),
+    Suits(ItemEnvelope<Suit>),
+    LongGuns(ItemEnvelope<LongGun>),
+    Pistols(ItemEnvelope<Pistol>),
+    Melee(ItemEnvelope<Melee>),
+    SpaceSuits(ItemEnvelope<SpaceSuit>),
+    SpaceGuns(ItemEnvelope<SpaceGun>),
+    SpaceMelee(ItemEnvelope<SpaceMelee>),
+    RawUpgrades(ItemEnvelope<RawUpgrade>),
+    Upgrades(ItemEnvelope<Upgrade>),
+    Recipes(ItemEnvelope<Recipe>),
+    PendingRecipes(ItemEnvelope<PendingRecipe>),
 }
 
 /// Category-erased view over the `ItemEnvelope<T>` inside each variant —
@@ -206,18 +232,18 @@ pub(super) enum InventoryItemEnvelope {
 #[enum_dispatch::enum_dispatch]
 pub(super) trait EnvelopeAccess {
     fn item_type(&self) -> &str;
-    fn set_details(&mut self, details: wf_itemdata::item_data::ItemDetails);
-    fn set_market(&mut self, market: crate::market::MarketSummary);
+    fn set_details(&mut self, details: ItemDetails);
+    fn set_market(&mut self, market: MarketSummary);
 }
 
 impl<T: HasOther> EnvelopeAccess for ItemEnvelope<T> {
     fn item_type(&self) -> &str {
         self.item_type.as_ref()
     }
-    fn set_details(&mut self, details: wf_itemdata::item_data::ItemDetails) {
+    fn set_details(&mut self, details: ItemDetails) {
         self.details = Some(details);
     }
-    fn set_market(&mut self, market: crate::market::MarketSummary) {
+    fn set_market(&mut self, market: MarketSummary) {
         self.market = Some(market);
     }
 }
@@ -260,33 +286,18 @@ trait HasOther {
     fn other_mut(&mut self) -> Option<&mut serde_json::Value>;
 }
 
-// The wf-inventory item types are unrelated structs that each happen to have
-// a `pub other: Option<Value>` catch-all; Rust has no structural typing, so a
-// blanket impl is impossible and the alternatives (a trait+impls in
-// wf-inventory, or a derive crate) are strictly more code for the same 11
-// impls. A field-accessor macro is the cheapest correct form here.
-macro_rules! impl_has_other {
-    ($($ty:ty),+ $(,)?) => {
-        $(impl HasOther for $ty {
-            fn other_mut(&mut self) -> Option<&mut serde_json::Value> {
-                self.other.as_mut()
-            }
-        })+
-    };
-}
-
 impl_has_other!(
-    wf_inventory::suit::Suit,
-    wf_inventory::long_gun::LongGun,
-    wf_inventory::pistol::Pistol,
-    wf_inventory::melee::Melee,
-    wf_inventory::space_suit::SpaceSuit,
-    wf_inventory::space_gun::SpaceGun,
-    wf_inventory::space_melee::SpaceMelee,
-    wf_inventory::upgrades::RawUpgrade,
-    wf_inventory::upgrades::Upgrade,
-    wf_inventory::recipe::Recipe,
-    wf_inventory::recipe::PendingRecipe,
+    Suit,
+    LongGun,
+    Pistol,
+    Melee,
+    SpaceSuit,
+    SpaceGun,
+    SpaceMelee,
+    RawUpgrade,
+    Upgrade,
+    Recipe,
+    PendingRecipe,
 );
 
 pub(super) struct ItemView<'a> {
@@ -325,22 +336,10 @@ pub(super) fn collect_inventory_items<'a>(
     category: Option<Category>,
     item_index: &'a ItemIndex,
 ) -> Vec<ItemView<'a>> {
-    let mut items = Vec::new();
-
-    let mut push_item = |envelope: InventoryItemEnvelope| {
-        let info = item_index.lookup(envelope.item_type(), Some(envelope.category().as_ref()));
-        items.push(ItemView {
-            details_name: info.and_then(|item| item.name.as_deref()),
-            details_desc: info.and_then(|item| item.description.as_deref()),
-            envelope,
-        });
-    };
-
-    fn envelope<T: Clone + HasOther>(
-        item: &T,
-        item_type: &ItemType,
-        item_id: Option<String>,
-    ) -> ItemEnvelope<T> {
+    fn envelope<T>(item: &T, item_type: &ItemType, item_id: Option<String>) -> ItemEnvelope<T>
+    where
+        T: Clone + HasOther,
+    {
         let mut item = item.clone();
         if let Some(serde_json::Value::Object(map)) = item.other_mut() {
             for key in RESERVED_ENVELOPE_KEYS {
@@ -355,6 +354,17 @@ pub(super) fn collect_inventory_items<'a>(
             item,
         }
     }
+
+    let mut items = Vec::new();
+
+    let mut push_item = |envelope: InventoryItemEnvelope| {
+        let info = item_index.lookup(envelope.item_type(), Some(envelope.category().as_ref()));
+        items.push(ItemView {
+            details_name: info.and_then(|item| item.name.as_deref()),
+            details_desc: info.and_then(|item| item.description.as_deref()),
+            envelope,
+        });
+    };
 
     // One arm per category: inventory field, envelope variant, and how the
     // item id is derived (`item_id`, `last_added_id`, or absent).
@@ -438,9 +448,9 @@ pub(super) fn build_tantivy_index(
             }
         };
         let mut doc = doc! {
-            item_type_exact => item.envelope.item_type().to_string(),
+            item_type_exact => item.envelope.item_type().to_owned(),
             category => item.envelope.category().to_string(),
-            item_type_text => item.envelope.item_type().to_string(),
+            item_type_text => item.envelope.item_type().to_owned(),
             raw_json => raw,
         };
 
@@ -469,12 +479,12 @@ pub(super) fn build_tantivy_index(
 
 pub(super) fn search_inventory(
     search_index: &InventorySearchIndex,
-    clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)>,
+    clauses: Vec<(Occur, Box<dyn Query>)>,
 ) -> Result<(usize, Vec<InventoryItemEnvelope>), tantivy::TantivyError> {
     let reader = search_index.index.reader()?;
     let searcher = reader.searcher();
 
-    let query: Box<dyn tantivy::query::Query> = if clauses.is_empty() {
+    let query: Box<dyn Query> = if clauses.is_empty() {
         Box::new(AllQuery)
     } else {
         Box::new(BooleanQuery::new(clauses))
@@ -494,7 +504,7 @@ pub(super) fn search_inventory(
             .doc::<tantivy::TantivyDocument>(addr)?
             .get_first(search_index.raw_json)
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+            .map(str::to_owned)
             .unwrap_or_default();
         match serde_json::from_str::<InventoryItemEnvelope>(&raw) {
             Ok(envelope) => results.push(envelope),
@@ -507,16 +517,11 @@ pub(super) fn search_inventory(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::HashSet;
+
     use serde_json::Value;
 
-    fn sample_inventory() -> Inventory {
-        let raw = include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../wf-inventory/testdata/inventory/sample_inventory.json"
-        ));
-        serde_json::from_str(raw).unwrap()
-    }
+    use super::*;
 
     const ALL_CATEGORIES: [(Category, &str); 11] = [
         (Category::Suits, "suits"),
@@ -532,6 +537,14 @@ mod tests {
         (Category::PendingRecipes, "pending_recipes"),
     ];
 
+    fn sample_inventory() -> Inventory {
+        let raw = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../wf-inventory/testdata/inventory/sample_inventory.json"
+        ));
+        serde_json::from_str(raw).unwrap()
+    }
+
     /// The envelope must survive the tantivy raw_json round-trip
     /// (serialize -> parse -> serialize must be a fixed point), and the
     /// serialized "category" tag must agree with the category() accessor,
@@ -543,7 +556,7 @@ mod tests {
         let items = collect_inventory_items(&inventory, None, &item_index);
         assert!(!items.is_empty());
 
-        let mut seen = std::collections::HashSet::new();
+        let mut seen = HashSet::new();
         for item in &items {
             seen.insert(item.envelope.category());
             let raw = serde_json::to_string(&item.envelope).unwrap();
@@ -571,25 +584,29 @@ mod tests {
     /// old push_item logic did: to_value(item) + injected
     /// category/item_type/item_id, for every category and every item.
     #[test]
+    #[allow(
+        clippy::cognitive_complexity,
+        reason = "the complexity is the check_category! macro expanded once per category; the branches are eleven identical stamped-out assertions, not intertwined logic"
+    )]
     fn collected_envelopes_match_legacy_injected_shape() {
-        let inventory = sample_inventory();
-        let item_index = ItemIndex::default();
+        type IdOf<T> = fn(&T) -> Option<&str>;
 
-        fn legacy<T: serde::Serialize>(
-            item: &T,
-            category: &str,
-            item_type: &str,
-            item_id: Option<&str>,
-        ) -> Value {
+        fn legacy<T>(item: &T, category: &str, item_type: &str, item_id: Option<&str>) -> Value
+        where
+            T: serde::Serialize,
+        {
             let mut value = serde_json::to_value(item).unwrap();
             let map = value.as_object_mut().unwrap();
-            map.insert("category".into(), Value::String(category.to_string()));
-            map.insert("item_type".into(), Value::String(item_type.to_string()));
+            map.insert("category".into(), Value::String(category.to_owned()));
+            map.insert("item_type".into(), Value::String(item_type.to_owned()));
             if let Some(id) = item_id {
-                map.insert("item_id".into(), Value::String(id.to_string()));
+                map.insert("item_id".into(), Value::String(id.to_owned()));
             }
             value
         }
+
+        let inventory = sample_inventory();
+        let item_index = ItemIndex::default();
 
         macro_rules! check_category {
             ($field:ident, $cat:literal, $id:expr) => {
@@ -609,61 +626,52 @@ mod tests {
             };
         }
 
-        type IdOf<T> = fn(&T) -> Option<&str>;
-        check_category!(
-            suits,
-            "suits",
-            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::suit::Suit>
-        );
+        check_category!(suits, "suits", (|i| Some(i.item_id.as_ref())) as IdOf<Suit>);
         check_category!(
             long_guns,
             "long_guns",
-            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::long_gun::LongGun>
+            (|i| Some(i.item_id.as_ref())) as IdOf<LongGun>
         );
         check_category!(
             pistols,
             "pistols",
-            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::pistol::Pistol>
+            (|i| Some(i.item_id.as_ref())) as IdOf<Pistol>
         );
         check_category!(
             melee,
             "melee",
-            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::melee::Melee>
+            (|i| Some(i.item_id.as_ref())) as IdOf<Melee>
         );
         check_category!(
             space_suits,
             "space_suits",
-            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::space_suit::SpaceSuit>
+            (|i| Some(i.item_id.as_ref())) as IdOf<SpaceSuit>
         );
         check_category!(
             space_guns,
             "space_guns",
-            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::space_gun::SpaceGun>
+            (|i| Some(i.item_id.as_ref())) as IdOf<SpaceGun>
         );
         check_category!(
             space_melee,
             "space_melee",
-            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::space_melee::SpaceMelee>
+            (|i| Some(i.item_id.as_ref())) as IdOf<SpaceMelee>
         );
         check_category!(
             raw_upgrades,
             "raw_upgrades",
-            (|i| Some(i.last_added_id.as_ref())) as IdOf<wf_inventory::upgrades::RawUpgrade>
+            (|i| Some(i.last_added_id.as_ref())) as IdOf<RawUpgrade>
         );
         check_category!(
             upgrades,
             "upgrades",
-            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::upgrades::Upgrade>
+            (|i| Some(i.item_id.as_ref())) as IdOf<Upgrade>
         );
-        check_category!(
-            recipes,
-            "recipes",
-            (|_| None) as IdOf<wf_inventory::recipe::Recipe>
-        );
+        check_category!(recipes, "recipes", (|_| None) as IdOf<Recipe>);
         check_category!(
             pending_recipes,
             "pending_recipes",
-            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::recipe::PendingRecipe>
+            (|i| Some(i.item_id.as_ref())) as IdOf<PendingRecipe>
         );
     }
 

@@ -20,6 +20,7 @@ impl Default for EventBus {
 }
 
 impl EventBus {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -27,9 +28,10 @@ impl EventBus {
     /// Broadcast an event to all subscribers. A send error only means there
     /// are currently no subscribers, which is fine.
     pub fn emit(&self, event: DaemonEvent) {
-        let _ = self.0.send(event);
+        self.0.send(event).ok();
     }
 
+    #[must_use]
     pub fn subscribe(&self) -> broadcast::Receiver<DaemonEvent> {
         self.0.subscribe()
     }
@@ -68,6 +70,7 @@ pub enum DaemonEvent {
 }
 
 impl DaemonEvent {
+    #[must_use]
     pub fn kind(&self) -> DaemonEventKind {
         self.into()
     }

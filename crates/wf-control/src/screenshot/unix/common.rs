@@ -1,6 +1,9 @@
 use std::env;
 use std::num::NonZeroI32;
 
+pub(super) const WARFRAME_TITLE_HINTS: &[&str] = &["Warframe"];
+pub(super) const WARFRAME_CLASS_HINTS: &[&str] = &["steam_app_230410", "warframe"];
+
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum BmpError {
     #[error("BMP width must be positive: {0}")]
@@ -11,25 +14,12 @@ pub(crate) enum BmpError {
     Overflow,
 }
 
-pub(super) const WARFRAME_TITLE_HINTS: &[&str] = &["Warframe"];
-pub(super) const WARFRAME_CLASS_HINTS: &[&str] = &["steam_app_230410", "warframe"];
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum EnvironmentKind {
     X11,
     XWayland,
     Wayland,
     Unknown,
-}
-
-pub(super) fn detect_unix_environment() -> EnvironmentKind {
-    if env::var_os("WAYLAND_DISPLAY").is_some() {
-        EnvironmentKind::Wayland
-    } else if env::var_os("DISPLAY").is_some() {
-        EnvironmentKind::X11
-    } else {
-        EnvironmentKind::Unknown
-    }
 }
 
 /// A top-down 24-bit BMP under construction. Owns the header layout (magic,
@@ -46,6 +36,10 @@ impl BmpRgb24 {
     /// BMP headers store signed dimensions, so this takes the header's native
     /// type (nonzero, since an empty image has no valid pixel array); height
     /// is negated in the header for top-down rows.
+    #[allow(
+        clippy::indexing_slicing,
+        reason = "all header writes use constant ranges below HEADER_LEN (54), and the buffer is allocated at file_size = 54 + pixel_bytes, so they are provably in bounds"
+    )]
     pub(super) fn new(width: NonZeroI32, height: NonZeroI32) -> Result<Self, BmpError> {
         let width = width.get();
         let height = height.get();
@@ -56,17 +50,17 @@ impl BmpRgb24 {
             .checked_next_multiple_of(4)
             .ok_or(BmpError::Overflow)?;
         let pixel_bytes = stride.checked_mul(height_u32).ok_or(BmpError::Overflow)?;
-        let file_size = 54u32.checked_add(pixel_bytes).ok_or(BmpError::Overflow)?;
+        let file_size = 54_u32.checked_add(pixel_bytes).ok_or(BmpError::Overflow)?;
 
         let mut bytes = vec![0; file_size as usize];
         bytes[0..2].copy_from_slice(b"BM");
         bytes[2..6].copy_from_slice(&file_size.to_le_bytes());
-        bytes[10..14].copy_from_slice(&54u32.to_le_bytes());
-        bytes[14..18].copy_from_slice(&40u32.to_le_bytes());
+        bytes[10..14].copy_from_slice(&54_u32.to_le_bytes());
+        bytes[14..18].copy_from_slice(&40_u32.to_le_bytes());
         bytes[18..22].copy_from_slice(&width.to_le_bytes());
         bytes[22..26].copy_from_slice(&(-height).to_le_bytes());
-        bytes[26..28].copy_from_slice(&1u16.to_le_bytes());
-        bytes[28..30].copy_from_slice(&24u16.to_le_bytes());
+        bytes[26..28].copy_from_slice(&1_u16.to_le_bytes());
+        bytes[28..30].copy_from_slice(&24_u16.to_le_bytes());
         bytes[34..38].copy_from_slice(&pixel_bytes.to_le_bytes());
 
         Ok(Self {
@@ -77,21 +71,53 @@ impl BmpRgb24 {
     }
 
     /// Copy one row of 4-byte-per-pixel BGRX/BGRA source data into row `y`,
-    /// dropping the fourth channel.
+    /// dropping the fourth channel. Rows outside the image are ignored.
     pub(super) fn copy_bgrx_row(&mut self, y: usize, source_row: &[u8]) {
-        let start = Self::HEADER_LEN + y * self.stride;
-        let row = &mut self.bytes[start..start + self.row_len];
+        let Some(start) = y
+            .checked_mul(self.stride)
+            .map(|offset| Self::HEADER_LEN + offset)
+        else {
+            return;
+        };
+        let Some(row) = self
+            .bytes
+            .get_mut(start..start.saturating_add(self.row_len))
+        else {
+            return;
+        };
         for (out, pixel) in row.chunks_exact_mut(3).zip(source_row.chunks_exact(4)) {
-            out.copy_from_slice(&pixel[..3]);
+            if let Some(rgb) = pixel.get(..3) {
+                out.copy_from_slice(rgb);
+            }
         }
     }
 
+    /// Write one BGR pixel at (`x`, `y`). Pixels outside the image are
+    /// ignored.
     pub(super) fn set_pixel_bgr(&mut self, x: usize, y: usize, bgr: [u8; 3]) {
-        let offset = Self::HEADER_LEN + y * self.stride + x * 3;
-        self.bytes[offset..offset + 3].copy_from_slice(&bgr);
+        let Some(offset) = y
+            .checked_mul(self.stride)
+            .and_then(|row| row.checked_add(x * 3))
+            .map(|offset| Self::HEADER_LEN + offset)
+        else {
+            return;
+        };
+        if let Some(out) = self.bytes.get_mut(offset..offset.saturating_add(3)) {
+            out.copy_from_slice(&bgr);
+        }
     }
 
     pub(super) fn into_bytes(self) -> Vec<u8> {
         self.bytes
+    }
+}
+
+pub(super) fn detect_unix_environment() -> EnvironmentKind {
+    if env::var_os("WAYLAND_DISPLAY").is_some() {
+        EnvironmentKind::Wayland
+    } else if env::var_os("DISPLAY").is_some() {
+        EnvironmentKind::X11
+    } else {
+        EnvironmentKind::Unknown
     }
 }

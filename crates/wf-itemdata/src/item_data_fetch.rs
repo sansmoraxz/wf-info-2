@@ -1,5 +1,5 @@
-use std::fs;
 use std::path::PathBuf;
+use std::{env, fs, io};
 
 const DEFAULT_BASE_URL: &str =
     "https://raw.githubusercontent.com/WFCD/warframe-items/refs/heads/master/data/json/";
@@ -21,13 +21,13 @@ pub enum CacheError {
     #[error("Could not find cache directory")]
     NoCacheDir,
     #[error(transparent)]
-    Io(#[from] std::io::Error),
+    Io(#[from] io::Error),
     #[error(transparent)]
     Http(#[from] reqwest::Error),
 }
 
 fn base_url() -> String {
-    std::env::var("WF_ITEM_DATA_BASE_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_string())
+    env::var("WF_ITEM_DATA_BASE_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_owned())
 }
 
 pub fn cache_dir() -> Result<PathBuf, CacheError> {
@@ -77,8 +77,9 @@ pub async fn update_cache(client: &reqwest::Client) -> Result<(), CacheError> {
                 // Save ETag if present
                 if let Some(etag) = resp.headers().get("etag")
                     && let Ok(val) = etag.to_str()
+                    && let Err(e) = fs::write(&etag_path, val)
                 {
-                    let _ = fs::write(&etag_path, val);
+                    log::warn!("itemdata: failed to save ETag for {file}: {e}");
                 }
 
                 let body = resp.text().await?;

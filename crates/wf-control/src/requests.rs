@@ -2,23 +2,29 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 
+use tantivy::query::QueryParserError;
+use wf_core::storage::{self, InventoryMeta};
+use wf_itemdata::item_data::ItemIndex;
+
 use crate::control_ops::{ControlOp, InventoryOp, ScreenshotOp, WfmOp};
 
 use super::events::EventBus;
 use super::inventory::{
-    FilterParams, InventoryFilterResponse, InventoryLoadResponse, LoadInventoryParams,
-    RefreshParams, StaleParams, handle_inventory_meta_get,
+    FilterParams, InventoryError, InventoryFilterResponse, InventoryLoadResponse,
+    LoadInventoryParams, RefreshParams, StaleParams, handle_inventory_meta_get,
 };
 use super::market::{
-    MarketCache, MarketPriceParams, MarketPriceResponse, MarketRefreshResponse,
+    MarketCache, MarketError, MarketPriceParams, MarketPriceResponse, MarketRefreshResponse,
     handle_market_refresh,
 };
-use super::screenshot::{ScreenshotConfig, ScreenshotEvent, ScreenshotParams, ScreenshotState};
-use super::search::InventoryIndexCache;
+use super::screenshot::{
+    ScreenshotConfig, ScreenshotError, ScreenshotEvent, ScreenshotParams, ScreenshotState,
+};
+use super::search::{InventoryIndexCache, SearchError};
 use super::subscription::{self, EventFilter, SubscribeParams, SubscribeResponse};
-use super::utils::{parse_params, parse_required_params};
+use super::utils::{ParamsError, parse_params, parse_required_params};
 use super::wfm_auth::{
-    SigninParams, SignstatusParams, SignstatusResponse, WfmHandle, handle_wfm_signout,
+    SigninParams, SignstatusParams, SignstatusResponse, WfmError, WfmHandle, handle_wfm_signout,
 };
 
 /// Cheaply-cloneable bundle of every per-module handle, assembled once at the
@@ -31,13 +37,14 @@ pub struct Handles {
     pub http: reqwest::Client,
     pub(crate) market: Arc<MarketCache>,
     pub(crate) inventory_index: Arc<InventoryIndexCache>,
-    pub(crate) item_index: Arc<wf_itemdata::item_data::ItemIndex>,
+    pub(crate) item_index: Arc<ItemIndex>,
     pub screenshot: Arc<ScreenshotState>,
 }
 
 impl Handles {
     /// Build all handles, spawning the WFM actor. Must run inside a tokio
     /// runtime.
+    #[must_use]
     pub fn new(screenshot: ScreenshotConfig) -> Self {
         let http = reqwest::Client::new();
         Self {
@@ -62,23 +69,23 @@ pub(super) enum ControlError {
     #[error("Unexpected subscribe operation")]
     UnexpectedSubscribe,
     #[error(transparent)]
-    Params(#[from] super::utils::ParamsError),
+    Params(#[from] ParamsError),
     #[error(transparent)]
-    Inventory(#[from] super::inventory::InventoryError),
+    Inventory(#[from] InventoryError),
     #[error(transparent)]
-    Search(#[from] super::search::SearchError),
+    Search(#[from] SearchError),
     #[error(transparent)]
     Tantivy(#[from] tantivy::TantivyError),
     #[error(transparent)]
-    QueryParser(#[from] tantivy::query::QueryParserError),
+    QueryParser(#[from] QueryParserError),
     #[error(transparent)]
-    Market(#[from] super::market::MarketError),
+    Market(#[from] MarketError),
     #[error(transparent)]
-    Wfm(#[from] super::wfm_auth::WfmError),
+    Wfm(#[from] WfmError),
     #[error(transparent)]
-    Screenshot(#[from] super::screenshot::ScreenshotError),
+    Screenshot(#[from] ScreenshotError),
     #[error(transparent)]
-    Storage(#[from] wf_core::storage::StorageError),
+    Storage(#[from] storage::StorageError),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
 }
@@ -88,10 +95,6 @@ pub(super) enum ControlError {
 pub(super) trait HandleOp {
     type Response: Into<ResponseData>;
     async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError>;
-}
-
-async fn run<P: HandleOp>(params: P, cx: &Handles) -> Result<ResponseData, ControlError> {
-    Ok(params.handle(cx).await?.into())
 }
 
 #[derive(Debug, Deserialize)]
@@ -106,7 +109,7 @@ pub(super) struct PingResponse {
     pub pong: monostate::MustBe!(true),
 }
 
-/// Serializes to `{}`.
+/// Serializes to `{}`; a unit struct would serialize as `null`.
 #[derive(Debug, Serialize)]
 pub(super) struct EmptyResponse {}
 
@@ -122,8 +125,8 @@ pub(super) enum ResponseData {
     InventoryLoad(Box<InventoryLoadResponse>),
     #[from(InventoryFilterResponse, Box<InventoryFilterResponse>)]
     InventoryFilter(Box<InventoryFilterResponse>),
-    #[from(wf_core::storage::InventoryMeta, Box<wf_core::storage::InventoryMeta>)]
-    InventoryMeta(Box<wf_core::storage::InventoryMeta>),
+    #[from(InventoryMeta, Box<InventoryMeta>)]
+    InventoryMeta(Box<InventoryMeta>),
     #[from(ScreenshotEvent, Box<ScreenshotEvent>)]
     Screenshot(Box<ScreenshotEvent>),
     #[from(MarketPriceResponse, Box<MarketPriceResponse>)]
@@ -196,10 +199,16 @@ pub(super) enum HandleOutcome {
 impl HandleOutcome {
     pub(crate) fn response(&self) -> &Response {
         match self {
-            Self::Reply(response) => response,
-            Self::EnterSubscription { response, .. } => response,
+            Self::Reply(response) | Self::EnterSubscription { response, .. } => response,
         }
     }
+}
+
+async fn run<P>(params: P, cx: &Handles) -> Result<ResponseData, ControlError>
+where
+    P: HandleOp,
+{
+    Ok(params.handle(cx).await?.into())
 }
 
 pub(super) async fn handle_line(cx: &Handles, line: &str) -> HandleOutcome {
@@ -214,7 +223,8 @@ async fn handle_request(cx: &Handles, req: Request) -> HandleOutcome {
 
     // Handle subscribe separately since it needs to return the filter
     if let Ok(ControlOp::Subscribe) = req.op.parse() {
-        let result = parse_params::<SubscribeParams>(req.params).map(subscription::handle_subscribe);
+        let result =
+            parse_params::<SubscribeParams>(req.params).map(subscription::handle_subscribe);
         return match result {
             Ok(result) => HandleOutcome::EnterSubscription {
                 response: Response::ok(id, result.response.into()),
@@ -237,9 +247,12 @@ async fn dispatch(
 ) -> Result<ResponseData, ControlError> {
     let op: ControlOp = op
         .parse()
-        .map_err(|_| ControlError::UnknownOperation(op.to_string()))?;
+        .map_err(|_| ControlError::UnknownOperation(op.to_owned()))?;
     Ok(match op {
-        ControlOp::Ping => PingResponse { pong: monostate::MustBe!(true) }.into(),
+        ControlOp::Ping => PingResponse {
+            pong: monostate::MustBe!(true),
+        }
+        .into(),
         ControlOp::Inventory(InventoryOp::Load) => {
             run(parse_params::<LoadInventoryParams>(params)?, cx).await?
         }
@@ -261,7 +274,9 @@ async fn dispatch(
         ControlOp::Wfm(WfmOp::Signstatus) => {
             run(parse_params::<SignstatusParams>(params)?, cx).await?
         }
-        ControlOp::Wfm(WfmOp::Signin) => run(parse_required_params::<SigninParams>(params)?, cx).await?,
+        ControlOp::Wfm(WfmOp::Signin) => {
+            run(parse_required_params::<SigninParams>(params)?, cx).await?
+        }
         ControlOp::Wfm(WfmOp::Signout) => {
             handle_wfm_signout(&cx.wfm).await?;
             EmptyResponse {}.into()
@@ -273,6 +288,7 @@ async fn dispatch(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wfm_auth::Status;
     use serde_json::json;
 
     #[tokio::test]
@@ -344,7 +360,7 @@ mod tests {
         );
 
         let auth = SignstatusResponse::Authenticated {
-            status: Some(crate::wfm_auth::Status::Online),
+            status: Some(Status::Online),
             expires_at: "2026-07-27T00:00:00+00:00".into(),
             expired: false,
         };
@@ -359,7 +375,7 @@ mod tests {
         );
 
         let set = SignstatusResponse::Set {
-            status: crate::wfm_auth::Status::Ingame,
+            status: Status::Ingame,
         };
         assert_eq!(
             serde_json::to_value(&set).unwrap(),

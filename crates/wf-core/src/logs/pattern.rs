@@ -2,7 +2,7 @@ use regex::{Captures, Regex, RegexSet};
 
 use crate::{
     account::{AccountInfo, Platform},
-    logs::{DirectMessageInfo, LogEvent, TradeItem},
+    logs::{DirectMessageInfo, LogEvent, TradeInfo, TradeItem},
 };
 
 use std::collections::{HashMap, VecDeque};
@@ -12,6 +12,48 @@ type Transform = fn(&Captures) -> Option<LogEvent>;
 struct Transformer {
     pattern: Regex,
     transform: Transform,
+}
+
+pub struct LogProcessingEngine {
+    transformers: Vec<Transformer>,
+    reset: RegexSet,
+}
+
+/// temp struct used for sorting events
+struct LogRecords {
+    pos: usize,
+    event: LogEvent,
+}
+
+impl LogProcessingEngine {
+    pub fn new() -> Result<Self, regex::Error> {
+        let transformers = transformers()?;
+        let reset = RegexSet::new(transformers.iter().map(|t| t.pattern.as_str()))?;
+        Ok(Self {
+            transformers,
+            reset,
+        })
+    }
+
+    #[must_use]
+    pub fn extract_events(&self, s: &str) -> Vec<LogEvent> {
+        let mut v: VecDeque<_> = self
+            .reset
+            .matches(s)
+            .into_iter()
+            .filter_map(|cap_idx| self.transformers.get(cap_idx))
+            .flat_map(move |t| {
+                t.pattern.captures_iter(s).filter_map(move |c| {
+                    let pos = c.get(0)?.start();
+                    let event = (t.transform)(&c)?;
+                    Some(LogRecords { pos, event })
+                })
+            })
+            .collect();
+
+        v.make_contiguous().sort_by_key(|a| a.pos);
+        v.drain(..).map(move |rec| rec.event).collect()
+    }
 }
 
 /// Pattern table: (regex, capture-group transform). Group meanings are noted
@@ -35,7 +77,7 @@ fn transformers() -> Result<Vec<Transformer>, regex::Error> {
         // G1: reason
         (
             r"(?Rmu)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade failed: (.+?), title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok\)$",
-            |c| Some(LogEvent::TradeFail(c.get(1)?.as_str().to_string())),
+            |c| Some(LogEvent::TradeFail(c.get(1)?.as_str().to_owned())),
         ),
         // G1: name, G2: platform glyph, G3: clan, G4: clan hash.
         // A legacy `AccountId:` suffix may be present, but is deliberately ignored.
@@ -77,16 +119,16 @@ fn transformers() -> Result<Vec<Transformer>, regex::Error> {
 }
 
 fn transform_who_query(c: &Captures) -> Option<LogEvent> {
-    Some(LogEvent::WhoQuery(c.get(1)?.as_str().to_string()))
+    Some(LogEvent::WhoQuery(c.get(1)?.as_str().to_owned()))
 }
 
 fn transform_trade_confirm(c: &Captures) -> Option<LogEvent> {
     let sent = extract_trade_items(c.get(1)?.as_str());
-    let name = c.get(2)?.as_str().to_string();
+    let name = c.get(2)?.as_str().to_owned();
     let received = extract_trade_items(c.get(4)?.as_str());
     let platform = Platform::from(c.get(3)?.as_str());
 
-    let info = crate::logs::TradeInfo {
+    let info = TradeInfo {
         sent,
         received,
         name,
@@ -96,11 +138,11 @@ fn transform_trade_confirm(c: &Captures) -> Option<LogEvent> {
 }
 
 fn transform_login(c: &Captures) -> Option<LogEvent> {
-    let name = c.get(1)?.as_str().to_string();
+    let name = c.get(1)?.as_str().to_owned();
     let platform = Platform::from(c.get(2)?.as_str());
-    let clan_name = c.get(3)?.as_str().to_string();
-    let clan_id = c.get(4)?.as_str().to_string();
-    let clan = [clan_name, "#".to_string(), clan_id].concat();
+    let clan_name = c.get(3)?.as_str().to_owned();
+    let clan_id = c.get(4)?.as_str().to_owned();
+    let clan = [clan_name, "#".to_owned(), clan_id].concat();
     let account_info = AccountInfo {
         username: name,
         platform,
@@ -110,54 +152,12 @@ fn transform_login(c: &Captures) -> Option<LogEvent> {
 }
 
 fn transform_dm_tab(c: &Captures) -> Option<LogEvent> {
-    let username = c.get(1)?.as_str().to_string();
+    let username = c.get(1)?.as_str().to_owned();
     let platform = Platform::from(c.get(2)?.as_str());
     Some(LogEvent::DmTabOpened(DirectMessageInfo {
         username,
         platform,
     }))
-}
-
-pub struct LogProcessingEngine {
-    transformers: Vec<Transformer>,
-    reset: RegexSet,
-}
-
-/// temp struct used for sorting events
-struct LogRecords {
-    pos: usize,
-    event: LogEvent,
-}
-
-impl LogProcessingEngine {
-    pub fn new() -> Result<Self, regex::Error> {
-        let transformers = transformers()?;
-        let reset = RegexSet::new(transformers.iter().map(|t| t.pattern.as_str()))?;
-        Ok(Self {
-            transformers,
-            reset,
-        })
-    }
-
-    pub fn extract_events(&self, s: &str) -> Vec<LogEvent> {
-        let container = &self.transformers;
-        let mut v: VecDeque<_> = self
-            .reset
-            .matches(s)
-            .into_iter()
-            .flat_map(move |cap_idx| {
-                let t = &container[cap_idx];
-                t.pattern.captures_iter(s).filter_map(move |c| {
-                    let pos = c.get(0)?.start();
-                    let event = (t.transform)(&c)?;
-                    Some(LogRecords { pos, event })
-                })
-            })
-            .collect();
-
-        v.make_contiguous().sort_by_key(|a| a.pos);
-        v.drain(..).map(move |rec| rec.event).collect()
-    }
 }
 
 fn trade_confirm_item_filter(a: &str) -> Option<(String, u32)> {
@@ -170,9 +170,9 @@ fn trade_confirm_item_filter(a: &str) -> Option<(String, u32)> {
         && let Ok(count) = r.trim().parse::<u32>()
     {
         let l = a.get(..csplit)?;
-        return Some((l.trim().to_string(), count));
+        return Some((l.trim().to_owned(), count));
     }
-    Some((a.to_string(), 1))
+    Some((a.to_owned(), 1))
 }
 
 fn extract_trade_items(s: &str) -> Vec<TradeItem> {

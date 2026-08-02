@@ -226,8 +226,7 @@ fn capture_pipewire_frame(portal_stream: PortalStream) -> Result<Vec<u8>, Portal
 fn sample_to_bmp(sample: gst::Sample) -> Result<Vec<u8>, PortalError> {
     let total_start = Instant::now();
     let caps = sample.caps().ok_or(PortalError::MissingCaps)?;
-    let info =
-        gstreamer_video::VideoInfo::from_caps(caps).map_err(PortalError::VideoInfo)?;
+    let info = gstreamer_video::VideoInfo::from_caps(caps).map_err(PortalError::VideoInfo)?;
     let buffer = sample.buffer().ok_or(PortalError::MissingBuffer)?;
     let map = buffer.map_readable().map_err(PortalError::MapBuffer)?;
 
@@ -241,11 +240,8 @@ fn sample_to_bmp(sample: gst::Sample) -> Result<Vec<u8>, PortalError> {
     };
 
     let source_row_len = width as usize * 4;
-    let stride =
-        usize::try_from(info.stride()[0]).map_err(|_| PortalError::InvalidFrameSize {
-            width,
-            height,
-        })?;
+    let stride = usize::try_from(info.stride()[0])
+        .map_err(|_| PortalError::InvalidFrameSize { width, height })?;
     let mut bmp = BmpRgb24::new(frame_dim(width)?, frame_dim(height)?)?;
 
     let convert_start = Instant::now();

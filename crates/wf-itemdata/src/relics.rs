@@ -38,7 +38,7 @@ pub struct Relic {
 
 impl ProductCategory for Relic {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["MiscItems".to_string()]
+        vec!["MiscItems".to_owned()]
     }
 }
 

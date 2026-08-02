@@ -1,10 +1,15 @@
+use std::env;
 #[cfg(unix)]
 use std::fs;
+use std::io;
 #[cfg(unix)]
 use std::path::PathBuf;
 
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::io::{
+    AsyncBufReadExt as _, AsyncRead, AsyncWrite, AsyncWriteExt as _, BufReader, Lines, split,
+};
 use tokio::net::TcpListener;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::task::JoinHandle;
 
 #[cfg(unix)]
@@ -12,7 +17,7 @@ use tokio::net::UnixListener;
 #[cfg(windows)]
 use tokio::net::windows::named_pipe::ServerOptions;
 
-use super::events::EventMessage;
+use super::events::{DaemonEvent, EventMessage};
 use super::requests::{self, Handles};
 use super::subscription::EventFilter;
 
@@ -22,35 +27,35 @@ pub enum ServerError {
     BindTcp {
         addr: String,
         #[source]
-        source: std::io::Error,
+        source: io::Error,
     },
     #[cfg(unix)]
     #[error("Failed to create unix socket dir {path}")]
     CreateSocketDir {
         path: String,
         #[source]
-        source: std::io::Error,
+        source: io::Error,
     },
     #[cfg(unix)]
     #[error("Failed to remove existing unix socket {path}")]
     RemoveStaleSocket {
         path: String,
         #[source]
-        source: std::io::Error,
+        source: io::Error,
     },
     #[cfg(unix)]
     #[error("Failed to bind unix control socket {path}")]
     BindUnix {
         path: String,
         #[source]
-        source: std::io::Error,
+        source: io::Error,
     },
     #[error("Failed to serialize response")]
     SerializeResponse(#[source] serde_json::Error),
     #[error("Failed to serialize event")]
     SerializeEvent(#[source] serde_json::Error),
     #[error(transparent)]
-    Io(#[from] std::io::Error),
+    Io(#[from] io::Error),
 }
 
 #[derive(Debug, Clone)]
@@ -68,23 +73,24 @@ pub struct ControlConfig {
 }
 
 impl ControlConfig {
+    #[must_use]
     pub fn from_env() -> Option<Self> {
         let mut endpoints = Vec::new();
 
-        if let Ok(addr) = std::env::var("WF_INFO_API_TCP") {
+        if let Ok(addr) = env::var("WF_INFO_API_TCP") {
             endpoints.push(ControlEndpoint::Tcp(addr));
         }
 
         #[cfg(unix)]
         {
-            if let Ok(path) = std::env::var("WF_INFO_API_UNIX") {
+            if let Ok(path) = env::var("WF_INFO_API_UNIX") {
                 endpoints.push(ControlEndpoint::Unix(PathBuf::from(path)));
             }
         }
 
         #[cfg(windows)]
         {
-            if let Ok(pipe) = std::env::var("WF_INFO_API_NPIPE") {
+            if let Ok(pipe) = env::var("WF_INFO_API_NPIPE") {
                 endpoints.push(ControlEndpoint::Npipe(pipe));
             }
         }
@@ -110,11 +116,33 @@ pub struct ControlServer {
 }
 
 impl ControlServer {
+    #[must_use]
     pub fn empty() -> Self {
         Self {
             _handles: Vec::new(),
             #[cfg(unix)]
             _unix_guards: Vec::new(),
+        }
+    }
+}
+
+#[cfg(unix)]
+#[derive(Debug)]
+struct UnixSocketGuard {
+    path: PathBuf,
+}
+
+#[cfg(unix)]
+impl Drop for UnixSocketGuard {
+    fn drop(&mut self) {
+        if let Err(e) = fs::remove_file(&self.path)
+            && e.kind() != io::ErrorKind::NotFound
+        {
+            log::error!(
+                "Failed to cleanup unix socket {}: {}",
+                self.path.display(),
+                e
+            );
         }
     }
 }
@@ -163,7 +191,7 @@ async fn spawn_tcp_server(addr: &str, cx: Handles) -> Result<JoinHandle<()>, Ser
     let listener = TcpListener::bind(addr)
         .await
         .map_err(|source| ServerError::BindTcp {
-            addr: addr.to_string(),
+            addr: addr.to_owned(),
             source,
         })?;
     log::info!("Control API listening on tcp {addr}");
@@ -280,7 +308,7 @@ async fn handle_stream<T>(stream: T, cx: Handles) -> Result<(), ServerError>
 where
     T: AsyncRead + AsyncWrite + Unpin,
 {
-    let (reader, mut writer) = tokio::io::split(stream);
+    let (reader, mut writer) = split(stream);
     let mut lines = BufReader::new(reader).lines();
 
     while let Some(line) = lines.next_line().await? {
@@ -291,8 +319,8 @@ where
 
         let outcome = requests::handle_line(&cx, line).await;
 
-        let payload = serde_json::to_string(outcome.response())
-            .map_err(ServerError::SerializeResponse)?;
+        let payload =
+            serde_json::to_string(outcome.response()).map_err(ServerError::SerializeResponse)?;
         writer.write_all(payload.as_bytes()).await?;
         writer.write_all(b"\n").await?;
 
@@ -305,7 +333,7 @@ where
     Ok(())
 }
 
-async fn event_writer<W>(event: crate::DaemonEvent, writer: &mut W) -> Result<(), ServerError>
+async fn event_writer<W>(event: DaemonEvent, writer: &mut W) -> Result<(), ServerError>
 where
     W: AsyncWrite + Unpin,
 {
@@ -319,7 +347,7 @@ where
 
 async fn handle_subscription_mode<R, W>(
     cx: &Handles,
-    lines: &mut tokio::io::Lines<BufReader<R>>,
+    lines: &mut Lines<BufReader<R>>,
     writer: &mut W,
     filter: EventFilter,
 ) -> Result<(), ServerError>
@@ -340,10 +368,10 @@ where
                                 log::error!("Error publishing event {e:?}");
                             }
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {
+                    Err(RecvError::Lagged(count)) => {
                         log::warn!("Subscription client lagged, missed {count} events");
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    Err(RecvError::Closed) => {
                         log::debug!("Broadcast channel closed");
                         break;
                     }
@@ -380,27 +408,6 @@ where
     }
 
     Ok(())
-}
-
-#[cfg(unix)]
-#[derive(Debug)]
-struct UnixSocketGuard {
-    path: PathBuf,
-}
-
-#[cfg(unix)]
-impl Drop for UnixSocketGuard {
-    fn drop(&mut self) {
-        if let Err(e) = fs::remove_file(&self.path)
-            && e.kind() != std::io::ErrorKind::NotFound
-        {
-            log::error!(
-                "Failed to cleanup unix socket {}: {}",
-                self.path.display(),
-                e
-            );
-        }
-    }
 }
 
 #[cfg(unix)]

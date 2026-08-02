@@ -4,6 +4,8 @@
 //! into item types using serde's flatten attribute, reducing boilerplate
 //! while maintaining clear property groupings.
 
+use std::ops::Deref;
+
 use serde::{Deserialize, Serialize};
 
 use crate::common::{Introduced, deserialize_option_number_to_f64};
@@ -209,6 +211,7 @@ pub struct ComponentWeaponData {
 #[serde(untagged)]
 pub enum ComponentWeapon {
     Armed(Box<ComponentWeaponData>),
+    // Empty struct variant so untagged matches any map; a unit variant would only match null.
     Unarmed {},
 }
 
@@ -219,6 +222,7 @@ impl Default for ComponentWeapon {
 }
 
 impl ComponentWeapon {
+    #[must_use]
     pub fn as_armed(&self) -> Option<&ComponentWeaponData> {
         match self {
             Self::Armed(data) => Some(data),
@@ -281,7 +285,11 @@ impl WeaponTypeStats {
     /// - Has melee-specific fields (blocking_angle, stance_polarity, combo_duration) → Melee
     /// - Has ranged-specific fields (magazine_size, reload_time) → Ranged
     /// - Neither → None
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "mirrors the full set of type-specific weapon fields extracted from deserialized data"
+    )]
+    #[must_use]
     pub fn detect(
         // Ranged-specific
         accuracy: Option<f64>,
@@ -352,6 +360,7 @@ impl WeaponTypeStats {
     }
 
     /// Get ranged weapon data if available
+    #[must_use]
     pub fn as_ranged(&self) -> Option<&RangedWeaponData> {
         match self {
             Self::Ranged(data) => Some(data),
@@ -360,6 +369,7 @@ impl WeaponTypeStats {
     }
 
     /// Get melee weapon data if available
+    #[must_use]
     pub fn as_melee(&self) -> Option<&MeleeWeaponData> {
         match self {
             Self::Melee(data) => Some(data),
@@ -393,7 +403,7 @@ pub struct CharacterStats {
     pub sprint_speed: Option<f64>,
 }
 
-impl std::ops::Deref for CharacterStats {
+impl Deref for CharacterStats {
     type Target = DefenseStats;
     fn deref(&self) -> &DefenseStats {
         &self.defense
@@ -428,7 +438,7 @@ pub struct EnemyCombatStats {
     pub resistances: Vec<Resistance>,
 }
 
-impl std::ops::Deref for EnemyCombatStats {
+impl Deref for EnemyCombatStats {
     type Target = DefenseStats;
     fn deref(&self) -> &DefenseStats {
         &self.defense
@@ -502,14 +512,14 @@ mod tests {
     #[test]
     fn test_weapon_type_stats_ranged() {
         let stats = WeaponTypeStats::detect(
-            Some(28.6), // accuracy
-            Some(45),   // magazine_size
-            Some(2.0),  // reload_time
-            Some(1),    // multishot
+            Some(28.6_f64), // accuracy
+            Some(45),       // magazine_size
+            Some(2.0_f64),  // reload_time
+            Some(1),        // multishot
             Some(Noise::Alarming),
             Some(Trigger::Auto),
-            Some("Hitscan".to_string()), // projectile
-            None,                        // flight
+            Some("Hitscan".to_owned()), // projectile
+            None,                       // flight
             None,
             None,
             None,
@@ -531,7 +541,7 @@ mod tests {
 
         let ranged_data = stats.as_ranged().unwrap();
         assert_eq!(ranged_data.magazine_size, Some(45));
-        assert_eq!(ranged_data.reload_time, Some(2.0));
+        assert_eq!(ranged_data.reload_time, Some(2.0_f64));
         assert_eq!(ranged_data.noise, Some(Noise::Alarming));
     }
 
@@ -548,8 +558,8 @@ mod tests {
             None,
             Some(55),                // blocking_angle
             Some(5),                 // combo_duration
-            Some(0.6),               // follow_through
-            Some(2.5),               // range
+            Some(0.6_f64),           // follow_through
+            Some(2.5_f64),           // range
             Some(Polarity::Naramon), // stance_polarity
             Some(150),               // slam_attack
             Some(100),               // slam_radial_damage
@@ -559,7 +569,7 @@ mod tests {
             Some(450),               // heavy_slam_attack
             Some(300),               // heavy_slam_radial_damage
             Some(8),                 // heavy_slam_radius
-            Some(0.8),               // wind_up
+            Some(0.8_f64),           // wind_up
         );
 
         assert!(stats.is_melee());
@@ -589,9 +599,9 @@ mod tests {
         // When both ranged and melee fields present, melee takes priority
         // (more distinctive fields)
         let stats = WeaponTypeStats::detect(
-            Some(28.6), // accuracy (ranged)
-            Some(45),   // magazine_size (ranged)
-            Some(2.0),  // reload_time (ranged)
+            Some(28.6_f64), // accuracy (ranged)
+            Some(45),       // magazine_size (ranged)
+            Some(2.0_f64),  // reload_time (ranged)
             None,
             None,
             None,

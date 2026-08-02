@@ -3,7 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ProductCategory;
-use crate::common::Patchlog;
+use crate::common::{Introduced, Patchlog};
+use crate::components::Component;
 use crate::enums::{Polarity, SentinelProductCategory, SentinelType, Slot};
 use crate::props::{
     BuildableProps, CharacterStats, EquippableProps, ItemDetailProps, ItemIdentityProps,
@@ -45,7 +46,7 @@ pub struct Sentinel {
 
 impl ProductCategory for Sentinel {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.as_ref().to_string()]
+        vec![self.product_category.as_ref().to_owned()]
     }
 }
 
@@ -101,7 +102,7 @@ impl Buildable for Sentinel {
     fn bp_cost(&self) -> Option<i64> {
         self.build.bp_cost
     }
-    fn components(&self) -> &[crate::components::Component] {
+    fn components(&self) -> &[Component] {
         &self.build.components
     }
 }
@@ -131,7 +132,7 @@ impl WikiaLinked for Sentinel {
     fn wikia_thumbnail(&self) -> Option<&str> {
         self.wikia.wikia_thumbnail.as_deref()
     }
-    fn introduced(&self) -> Option<&crate::common::Introduced> {
+    fn introduced(&self) -> Option<&Introduced> {
         self.wikia.introduced.as_ref()
     }
     fn release_date(&self) -> Option<&str> {

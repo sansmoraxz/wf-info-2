@@ -1,8 +1,8 @@
 use clap::{Args, Parser, Subcommand};
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 #[cfg(unix)]
 use std::path::PathBuf;
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt as _, AsyncRead, AsyncWrite, AsyncWriteExt as _, BufReader};
 use tokio::net::TcpStream;
 use wf_control::control_ops::{ControlOp, InventoryOp, ScreenshotOp, WfmOp};
 use wf_control::{ControlConfig, ControlEndpoint};
@@ -335,34 +335,14 @@ enum CliMode {
     Watch(WatchConfig),
 }
 
-// Value parsers for clap
-
-// clap's value_parser requires a Result-returning signature
-#[allow(clippy::unnecessary_wraps)]
-fn parse_jsonish_clap(raw: &str) -> Result<Value, String> {
-    Ok(parse_jsonish(raw))
-}
-
-fn parse_json_value(raw: &str) -> Result<Value, String> {
-    serde_json::from_str(raw).map_err(|e| format!("Invalid JSON: {e}"))
-}
-
-fn parse_jsonish(raw: &str) -> Value {
-    if let Ok(v) = serde_json::from_str(raw) {
-        v
-    } else if let Ok(num) = raw.parse::<i64>() {
-        Value::Number(num.into())
-    } else if let Ok(b) = raw.parse::<bool>() {
-        Value::Bool(b)
-    } else {
-        Value::String(raw.to_string())
-    }
-}
-
 // Conversion implementations
 
 impl ConnectionArgs {
-    fn into_cli_config(self, output: OutputFormat, id: Option<String>) -> anyhow::Result<CliConfig> {
+    fn into_cli_config(
+        self,
+        output: OutputFormat,
+        id: Option<String>,
+    ) -> anyhow::Result<CliConfig> {
         let mut cfg = CliConfig {
             tcp_addr: self.tcp,
             #[cfg(unix)]
@@ -500,17 +480,16 @@ impl Commands {
                 params: None,
             },
             Self::WfmSignin(args) => {
-                let mut params = json!({
-                    "email": args.email,
-                    "password": args.password,
-                    "client_id": args.client_id,
-                });
+                let mut params = Map::new();
+                params.insert("email".to_owned(), Value::String(args.email));
+                params.insert("password".to_owned(), Value::String(args.password));
+                params.insert("client_id".to_owned(), Value::String(args.client_id));
                 if let Some(name) = args.device_name {
-                    params["device_name"] = Value::String(name);
+                    params.insert("device_name".to_owned(), Value::String(name));
                 }
                 Command {
                     op: CliOp::Known(ControlOp::Wfm(WfmOp::Signin)),
-                    params: Some(params),
+                    params: Some(Value::Object(params)),
                 }
             }
             Self::WfmSignout => Command {
@@ -518,16 +497,16 @@ impl Commands {
                 params: None,
             },
             Self::WfmStatus(args) => {
-                let mut params = json!({});
+                let mut params = Map::new();
                 if let Some(s) = args.status {
-                    params["status"] = Value::String(s);
+                    params.insert("status".to_owned(), Value::String(s));
                 }
                 if let Some(d) = args.duration {
-                    params["duration"] = d;
+                    params.insert("duration".to_owned(), d);
                 }
                 Command {
                     op: CliOp::Known(ControlOp::Wfm(WfmOp::Signstatus)),
-                    params: Some(params),
+                    params: Some(Value::Object(params)),
                 }
             }
             Self::Call(args) => Command {
@@ -541,118 +520,145 @@ impl Commands {
 
 impl InventoryLoadArgs {
     fn into_params(self) -> Value {
-        let mut params = json!({});
+        let mut params = Map::new();
         if let Some(v) = self.path {
-            params["path"] = Value::String(v);
+            params.insert("path".to_owned(), Value::String(v));
         }
         if let Some(v) = self.raw {
-            params["raw"] = Value::String(v);
+            params.insert("raw".to_owned(), Value::String(v));
         }
         if let Some(v) = self.json {
-            params["json"] = v;
+            params.insert("json".to_owned(), v);
         }
         if let Some(v) = self.save {
-            params["save"] = Value::Bool(v);
+            params.insert("save".to_owned(), Value::Bool(v));
         }
         if let Some(v) = self.source {
-            params["source"] = Value::String(v);
+            params.insert("source".to_owned(), Value::String(v));
         }
         if self.encrypted {
-            params["encrypted"] = Value::Bool(true);
+            params.insert("encrypted".to_owned(), Value::Bool(true));
         }
-        params
+        Value::Object(params)
     }
 }
 
 impl InventoryFilterArgs {
     fn into_params(self) -> Value {
-        let mut params = json!({});
+        let mut params = Map::new();
         if let Some(v) = self.category {
-            params["category"] = Value::String(v);
+            params.insert("category".to_owned(), Value::String(v));
         }
         if let Some(v) = self.item_type {
-            params["item_type"] = Value::String(v);
+            params.insert("item_type".to_owned(), Value::String(v));
         }
         if let Some(v) = self.contains {
-            params["contains"] = Value::String(v);
+            params.insert("contains".to_owned(), Value::String(v));
         }
         if let Some(v) = self.limit {
-            params["limit"] = Value::Number(v.into());
+            params.insert("limit".to_owned(), Value::Number(v.into()));
         }
         if let Some(v) = self.offset {
-            params["offset"] = Value::Number(v.into());
+            params.insert("offset".to_owned(), Value::Number(v.into()));
         }
         if self.include_details {
-            params["include_details"] = Value::Bool(true);
+            params.insert("include_details".to_owned(), Value::Bool(true));
         }
         if self.include_market {
-            params["include_market"] = Value::Bool(true);
+            params.insert("include_market".to_owned(), Value::Bool(true));
         }
         if let Some(v) = self.path {
-            params["path"] = Value::String(v);
+            params.insert("path".to_owned(), Value::String(v));
         }
         if self.encrypted {
-            params["encrypted"] = Value::Bool(true);
+            params.insert("encrypted".to_owned(), Value::Bool(true));
         }
-        params
+        Value::Object(params)
     }
 }
 
 impl InventoryStaleArgs {
     fn into_params(self) -> Value {
-        let mut params = json!({});
+        let mut params = Map::new();
         if let Some(v) = self.timestamp {
-            params["timestamp"] = v;
+            params.insert("timestamp".to_owned(), v);
         }
         if let Some(v) = self.reason {
-            params["reason"] = Value::String(v);
+            params.insert("reason".to_owned(), Value::String(v));
         }
-        params
+        Value::Object(params)
     }
 }
 
 impl InventoryRefreshArgs {
     fn into_params(self) -> Value {
-        let mut params = json!({});
+        let mut params = Map::new();
         if let Some(v) = self.scan_retries {
-            params["scan_retries"] = Value::Number(v.into());
+            params.insert("scan_retries".to_owned(), Value::Number(v.into()));
         }
         if let Some(v) = self.scan_delay_ms {
-            params["scan_delay_ms"] = Value::Number(v.into());
+            params.insert("scan_delay_ms".to_owned(), Value::Number(v.into()));
         }
         if self.no_save {
-            params["save"] = Value::Bool(false);
+            params.insert("save".to_owned(), Value::Bool(false));
         }
         if let Some(v) = self.source {
-            params["source"] = Value::String(v);
+            params.insert("source".to_owned(), Value::String(v));
         }
-        params
+        Value::Object(params)
     }
 }
 
 impl ScreenshotArgs {
     fn into_params(self) -> Value {
-        let mut params = json!({});
+        let mut params = Map::new();
         if let Some(v) = self.metadata {
-            params["metadata"] = v;
+            params.insert("metadata".to_owned(), v);
         }
-        params
+        Value::Object(params)
     }
 }
 
 impl WFMarketPriceArgs {
     fn into_params(self) -> Value {
-        let mut params = json!({});
+        let mut params = Map::new();
         if let Some(v) = self.item_type {
-            params["item_type"] = Value::String(v);
+            params.insert("item_type".to_owned(), Value::String(v));
         }
         if let Some(v) = self.search {
-            params["search"] = Value::String(v);
+            params.insert("search".to_owned(), Value::String(v));
         }
         if let Some(v) = self.include_parts {
-            params["include_parts"] = Value::Bool(v);
+            params.insert("include_parts".to_owned(), Value::Bool(v));
         }
-        params
+        Value::Object(params)
+    }
+}
+
+// Value parsers for clap
+
+// clap's value_parser requires a Result-returning signature
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "clap value_parser requires a Result-returning signature"
+)]
+fn parse_jsonish_clap(raw: &str) -> Result<Value, String> {
+    Ok(parse_jsonish(raw))
+}
+
+fn parse_json_value(raw: &str) -> Result<Value, String> {
+    serde_json::from_str(raw).map_err(|e| format!("Invalid JSON: {e}"))
+}
+
+fn parse_jsonish(raw: &str) -> Value {
+    if let Ok(v) = serde_json::from_str(raw) {
+        v
+    } else if let Ok(num) = raw.parse::<i64>() {
+        Value::Number(num.into())
+    } else if let Ok(b) = raw.parse::<bool>() {
+        Value::Bool(b)
+    } else {
+        Value::String(raw.to_owned())
     }
 }
 

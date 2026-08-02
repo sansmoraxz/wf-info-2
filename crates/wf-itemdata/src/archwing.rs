@@ -3,7 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ProductCategory;
-use crate::common::{Ability, Patchlog};
+use crate::common::{Ability, Introduced, Patchlog};
+use crate::components::Component;
 use crate::enums::{ArchwingProductCategory, ArchwingType, Polarity, Slot};
 use crate::props::{
     BuildableProps, CharacterStats, ItemDetailProps, ItemIdentityProps, PrimeProps, TradableProps,
@@ -53,7 +54,7 @@ pub struct Archwing {
 
 impl ProductCategory for Archwing {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.as_ref().to_string()]
+        vec![self.product_category.as_ref().to_owned()]
     }
 }
 
@@ -112,7 +113,7 @@ impl Buildable for Archwing {
     fn bp_cost(&self) -> Option<i64> {
         self.build.bp_cost
     }
-    fn components(&self) -> &[crate::components::Component] {
+    fn components(&self) -> &[Component] {
         &self.build.components
     }
 }
@@ -142,7 +143,7 @@ impl WikiaLinked for Archwing {
     fn wikia_thumbnail(&self) -> Option<&str> {
         self.wikia.wikia_thumbnail.as_deref()
     }
-    fn introduced(&self) -> Option<&crate::common::Introduced> {
+    fn introduced(&self) -> Option<&Introduced> {
         self.wikia.introduced.as_ref()
     }
     fn release_date(&self) -> Option<&str> {

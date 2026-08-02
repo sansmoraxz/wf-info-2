@@ -41,7 +41,7 @@ pub struct Arcane {
 
 impl ProductCategory for Arcane {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["Upgrades".to_string(), "RawUpgrades".to_string()]
+        vec!["Upgrades".to_owned(), "RawUpgrades".to_owned()]
     }
 }
 

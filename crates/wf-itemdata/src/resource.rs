@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ProductCategory;
 use crate::common::{Drop, Patchlog};
+use crate::components::Component;
 use crate::enums::ResourceType;
 use crate::props::{BuildableProps, ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::traits::{Buildable, Droppable, Item};
@@ -40,7 +41,7 @@ pub struct Resource {
 
 impl ProductCategory for Resource {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["MiscItems".to_string()]
+        vec!["MiscItems".to_owned()]
     }
 }
 
@@ -102,7 +103,7 @@ impl Buildable for Resource {
     fn bp_cost(&self) -> Option<i64> {
         self.build.bp_cost
     }
-    fn components(&self) -> &[crate::components::Component] {
+    fn components(&self) -> &[Component] {
         &self.build.components
     }
 }

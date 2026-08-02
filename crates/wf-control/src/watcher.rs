@@ -1,21 +1,27 @@
-use chrono::Utc;
 use std::collections::HashSet;
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
+use std::error::Error;
+use std::mem;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+
+use chrono::Utc;
+use tokio::time::sleep;
+use wf_core::account::AccountInfo;
+use wf_core::logs::pattern::LogProcessingEngine;
+use wf_core::logs::{self, LineAssembler, LogEvent, LogSource};
 use wf_ocr::{RelicRecognizer, load_image};
 
-use crate::events::EventBus;
+use crate::events::{
+    EventBus, RelicSelectionPopup, TradeConfirmPopupEvent, TradeFailedEvent, TradeSuccessEvent,
+};
 use crate::screenshot::{ScreenshotState, capture_screen};
 use crate::{
     AccountLoginEvent, AccountLogoutEvent, DaemonEvent, DmTabOpenedEvent, SystemQuitReason,
 };
-use wf_core::account::AccountInfo;
-use wf_core::logs::pattern::LogProcessingEngine;
-use wf_core::logs::{self, LineAssembler, LogEvent, LogSource};
 
+#[cfg(feature = "memory")]
+use crate::events::Source;
 #[cfg(feature = "memory")]
 use crate::{InventoryFetchedEvent, ProfileUpdatedEvent};
 #[cfg(feature = "memory")]
@@ -31,10 +37,12 @@ impl GameLifecycleTracker {
         self.quit_requested.store(true, Ordering::SeqCst);
     }
 
+    #[must_use]
     pub fn is_quit_requested(&self) -> bool {
         self.quit_requested.load(Ordering::SeqCst)
     }
 
+    #[must_use]
     pub fn exit_reason(&self) -> SystemQuitReason {
         if self.quit_requested.load(Ordering::SeqCst) {
             SystemQuitReason::Requested
@@ -98,7 +106,7 @@ impl SessionState {
             return false;
         }
         *self = Self::LoggedIn {
-            username: username.to_string(),
+            username: username.to_owned(),
         };
         true
     }
@@ -123,7 +131,7 @@ impl TradeState {
     /// Take the pending trade on success/failure; `None` when no trade was
     /// pending (log stream out of sync).
     fn resolve(&mut self) -> Option<logs::TradeInfo> {
-        match std::mem::take(self) {
+        match mem::take(self) {
             Self::Pending(info) => Some(info),
             Self::Idle => None,
         }
@@ -132,12 +140,21 @@ impl TradeState {
 
 struct WatchState {
     events: EventBus,
-    #[cfg_attr(not(feature = "memory"), allow(dead_code))]
+    #[cfg_attr(
+        not(feature = "memory"),
+        allow(dead_code, reason = "only read by the memory-feature login handler")
+    )]
     http: reqwest::Client,
     screenshot: Arc<ScreenshotState>,
-    #[cfg_attr(not(feature = "memory"), allow(dead_code))]
+    #[cfg_attr(
+        not(feature = "memory"),
+        allow(dead_code, reason = "only read by the memory-feature login handler")
+    )]
     warframe_pid: Option<u32>,
-    #[cfg_attr(not(feature = "memory"), allow(dead_code))]
+    #[cfg_attr(
+        not(feature = "memory"),
+        allow(dead_code, reason = "only read by the memory-feature login handler")
+    )]
     auto_callbacks: AutoCallbacks,
     session: SessionState,
     /// Usernames for which we issued `IRC out: WHO` (self-initiated DMs).
@@ -175,6 +192,33 @@ impl WatchState {
             trade: TradeState::default(),
             relic: RelicState::default(),
             relic_recognizer,
+        }
+    }
+
+    /// Resolve the pending trade, emitting `TradeSuccess` when `fail_reason`
+    /// is `None` and `TradeFailed` otherwise.
+    fn resolve_trade(&mut self, fail_reason: Option<String>) {
+        let Some(trades) = self.trade.resolve() else {
+            log::error!("No trade activity in watch buffer. Something's probably wrong");
+            return;
+        };
+        match &fail_reason {
+            Some(reason) => log::info!("Trade failed: {trades:?}, reason: {reason}"),
+            None => log::info!("Trade confirmed: {trades:?}"),
+        }
+        let popup = TradeConfirmPopupEvent {
+            sent: trades.sent,
+            received: trades.received,
+            name: trades.name,
+            platform: trades.platform,
+        };
+        match fail_reason {
+            Some(reason) => self
+                .events
+                .emit(DaemonEvent::TradeFailed(TradeFailedEvent(popup, reason))),
+            None => self
+                .events
+                .emit(DaemonEvent::TradeSuccess(TradeSuccessEvent(popup))),
         }
     }
 }
@@ -242,42 +286,8 @@ fn event_emitter_fn(
                         }));
                 }
             }
-            LogEvent::TradeSuccess => {
-                if let Some(trades) = state.trade.resolve() {
-                    log::info!("Trade confirmed: {trades:?}");
-                    let popup = crate::events::TradeConfirmPopupEvent {
-                        sent: trades.sent,
-                        received: trades.received,
-                        name: trades.name,
-                        platform: trades.platform,
-                    };
-                    state
-                        .events
-                        .emit(DaemonEvent::TradeSuccess(crate::events::TradeSuccessEvent(
-                            popup,
-                        )));
-                } else {
-                    log::error!("No trade activity in watch buffer. Something's probably wrong");
-                }
-            }
-            LogEvent::TradeFail(reason) => {
-                if let Some(trades) = state.trade.resolve() {
-                    log::info!("Trade failed: {trades:?}, reason: {reason}");
-                    let popup = crate::events::TradeConfirmPopupEvent {
-                        sent: trades.sent,
-                        received: trades.received,
-                        name: trades.name,
-                        platform: trades.platform,
-                    };
-                    state
-                        .events
-                        .emit(DaemonEvent::TradeFailed(crate::events::TradeFailedEvent(
-                            popup, reason,
-                        )));
-                } else {
-                    log::error!("No trade in watch buffer. Something's probably wrong");
-                }
-            }
+            LogEvent::TradeSuccess => state.resolve_trade(None),
+            LogEvent::TradeFail(reason) => state.resolve_trade(Some(reason)),
             LogEvent::TradeConfirmPopup(info) => {
                 log::info!("Got trade request confirmation: {info:?}");
                 state.trade.confirm_popup(info);
@@ -377,14 +387,12 @@ async fn handle_login_event(
             if let Err(e) = storage::save_inventory(&result.inventory) {
                 log::error!("Failed to save inventory: {e}");
             } else {
-                if let Err(e) =
-                    storage::touch_inventory_updated(Some(&crate::events::Source::Auto.to_string()))
-                {
+                if let Err(e) = storage::touch_inventory_updated(Some(&Source::Auto.to_string())) {
                     log::warn!("Failed to update inventory metadata: {e}");
                 }
                 events.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
                     timestamp: Utc::now(),
-                    source: crate::events::Source::Auto,
+                    source: Source::Auto,
                     summary: crate::inventory::inventory_summary(&result.inventory),
                 }));
             }
@@ -404,7 +412,7 @@ async fn handle_relic_selection_popup(
     shots: Arc<ScreenshotState>,
     recognizer: Arc<RelicRecognizer>,
 ) {
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    sleep(Duration::from_millis(500)).await;
 
     let res = capture_screen(&shots).await;
     match res {
@@ -413,7 +421,7 @@ async fn handle_relic_selection_popup(
                 Ok(mut v) => {
                     log::info!("Got relic items: {v:?}");
                     let filtered: Vec<String> = v.drain(..).map(|e| e.text).collect();
-                    let popup = crate::events::RelicSelectionPopup { items: filtered };
+                    let popup = RelicSelectionPopup { items: filtered };
                     events.emit(DaemonEvent::RelicSelectionOpen(popup));
                 }
                 Err(e) => log::error!("OCR failed on screenshot image {e}"),
@@ -424,7 +432,7 @@ async fn handle_relic_selection_popup(
     }
 }
 
-pub async fn observe_warframe_activity_with_lifecycle<S: LogSource>(
+pub async fn observe_warframe_activity_with_lifecycle<S>(
     events: EventBus,
     http: reqwest::Client,
     screenshot: Arc<ScreenshotState>,
@@ -432,36 +440,41 @@ pub async fn observe_warframe_activity_with_lifecycle<S: LogSource>(
     warframe_pid: Option<u32>,
     auto_callbacks: AutoCallbacks,
     lifecycle: GameLifecycleTracker,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn Error>>
+where
+    S: LogSource,
+{
     log::info!("Watching for Warframe activity...");
     let log_processor = LogProcessingEngine::new()?;
     let mut state = WatchState::new(events, http, screenshot, warframe_pid, auto_callbacks);
     let mut assembler = LineAssembler::default();
 
     loop {
-        match source.recv_chunk().await? {
-            Some(chunk) => {
-                let lines = assembler.push_chunk(&chunk);
-                if lines.is_empty() {
-                    continue;
-                }
-                let entries = log_processor.extract_events(&lines);
-                log::debug!("Observed entries: {entries:?}");
-                state = event_emitter_fn(state, entries, &lifecycle);
+        if let Some(chunk) = source.recv_chunk().await? {
+            let lines = assembler.push_chunk(&chunk);
+            if lines.is_empty() {
+                continue;
             }
-            None => {
-                log::info!("Log source closed");
-                return Ok(());
-            }
+            let entries = log_processor.extract_events(&lines);
+            log::debug!("Observed entries: {entries:?}");
+            state = event_emitter_fn(state, entries, &lifecycle);
+        } else {
+            log::info!("Log source closed");
+            return Ok(());
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::collections::{HashSet, VecDeque};
+    use std::future::Future;
     use std::io;
+    use std::pin::Pin;
+
+    use wf_core::account::Platform;
+
+    use super::*;
 
     const USERNAME: &str = "Jasper123";
 
@@ -494,21 +507,22 @@ mod tests {
     impl LogSource for MockLogSource {
         fn recv_chunk(
             &mut self,
-        ) -> std::pin::Pin<
-            Box<dyn std::future::Future<Output = io::Result<Option<String>>> + Send + '_>,
-        > {
+        ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + '_>> {
             Box::pin(async move { self.chunks.pop_front().unwrap_or(Ok(None)) })
         }
     }
 
-    async fn observe_warframe_activity<S: LogSource>(
+    async fn observe_warframe_activity<S>(
         events: EventBus,
         http: reqwest::Client,
         screenshot: Arc<ScreenshotState>,
         source: S,
         warframe_pid: Option<u32>,
         auto_callbacks: AutoCallbacks,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), Box<dyn Error>>
+    where
+        S: LogSource,
+    {
         observe_warframe_activity_with_lifecycle(
             events,
             http,
@@ -561,7 +575,7 @@ mod tests {
         match &events[0] {
             LogEvent::Login(info) => {
                 assert_eq!(info.username, USERNAME);
-                assert_eq!(info.platform, wf_core::account::Platform::PC);
+                assert_eq!(info.platform, Platform::PC);
                 assert_eq!(info.clan, "TestC#963");
             }
             _ => panic!("expected Login from name-change"),
@@ -612,7 +626,7 @@ mod tests {
         match &events[0] {
             LogEvent::Login(info) => {
                 assert_eq!(info.username, USERNAME);
-                assert_eq!(info.platform, wf_core::account::Platform::PLAYSTATION);
+                assert_eq!(info.platform, Platform::PLAYSTATION);
                 assert_eq!(info.clan, "Test Clan#963");
             }
             _ => panic!("expected Login from legacy name-change line"),
@@ -656,7 +670,7 @@ mod tests {
     fn test_incremental_dm_tab_detection() {
         let mut harness = ChunkHarness::new();
 
-        let _ = harness.feed(
+        harness.feed(
             "0.049 Sys [Diag]: Build Label: 2026.02.13.16.03\r\n\
              72.458 Sys [Info]: Logged in sample_account (2baaaaaaaaaaaaaaaaaaaaaa)\r\n",
         );
@@ -670,7 +684,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_alpha");
-                assert_eq!(info.platform, wf_core::account::Platform::PC);
+                assert_eq!(info.platform, Platform::PC);
             }
             _ => panic!("expected DirectMessage"),
         }
@@ -682,7 +696,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_bravo");
-                assert_eq!(info.platform, wf_core::account::Platform::PC);
+                assert_eq!(info.platform, Platform::PC);
             }
             _ => panic!("expected DirectMessage"),
         }
@@ -699,7 +713,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_charlie");
-                assert_eq!(info.platform, wf_core::account::Platform::PC);
+                assert_eq!(info.platform, Platform::PC);
             }
             _ => panic!("expected DirectMessage"),
         }
@@ -711,7 +725,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_delta");
-                assert_eq!(info.platform, wf_core::account::Platform::XBOX);
+                assert_eq!(info.platform, Platform::XBOX);
             }
             _ => panic!("expected DirectMessage"),
         }
@@ -754,7 +768,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_echo");
-                assert_eq!(info.platform, wf_core::account::Platform::PC);
+                assert_eq!(info.platform, Platform::PC);
             }
             _ => panic!("expected DmTabOpened"),
         }
@@ -790,7 +804,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_foxtrot");
-                assert_eq!(info.platform, wf_core::account::Platform::PLAYSTATION);
+                assert_eq!(info.platform, Platform::PLAYSTATION);
             }
             _ => panic!("expected DmTabOpened"),
         }
@@ -817,7 +831,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_echo");
-                assert_eq!(info.platform, wf_core::account::Platform::PC);
+                assert_eq!(info.platform, Platform::PC);
             }
             _ => panic!("expected DmTabOpened"),
         }

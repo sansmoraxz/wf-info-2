@@ -1,10 +1,32 @@
 use std::collections::HashSet;
+use std::env;
+#[cfg(feature = "memory")]
+use std::io;
 use std::time::Duration;
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
-use tokio::time::sleep;
+use tokio::time::{Instant, sleep};
 
 #[cfg(feature = "memory")]
 use {memchr::memmem, std::collections::HashMap};
+
+#[cfg(all(feature = "memory", target_os = "linux"))]
+use std::{
+    fs::File,
+    io::{BufRead as _, BufReader, Read as _, Seek as _, SeekFrom},
+};
+
+const DEFAULT_HANDOFF_GRACE: Duration = Duration::from_secs(10);
+
+#[cfg(feature = "memory")]
+const AUTH_PREFIX: &[u8] = b"?accountId=";
+#[cfg(feature = "memory")]
+const NONCE_PREFIX: &[u8] = b"&nonce=";
+#[cfg(feature = "memory")]
+const ACCOUNT_ID_LEN: usize = 24;
+#[cfg(feature = "memory")]
+const REQUIRED_AUTH_ALLOCATIONS: u32 = 3;
+#[cfg(feature = "memory")]
+const CHUNK_OVERLAP: usize = 256;
 
 #[cfg(feature = "memory")]
 #[derive(Debug, thiserror::Error)]
@@ -14,11 +36,11 @@ pub enum ScanError {
     OpenProcFile {
         path: String,
         #[source]
-        source: std::io::Error,
+        source: io::Error,
     },
     #[cfg(target_os = "linux")]
     #[error(transparent)]
-    Io(#[from] std::io::Error),
+    Io(#[from] io::Error),
     #[cfg(target_os = "windows")]
     #[error("Failed to open process (try running as Administrator)")]
     OpenProcess,
@@ -27,11 +49,161 @@ pub enum ScanError {
     Unsupported,
 }
 
-#[cfg(all(feature = "memory", target_os = "linux"))]
-use std::{
-    fs::File,
-    io::{BufRead, BufReader, Read, Seek, SeekFrom},
-};
+/// Authorization query string containing accountId and nonce
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct AuthQuery {
+    pub account_id: String,
+    pub(crate) nonce: String,
+}
+
+/// The Warframe launcher has been spawned; the game process is not up yet.
+///
+/// Transitions: `Launcher -> RunningGame` via [`Self::game_started`], or
+/// stop (drop this) when the launcher exits without producing a game process.
+#[derive(Debug)]
+pub struct Launcher {
+    pid: u32,
+    existing_pids: HashSet<u32>,
+}
+
+impl Launcher {
+    #[must_use]
+    pub fn new(pid: u32, existing_pids: HashSet<u32>) -> Self {
+        Self { pid, existing_pids }
+    }
+
+    /// Resolves once a newly launched Warframe game process appears.
+    ///
+    /// Never resolves if none does — race this against launcher exit and
+    /// drop the `Launcher` to take the stop transition.
+    pub async fn game_started(self) -> RunningGame {
+        log::info!(
+            "Waiting for launched Warframe game process under launcher PID {}; excluding existing PIDs: {:?}",
+            self.pid,
+            self.existing_pids
+        );
+        let mut system = System::new();
+
+        loop {
+            refresh_all_process_commands(&mut system);
+
+            if let Some(pid) = find_new_warframe_pid(&system, &self.existing_pids, self.pid) {
+                log::info!("Launched Warframe game process detected (PID: {pid}).");
+                return RunningGame {
+                    pid,
+                    launcher_pid: self.pid,
+                    existing_pids: self.existing_pids,
+                };
+            }
+
+            sleep(Duration::from_secs(1)).await;
+        }
+    }
+}
+
+/// A live Warframe game process being tracked for exit.
+///
+/// Transitions: stop via [`Self::pid_exited`] (possibly looping through a
+/// bootstrap handoff successor first).
+#[derive(Debug)]
+pub struct RunningGame {
+    pid: u32,
+    launcher_pid: u32,
+    existing_pids: HashSet<u32>,
+}
+
+impl RunningGame {
+    #[must_use]
+    pub fn pid(&self) -> u32 {
+        self.pid
+    }
+
+    /// Resolves once the tracked PID is no longer a Warframe game process.
+    pub async fn pid_exited(&self) -> PidExited {
+        while is_warframe_pid(self.pid) {
+            sleep(Duration::from_secs(1)).await;
+        }
+        PidExited {
+            exited_pid: self.pid,
+            launcher_pid: self.launcher_pid,
+            existing_pids: self.existing_pids.clone(),
+        }
+    }
+}
+
+/// The tracked PID has died. Either drop this (the game exited for good) or
+/// scan for a bootstrap-to-game handoff successor with [`Self::into_successor`].
+#[derive(Debug)]
+#[must_use = "decide whether the game exited or a handoff successor should be awaited"]
+pub struct PidExited {
+    exited_pid: u32,
+    launcher_pid: u32,
+    existing_pids: HashSet<u32>,
+}
+
+impl PidExited {
+    /// Scans for a successor game process within the handoff grace window.
+    /// Returns the successor to keep tracking, or `None` if the game exited.
+    pub async fn into_successor(self) -> Option<RunningGame> {
+        let deadline = Instant::now() + handoff_grace();
+        loop {
+            let mut system = System::new();
+            refresh_all_process_commands(&mut system);
+            if let Some(next) =
+                find_new_warframe_pid(&system, &self.existing_pids, self.launcher_pid)
+            {
+                log::info!(
+                    "Tracked Warframe PID {} exited; continuing with successor PID {}",
+                    self.exited_pid,
+                    next
+                );
+                return Some(RunningGame {
+                    pid: next,
+                    launcher_pid: self.launcher_pid,
+                    existing_pids: self.existing_pids,
+                });
+            }
+            if Instant::now() >= deadline {
+                return None;
+            }
+            sleep(Duration::from_secs(1)).await;
+        }
+    }
+}
+
+/// Whether a nonce running up to the end of the byte slice counts as
+/// terminated. A whole allocation is a natural boundary; a read chunk is not,
+/// since the nonce may continue in the next chunk.
+#[cfg(feature = "memory")]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NonceBoundary {
+    EndOfBytesTerminates,
+    RequireTerminator,
+}
+
+#[cfg(feature = "memory")]
+#[derive(Default)]
+struct AuthCandidateTracker {
+    allocation_counts: HashMap<AuthQuery, u32>,
+}
+
+#[cfg(feature = "memory")]
+impl AuthCandidateTracker {
+    fn observe_allocation(
+        &mut self,
+        allocation_candidates: HashSet<AuthQuery>,
+    ) -> Option<AuthQuery> {
+        for candidate in allocation_candidates {
+            let count = self.allocation_counts.entry(candidate.clone()).or_insert(0);
+            *count += 1;
+            log::debug!("Found authorization candidate in {count} readable allocation(s)");
+            if *count >= REQUIRED_AUTH_ALLOCATIONS {
+                return Some(candidate);
+            }
+        }
+        None
+    }
+}
 
 /// Checks if Warframe is the main game process (not launcher)
 fn is_warframe_game_process(process: &sysinfo::Process) -> bool {
@@ -89,13 +261,12 @@ fn find_all_warframe_pids(system: &System) -> Vec<u32> {
         .collect()
 }
 
-
 fn is_descendant_of(system: &System, pid: u32, ancestor_pid: u32) -> bool {
     let ancestor = sysinfo::Pid::from_u32(ancestor_pid);
     let mut current = sysinfo::Pid::from_u32(pid);
     // Bounded walk guards against parent-chain cycles from PID reuse.
-    for _ in 0..64 {
-        let Some(parent) = system.process(current).and_then(|p| p.parent()) else {
+    for _ in 0_i32..64_i32 {
+        let Some(parent) = system.process(current).and_then(sysinfo::Process::parent) else {
             return false;
         };
         if parent == ancestor {
@@ -125,134 +296,20 @@ fn find_new_warframe_pid(
         .or_else(|| candidates.first().copied())
 }
 
-const DEFAULT_HANDOFF_GRACE: Duration = Duration::from_secs(10);
-
 /// How long to keep scanning for a successor Warframe process after the
 /// tracked one dies before declaring the game exited: the bootstrap
 /// Warframe.x64.exe hands off to the real game process, and on slow systems
 /// the successor may not be up yet. Tradeoff: a genuine quit is only reported
 /// after this window. Tunable via WF_HANDOFF_GRACE_SECS.
 pub(crate) fn handoff_grace() -> Duration {
-    std::env::var("WF_HANDOFF_GRACE_SECS")
+    env::var("WF_HANDOFF_GRACE_SECS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
         .map_or(DEFAULT_HANDOFF_GRACE, Duration::from_secs)
 }
 
-/// The Warframe launcher has been spawned; the game process is not up yet.
-///
-/// Transitions: `Launcher -> RunningGame` via [`Self::game_started`], or
-/// stop (drop this) when the launcher exits without producing a game process.
-#[derive(Debug)]
-pub struct Launcher {
-    pid: u32,
-    existing_pids: HashSet<u32>,
-}
-
-impl Launcher {
-    pub fn new(pid: u32, existing_pids: HashSet<u32>) -> Self {
-        Self { pid, existing_pids }
-    }
-
-    /// Resolves once a newly launched Warframe game process appears.
-    ///
-    /// Never resolves if none does — race this against launcher exit and
-    /// drop the `Launcher` to take the stop transition.
-    pub async fn game_started(self) -> RunningGame {
-        log::info!(
-            "Waiting for launched Warframe game process under launcher PID {}; excluding existing PIDs: {:?}",
-            self.pid,
-            self.existing_pids
-        );
-        let mut system = System::new();
-
-        loop {
-            refresh_all_process_commands(&mut system);
-
-            if let Some(pid) = find_new_warframe_pid(&system, &self.existing_pids, self.pid) {
-                log::info!("Launched Warframe game process detected (PID: {pid}).");
-                return RunningGame {
-                    pid,
-                    launcher_pid: self.pid,
-                    existing_pids: self.existing_pids,
-                };
-            }
-
-            sleep(Duration::from_secs(1)).await;
-        }
-    }
-}
-
-/// A live Warframe game process being tracked for exit.
-///
-/// Transitions: stop via [`Self::pid_exited`] (possibly looping through a
-/// bootstrap handoff successor first).
-#[derive(Debug)]
-pub struct RunningGame {
-    pid: u32,
-    launcher_pid: u32,
-    existing_pids: HashSet<u32>,
-}
-
-impl RunningGame {
-    pub fn pid(&self) -> u32 {
-        self.pid
-    }
-
-    /// Resolves once the tracked PID is no longer a Warframe game process.
-    pub async fn pid_exited(&self) -> PidExited {
-        while is_warframe_pid(self.pid) {
-            sleep(Duration::from_secs(1)).await;
-        }
-        PidExited {
-            exited_pid: self.pid,
-            launcher_pid: self.launcher_pid,
-            existing_pids: self.existing_pids.clone(),
-        }
-    }
-}
-
-/// The tracked PID has died. Either drop this (the game exited for good) or
-/// scan for a bootstrap-to-game handoff successor with [`Self::into_successor`].
-#[derive(Debug)]
-#[must_use = "decide whether the game exited or a handoff successor should be awaited"]
-pub struct PidExited {
-    exited_pid: u32,
-    launcher_pid: u32,
-    existing_pids: HashSet<u32>,
-}
-
-impl PidExited {
-    /// Scans for a successor game process within the handoff grace window.
-    /// Returns the successor to keep tracking, or `None` if the game exited.
-    pub async fn into_successor(self) -> Option<RunningGame> {
-        let deadline = tokio::time::Instant::now() + handoff_grace();
-        loop {
-            let mut system = System::new();
-            refresh_all_process_commands(&mut system);
-            if let Some(next) =
-                find_new_warframe_pid(&system, &self.existing_pids, self.launcher_pid)
-            {
-                log::info!(
-                    "Tracked Warframe PID {} exited; continuing with successor PID {}",
-                    self.exited_pid,
-                    next
-                );
-                return Some(RunningGame {
-                    pid: next,
-                    launcher_pid: self.launcher_pid,
-                    existing_pids: self.existing_pids,
-                });
-            }
-            if tokio::time::Instant::now() >= deadline {
-                return None;
-            }
-            sleep(Duration::from_secs(1)).await;
-        }
-    }
-}
-
 /// Finds the Warframe game process PID if running
+#[must_use]
 pub fn get_warframe_pid() -> Option<u32> {
     let mut system = System::new();
     refresh_all_process_commands(&mut system);
@@ -260,6 +317,7 @@ pub fn get_warframe_pid() -> Option<u32> {
     find_warframe_pid(&system)
 }
 
+#[must_use]
 pub fn get_all_warframe_pids() -> Vec<u32> {
     let mut system = System::new();
     refresh_all_process_commands(&mut system);
@@ -273,29 +331,8 @@ pub fn is_warframe_pid(pid: u32) -> bool {
     let mut system = System::new();
     refresh_process_command(&mut system, pid);
 
-    system
-        .process(pid)
-        .is_some_and(is_warframe_game_process)
+    system.process(pid).is_some_and(is_warframe_game_process)
 }
-
-
-/// Authorization query string containing accountId and nonce
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct AuthQuery {
-    pub account_id: String,
-    pub(crate) nonce: String,
-}
-
-#[cfg(feature = "memory")]
-const AUTH_PREFIX: &[u8] = b"?accountId=";
-#[cfg(feature = "memory")]
-const NONCE_PREFIX: &[u8] = b"&nonce=";
-#[cfg(feature = "memory")]
-const ACCOUNT_ID_LEN: usize = 24;
-#[cfg(feature = "memory")]
-const REQUIRED_AUTH_ALLOCATIONS: u32 = 3;
-#[cfg(feature = "memory")]
-const CHUNK_OVERLAP: usize = 256;
 
 /// Extracts valid authorization values from one readable allocation.
 ///
@@ -306,48 +343,43 @@ fn auth_candidates_in_allocation(allocation: &[u8]) -> HashSet<AuthQuery> {
     auth_candidates_in_bytes(allocation, NonceBoundary::EndOfBytesTerminates)
 }
 
-/// Whether a nonce running up to the end of the byte slice counts as
-/// terminated. A whole allocation is a natural boundary; a read chunk is not,
-/// since the nonce may continue in the next chunk.
-#[cfg(feature = "memory")]
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum NonceBoundary {
-    EndOfBytesTerminates,
-    RequireTerminator,
-}
-
 #[cfg(feature = "memory")]
 fn auth_candidates_in_bytes(allocation: &[u8], boundary: NonceBoundary) -> HashSet<AuthQuery> {
     let mut candidates = HashSet::new();
     let finder = memmem::Finder::new(AUTH_PREFIX);
-    let mut search_from = 0;
+    let mut search_from = 0_usize;
 
-    while let Some(relative_pos) = finder.find(&allocation[search_from..]) {
+    while let Some(relative_pos) = allocation
+        .get(search_from..)
+        .and_then(|haystack| finder.find(haystack))
+    {
         let prefix_pos = search_from + relative_pos;
         let account_start = prefix_pos + AUTH_PREFIX.len();
         let account_end = account_start + ACCOUNT_ID_LEN;
         let nonce_prefix_end = account_end + NONCE_PREFIX.len();
 
-        if nonce_prefix_end <= allocation.len() {
-            let account_id = &allocation[account_start..account_end];
-            let nonce_prefix = &allocation[account_end..nonce_prefix_end];
+        if let (Some(account_id), Some(nonce_prefix)) = (
+            allocation.get(account_start..account_end),
+            allocation.get(account_end..nonce_prefix_end),
+        ) && account_id.iter().all(u8::is_ascii_hexdigit)
+            && nonce_prefix == NONCE_PREFIX
+        {
+            let nonce_start = nonce_prefix_end;
+            let nonce_tail = allocation.get(nonce_start..).unwrap_or(&[]);
+            let nonce_end = nonce_tail
+                .iter()
+                .position(|byte| !byte.is_ascii_digit())
+                .map_or(allocation.len(), |offset| nonce_start + offset);
 
-            if account_id.iter().all(u8::is_ascii_hexdigit) && nonce_prefix == NONCE_PREFIX {
-                let nonce_start = nonce_prefix_end;
-                let nonce_end = allocation[nonce_start..]
-                    .iter()
-                    .position(|byte| !byte.is_ascii_digit())
-                    .map_or(allocation.len(), |offset| nonce_start + offset);
-
-                let nonce_is_terminated =
-                    nonce_end < allocation.len() || boundary == NonceBoundary::EndOfBytesTerminates;
-                if nonce_end > nonce_start && nonce_is_terminated {
-                    // Both slices have been validated as ASCII above.
-                    let account_id = String::from_utf8_lossy(account_id).into_owned();
-                    let nonce =
-                        String::from_utf8_lossy(&allocation[nonce_start..nonce_end]).into_owned();
-                    candidates.insert(AuthQuery { account_id, nonce });
-                }
+            let nonce_is_terminated =
+                nonce_end < allocation.len() || boundary == NonceBoundary::EndOfBytesTerminates;
+            if nonce_end > nonce_start && nonce_is_terminated {
+                // Both slices have been validated as ASCII above.
+                let account_id = String::from_utf8_lossy(account_id).into_owned();
+                let nonce =
+                    String::from_utf8_lossy(allocation.get(nonce_start..nonce_end).unwrap_or(&[]))
+                        .into_owned();
+                candidates.insert(AuthQuery { account_id, nonce });
             }
         }
 
@@ -355,32 +387,6 @@ fn auth_candidates_in_bytes(allocation: &[u8], boundary: NonceBoundary) -> HashS
     }
 
     candidates
-}
-
-#[cfg(feature = "memory")]
-#[derive(Default)]
-struct AuthCandidateTracker {
-    allocation_counts: HashMap<AuthQuery, u32>,
-}
-
-#[cfg(feature = "memory")]
-impl AuthCandidateTracker {
-    fn observe_allocation(
-        &mut self,
-        allocation_candidates: HashSet<AuthQuery>,
-    ) -> Option<AuthQuery> {
-        for candidate in allocation_candidates {
-            let count = self.allocation_counts.entry(candidate.clone()).or_insert(0);
-            *count += 1;
-            log::debug!(
-                "Found authorization candidate in {count} readable allocation(s)"
-            );
-            if *count >= REQUIRED_AUTH_ALLOCATIONS {
-                return Some(candidate);
-            }
-        }
-        None
-    }
 }
 
 #[cfg(feature = "memory")]
@@ -401,9 +407,8 @@ fn add_chunk_candidates(
 
     let tail_start = searchable.len().saturating_sub(CHUNK_OVERLAP);
     previous_tail.clear();
-    previous_tail.extend_from_slice(&searchable[tail_start..]);
+    previous_tail.extend_from_slice(searchable.get(tail_start..).unwrap_or(&[]));
 }
-
 
 /// Scans process memory for authorization data (accountId + nonce).
 /// This reads /proc/{pid}/maps and /proc/{pid}/mem on Linux.
@@ -431,17 +436,14 @@ pub(crate) fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanEr
     let mut tracker = AuthCandidateTracker::default();
 
     // 4MB buffer for reading memory regions
-    let mut buffer = vec![0u8; 4 * 1024 * 1024];
+    let mut buffer = vec![0_u8; 4 * 1024 * 1024];
 
     for line in maps_reader.lines() {
         let line: String = line?;
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 2 {
+        let mut parts = line.split_whitespace();
+        let (Some(range_str), Some(perms)) = (parts.next(), parts.next()) else {
             continue;
-        }
-
-        let range_str = parts[0];
-        let perms = parts[1];
+        };
 
         // Only scan readable memory regions
         if !perms.contains('r') {
@@ -465,20 +467,23 @@ pub(crate) fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanEr
         }
 
         // Read region in chunks
-        let mut offset = 0usize;
+        let mut offset = 0_usize;
         let mut allocation_candidates = HashSet::new();
         let mut previous_tail = Vec::new();
         while offset < region_size {
-            let chunk_size = std::cmp::min(buffer.len(), region_size - offset);
+            let chunk_size = buffer.len().min(region_size - offset);
             let read_addr = start + offset as u64;
 
             if mem_file.seek(SeekFrom::Start(read_addr)).is_err() {
                 break;
             }
 
-            match mem_file.read(&mut buffer[..chunk_size]) {
+            let Some(chunk_buf) = buffer.get_mut(..chunk_size) else {
+                break;
+            };
+            match mem_file.read(chunk_buf) {
                 Ok(bytes_read) if bytes_read > 0 => {
-                    let chunk = &buffer[..bytes_read];
+                    let chunk = buffer.get(..bytes_read).unwrap_or(&[]);
                     add_chunk_candidates(&mut allocation_candidates, &mut previous_tail, chunk);
                 }
                 _ => break,
@@ -672,10 +677,9 @@ pub async fn scan_memory_for_auth_with_retry(
     Ok(None)
 }
 
-#[cfg(all(test, feature = "memory"))]
-// clippy's allow-*-in-tests exemption doesn't recognize cfg(all(test, ...)).
-#[allow(clippy::expect_used)]
-mod memory_tests {
+#[cfg(test)]
+#[cfg(feature = "memory")]
+mod tests {
     use super::*;
 
     const ACCOUNT_A: &str = "2baaaaaaaaaaaaaaaaaaaaaa";

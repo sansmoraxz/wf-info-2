@@ -1,5 +1,7 @@
 //! Common types shared across all item categories.
 
+use std::fmt;
+
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::enums::Rarity;
@@ -78,10 +80,14 @@ where
 
     struct NumberVisitor;
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "integers beyond f64's 52-bit mantissa lose precision by design: the schema field is f64, so the coercion is the point of this deserializer"
+    )]
     impl<'de> Visitor<'de> for NumberVisitor {
         type Value = f64;
 
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
             formatter.write_str("a number (integer or float)")
         }
 
@@ -119,10 +125,14 @@ where
 
     struct OptionNumberVisitor;
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "integers beyond f64's 52-bit mantissa lose precision by design: the schema field is f64, so the coercion is the point of this deserializer"
+    )]
     impl<'de> Visitor<'de> for OptionNumberVisitor {
         type Value = Option<f64>;
 
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
             formatter.write_str("null or a number")
         }
 

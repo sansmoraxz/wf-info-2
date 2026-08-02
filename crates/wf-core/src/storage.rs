@@ -2,14 +2,14 @@ use aes_gcm::{
     Aes256Gcm,
     Key, // Key is a type alias, but passing &[u8] via from_slice works
     Nonce,
-    aead::{Aead, KeyInit},
+    aead::{Aead as _, KeyInit as _},
 };
 use chrono::{DateTime, Utc};
-use rand::{Rng, rng};
+use rand::{Rng as _, rng};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha2::{Digest as _, Sha256};
 use std::fs::{self, File};
-use std::io::Write;
+use std::io::{self, Write as _};
 use std::path::PathBuf;
 
 use crate::profile::ProfileData;
@@ -42,7 +42,7 @@ pub enum StorageError {
     Io {
         context: String,
         #[source]
-        source: std::io::Error,
+        source: io::Error,
     },
     #[error("{context}: {source}")]
     Json {
@@ -56,8 +56,31 @@ pub enum StorageError {
     Decrypt(String),
 }
 
+/// Auth token storage (AES-256-GCM)
+#[serde_with::serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthTokenData {
+    pub access_token: String,
+    /// Stored as `""` on disk
+    /// The v1 API never issues refresh tokens
+    #[serde_as(as = "serde_with::NoneAsEmptyString")]
+    pub refresh_token: Option<String>,
+    pub device_id: String,
+    pub client_id: String,
+    pub device_name: String,
+    pub expires_at: DateTime<Utc>,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct InventoryMeta {
+    pub last_updated: Option<DateTime<Utc>>,
+    pub last_source: Option<String>,
+    pub stale_at: Option<DateTime<Utc>>,
+    pub stale_reason: Option<String>,
+}
+
 impl StorageError {
-    fn io(context: impl Into<String>) -> impl FnOnce(std::io::Error) -> Self {
+    fn io(context: impl Into<String>) -> impl FnOnce(io::Error) -> Self {
         move |source| Self::Io {
             context: context.into(),
             source,
@@ -82,7 +105,7 @@ pub fn save_encrypted_profile(profile: &ProfileData) -> Result<(), StorageError>
 
     let cipher = Aes256Gcm::new(key);
 
-    let mut nonce_bytes = [0u8; 12];
+    let mut nonce_bytes = [0_u8; 12];
     rng().fill(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
 
@@ -106,7 +129,6 @@ pub fn save_encrypted_profile(profile: &ProfileData) -> Result<(), StorageError>
     Ok(())
 }
 
-
 // AES-256-GCM helpers (shared by profile & auth token)
 fn gcm_encrypt(plaintext: &[u8]) -> Result<Vec<u8>, StorageError> {
     let mut hasher = Sha256::new();
@@ -115,7 +137,7 @@ fn gcm_encrypt(plaintext: &[u8]) -> Result<Vec<u8>, StorageError> {
     let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
     let cipher = Aes256Gcm::new(key);
 
-    let mut nonce_bytes = [0u8; 12];
+    let mut nonce_bytes = [0_u8; 12];
     rng().fill(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
 
@@ -130,37 +152,22 @@ fn gcm_encrypt(plaintext: &[u8]) -> Result<Vec<u8>, StorageError> {
 }
 
 fn gcm_decrypt(data: &[u8]) -> Result<Vec<u8>, StorageError> {
-    if data.len() < 12 {
+    let Some((nonce_bytes, ciphertext)) = data.split_at_checked(12) else {
         return Err(StorageError::Decrypt(
             "Data too short for AES-256-GCM".into(),
         ));
-    }
+    };
     let mut hasher = Sha256::new();
     hasher.update(RAW_KEY_ENV.as_bytes());
     let key_bytes = hasher.finalize();
     let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
     let cipher = Aes256Gcm::new(key);
 
-    let nonce = Nonce::from_slice(&data[..12]);
+    let nonce = Nonce::from_slice(nonce_bytes);
     let plaintext = cipher
-        .decrypt(nonce, &data[12..])
+        .decrypt(nonce, ciphertext)
         .map_err(|e| StorageError::Decrypt(e.to_string()))?;
     Ok(plaintext)
-}
-
-/// Auth token storage (AES-256-GCM)
-#[serde_with::serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuthTokenData {
-    pub access_token: String,
-    /// Stored as `""` on disk
-    /// The v1 API never issues refresh tokens
-    #[serde_as(as = "serde_with::NoneAsEmptyString")]
-    pub refresh_token: Option<String>,
-    pub device_id: String,
-    pub client_id: String,
-    pub device_name: String,
-    pub expires_at: DateTime<Utc>,
 }
 
 pub fn save_auth_token(data: &AuthTokenData) -> Result<(), StorageError> {
@@ -224,7 +231,7 @@ pub fn app_cache_dir() -> Result<PathBuf, StorageError> {
 }
 
 pub fn decrypt_inventory_bytes(data: &[u8]) -> Result<inventory::Inventory, StorageError> {
-    use aes::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
+    use aes::cipher::{BlockDecryptMut as _, KeyIvInit as _, block_padding::Pkcs7};
     type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
 
     let mut buf = data.to_vec();
@@ -233,8 +240,9 @@ pub fn decrypt_inventory_bytes(data: &[u8]) -> Result<inventory::Inventory, Stor
         .decrypt_padded_mut::<Pkcs7>(&mut buf)
         .map_err(|e| StorageError::Decrypt(format!("{e:?}")))?;
 
-    serde_json::from_slice(plaintext)
-        .map_err(StorageError::json("Failed to parse decrypted inventory JSON"))
+    serde_json::from_slice(plaintext).map_err(StorageError::json(
+        "Failed to parse decrypted inventory JSON",
+    ))
 }
 
 pub fn read_inventory() -> Result<inventory::Inventory, StorageError> {
@@ -242,14 +250,6 @@ pub fn read_inventory() -> Result<inventory::Inventory, StorageError> {
     let data =
         fs::read(&file_path).map_err(StorageError::io(format!("Failed to read {file_path:?}")))?;
     decrypt_inventory_bytes(&data)
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct InventoryMeta {
-    pub last_updated: Option<DateTime<Utc>>,
-    pub last_source: Option<String>,
-    pub stale_at: Option<DateTime<Utc>>,
-    pub stale_reason: Option<String>,
 }
 
 fn inventory_meta_path() -> Result<PathBuf, StorageError> {
@@ -261,8 +261,8 @@ pub fn read_inventory_meta() -> Result<InventoryMeta, StorageError> {
     if !path.exists() {
         return Ok(InventoryMeta::default());
     }
-    let raw = fs::read_to_string(&path)
-        .map_err(StorageError::io("Failed to read inventory metadata"))?;
+    let raw =
+        fs::read_to_string(&path).map_err(StorageError::io("Failed to read inventory metadata"))?;
     serde_json::from_str(&raw).map_err(StorageError::json("Failed to parse inventory metadata"))
 }
 
@@ -280,7 +280,7 @@ pub fn touch_inventory_updated(source: Option<&str>) -> Result<InventoryMeta, St
     meta.stale_at = None;
     meta.stale_reason = None;
     if let Some(src) = source {
-        meta.last_source = Some(src.to_string());
+        meta.last_source = Some(src.to_owned());
     }
     write_inventory_meta(&meta)?;
     Ok(meta)
@@ -307,20 +307,23 @@ pub fn clear_inventory_stale() -> Result<InventoryMeta, StorageError> {
 
 /// Encrypt inventory bytes using AES-128-CBC with the built-in key/IV.
 /// Returns the ciphertext (PKCS7-padded).
-pub(crate) fn encrypt_inventory_bytes(inventory: &inventory::Inventory) -> Result<Vec<u8>, StorageError> {
-    use aes::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
+pub(crate) fn encrypt_inventory_bytes(
+    inventory: &inventory::Inventory,
+) -> Result<Vec<u8>, StorageError> {
+    use aes::cipher::{BlockEncryptMut as _, KeyIvInit as _, block_padding::Pkcs7};
     type Aes128CbcEnc = cbc::Encryptor<aes::Aes128>;
 
     let json_bytes = serde_json::to_vec(inventory)
         .map_err(StorageError::json("Failed to serialize inventory"))?;
-    let block_size = 16;
-    let padded_len = ((json_bytes.len() / block_size) + 1) * block_size;
-    let mut buffer = vec![0u8; padded_len];
-    buffer[..json_bytes.len()].copy_from_slice(&json_bytes);
+    let block_size = 16_usize;
+    let msg_len = json_bytes.len();
+    let padded_len = ((msg_len / block_size) + 1) * block_size;
+    let mut buffer = json_bytes;
+    buffer.resize(padded_len, 0);
 
     let cipher = Aes128CbcEnc::new(&INVENTORY_KEY.into(), &INVENTORY_IV.into());
     let ciphertext = cipher
-        .encrypt_padded_mut::<Pkcs7>(&mut buffer, json_bytes.len())
+        .encrypt_padded_mut::<Pkcs7>(&mut buffer, msg_len)
         .map_err(|e| StorageError::Encrypt(format!("{e:?}")))?;
 
     Ok(ciphertext.to_vec())
@@ -333,14 +336,14 @@ pub(crate) fn encrypt_inventory_bytes_with_key(
     key: &[u8; 16],
     iv: &[u8; 16],
 ) -> Result<Vec<u8>, StorageError> {
-    use aes::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
+    use aes::cipher::{BlockEncryptMut as _, KeyIvInit as _, block_padding::Pkcs7};
     type Aes128CbcEnc = cbc::Encryptor<aes::Aes128>;
 
     let json_bytes = serde_json::to_vec(inventory)
         .map_err(StorageError::json("Failed to serialize inventory"))?;
     let block_size = 16;
     let padded_len = ((json_bytes.len() / block_size) + 1) * block_size;
-    let mut buffer = vec![0u8; padded_len];
+    let mut buffer = vec![0_u8; padded_len];
     buffer[..json_bytes.len()].copy_from_slice(&json_bytes);
 
     let cipher = Aes128CbcEnc::new(key.into(), iv.into());
@@ -357,7 +360,7 @@ pub fn decrypt_inventory_bytes_with_key(
     key: &[u8; 16],
     iv: &[u8; 16],
 ) -> Result<inventory::Inventory, StorageError> {
-    use aes::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
+    use aes::cipher::{BlockDecryptMut as _, KeyIvInit as _, block_padding::Pkcs7};
     type Aes128CbcDec = cbc::Decryptor<aes::Aes128>;
 
     let mut buf = data.to_vec();
@@ -366,14 +369,14 @@ pub fn decrypt_inventory_bytes_with_key(
         .decrypt_padded_mut::<Pkcs7>(&mut buf)
         .map_err(|e| StorageError::Decrypt(format!("{e:?}")))?;
 
-    serde_json::from_slice(plaintext)
-        .map_err(StorageError::json("Failed to parse decrypted inventory JSON"))
+    serde_json::from_slice(plaintext).map_err(StorageError::json(
+        "Failed to parse decrypted inventory JSON",
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{Rng, rng};
 
     fn load_test_inventory() -> inventory::Inventory {
         serde_json::from_str(include_str!(concat!(
@@ -429,8 +432,8 @@ mod tests {
     fn test_encrypt_decrypt_roundtrip_random_key() {
         let inventory = load_test_inventory();
 
-        let mut key = [0u8; 16];
-        let mut iv = [0u8; 16];
+        let mut key = [0_u8; 16];
+        let mut iv = [0_u8; 16];
         rng().fill(&mut key);
         rng().fill(&mut iv);
 
@@ -453,8 +456,8 @@ mod tests {
     fn test_decrypt_with_wrong_key_fails() {
         let inventory = load_test_inventory();
 
-        let mut key = [0u8; 16];
-        let mut iv = [0u8; 16];
+        let mut key = [0_u8; 16];
+        let mut iv = [0_u8; 16];
         rng().fill(&mut key);
         rng().fill(&mut iv);
 
@@ -462,7 +465,7 @@ mod tests {
             .expect("encryption should succeed");
 
         // Use a different random key — decryption should fail
-        let mut wrong_key = [0u8; 16];
+        let mut wrong_key = [0_u8; 16];
         rng().fill(&mut wrong_key);
         // Ensure it's actually different
         if wrong_key == key {
@@ -477,13 +480,13 @@ mod tests {
     fn test_multiple_random_keys_produce_different_ciphertext() {
         let inventory = load_test_inventory();
 
-        let mut key1 = [0u8; 16];
-        let mut iv1 = [0u8; 16];
+        let mut key1 = [0_u8; 16];
+        let mut iv1 = [0_u8; 16];
         rng().fill(&mut key1);
         rng().fill(&mut iv1);
 
-        let mut key2 = [0u8; 16];
-        let mut iv2 = [0u8; 16];
+        let mut key2 = [0_u8; 16];
+        let mut iv2 = [0_u8; 16];
         rng().fill(&mut key2);
         rng().fill(&mut iv2);
 

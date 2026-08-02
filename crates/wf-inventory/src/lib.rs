@@ -1,7 +1,3 @@
-use chrono::{DateTime, TimeZone, Utc};
-use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::Value;
-
 /// Shared types for inventory items
 pub mod common;
 
@@ -104,6 +100,12 @@ pub mod collections;
 /// Progress and standing data
 pub mod progress;
 
+use std::borrow::Borrow;
+
+use chrono::{DateTime, TimeZone as _, Utc};
+use serde::{Deserialize, Deserializer, Serialize, de};
+use serde_json::Value;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FractionSyndicates {
     SteelMeridianSyndicate,
@@ -152,7 +154,7 @@ pub struct ObjectId {
 #[as_ref(str)]
 pub struct ItemType(String);
 
-impl std::borrow::Borrow<str> for ItemType {
+impl Borrow<str> for ItemType {
     fn borrow(&self) -> &str {
         &self.0
     }
@@ -178,80 +180,6 @@ pub struct DateWrapper {
     #[serde(rename = "$date")]
     #[serde(deserialize_with = "deserialize_mongo_date_option")]
     pub date: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-pub fn deserialize_mongo_date_option<'de, D>(
-    deserializer: D,
-) -> Result<Option<DateTime<Utc>>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let v = Value::deserialize(deserializer).map_err(serde::de::Error::custom)?;
-    if v.is_null() {
-        return Ok(None);
-    }
-
-    if let Value::Number(n) = &v
-        && let Some(ms) = n.as_i64()
-    {
-        if let Some(dt) = ms_to_dt(ms) {
-            return Ok(Some(dt));
-        } else {
-            return Err(serde::de::Error::custom("invalid timestamp"));
-        }
-    }
-
-    if let Value::String(s) = &v {
-        if let Ok(ms) = s.parse::<i64>() {
-            if let Some(dt) = ms_to_dt(ms) {
-                return Ok(Some(dt));
-            } else {
-                return Err(serde::de::Error::custom("invalid timestamp"));
-            }
-        }
-        if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
-            return Ok(Some(dt.with_timezone(&Utc)));
-        }
-    }
-
-    if let Value::Object(map) = &v {
-        if let Some(Value::String(num_s)) = map.get("$numberLong")
-            && let Ok(ms) = num_s.parse::<i64>()
-        {
-            if let Some(dt) = ms_to_dt(ms) {
-                return Ok(Some(dt));
-            } else {
-                return Err(serde::de::Error::custom("invalid timestamp"));
-            }
-        }
-        if let Some(Value::Number(num)) = map.get("$numberLong")
-            && let Some(ms) = num.as_i64()
-        {
-            if let Some(dt) = ms_to_dt(ms) {
-                return Ok(Some(dt));
-            } else {
-                return Err(serde::de::Error::custom("invalid timestamp"));
-            }
-        }
-        if let Some(Value::String(s)) = map.get("$date") {
-            if let Ok(ms) = s.parse::<i64>() {
-                if let Some(dt) = ms_to_dt(ms) {
-                    return Ok(Some(dt));
-                } else {
-                    return Err(serde::de::Error::custom("invalid timestamp"));
-                }
-            }
-            if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
-                return Ok(Some(dt.with_timezone(&Utc)));
-            }
-        }
-    }
-
-    Err(serde::de::Error::custom("unsupported date format"))
-}
-
-fn ms_to_dt(ms: i64) -> Option<DateTime<Utc>> {
-    Utc.timestamp_millis_opt(ms).single()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1045,11 +973,81 @@ pub struct Inventory {
     pub other: Option<Value>,
 }
 
+pub fn deserialize_mongo_date_option<'de, D>(
+    deserializer: D,
+) -> Result<Option<DateTime<Utc>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v = Value::deserialize(deserializer).map_err(de::Error::custom)?;
+    if v.is_null() {
+        return Ok(None);
+    }
+
+    if let Value::Number(n) = &v
+        && let Some(ms) = n.as_i64()
+    {
+        if let Some(dt) = ms_to_dt(ms) {
+            return Ok(Some(dt));
+        }
+        return Err(de::Error::custom("invalid timestamp"));
+    }
+
+    if let Value::String(s) = &v {
+        if let Ok(ms) = s.parse::<i64>() {
+            if let Some(dt) = ms_to_dt(ms) {
+                return Ok(Some(dt));
+            }
+            return Err(de::Error::custom("invalid timestamp"));
+        }
+        if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
+            return Ok(Some(dt.with_timezone(&Utc)));
+        }
+    }
+
+    if let Value::Object(map) = &v {
+        if let Some(Value::String(num_s)) = map.get("$numberLong")
+            && let Ok(ms) = num_s.parse::<i64>()
+        {
+            if let Some(dt) = ms_to_dt(ms) {
+                return Ok(Some(dt));
+            }
+            return Err(de::Error::custom("invalid timestamp"));
+        }
+        if let Some(Value::Number(num)) = map.get("$numberLong")
+            && let Some(ms) = num.as_i64()
+        {
+            if let Some(dt) = ms_to_dt(ms) {
+                return Ok(Some(dt));
+            }
+            return Err(de::Error::custom("invalid timestamp"));
+        }
+        if let Some(Value::String(s)) = map.get("$date") {
+            if let Ok(ms) = s.parse::<i64>() {
+                if let Some(dt) = ms_to_dt(ms) {
+                    return Ok(Some(dt));
+                }
+                return Err(de::Error::custom("invalid timestamp"));
+            }
+            if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
+                return Ok(Some(dt.with_timezone(&Utc)));
+            }
+        }
+    }
+
+    Err(de::Error::custom("unsupported date format"))
+}
+
+fn ms_to_dt(ms: i64) -> Option<DateTime<Utc>> {
+    Utc.timestamp_millis_opt(ms).single()
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
     use serde_json::from_str;
 
+    #[must_use]
     pub fn load_test_inventory() -> Inventory {
         let inventory_str = include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -1060,7 +1058,7 @@ pub mod tests {
 
     #[test]
     fn test_inventory_deserialize() {
-        let inventory: Inventory = load_test_inventory();
+        let inventory = load_test_inventory();
         assert!(!inventory.suits.is_empty(), "Suits should not be empty");
         assert!(
             !inventory.long_guns.is_empty(),

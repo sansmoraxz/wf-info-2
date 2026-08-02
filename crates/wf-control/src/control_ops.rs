@@ -102,8 +102,8 @@ mod tests {
             assert_eq!(op.to_string(), wire);
             assert_eq!(wire.parse::<ControlOp>(), Ok(op));
         }
-        assert!("nope".parse::<ControlOp>().is_err());
-        assert!("inventory.nope".parse::<ControlOp>().is_err());
-        assert!("other.load".parse::<ControlOp>().is_err());
+        "nope".parse::<ControlOp>().unwrap_err();
+        "inventory.nope".parse::<ControlOp>().unwrap_err();
+        "other.load".parse::<ControlOp>().unwrap_err();
     }
 }

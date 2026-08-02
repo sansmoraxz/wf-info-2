@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::ProductCategory;
 use crate::common::{Drop, Introduced, Patchlog};
-use crate::enums::{PetType, Polarity};
+use crate::components::Component;
+use crate::enums::{PetType, Polarity, Slot};
 use crate::props::{
     BuildableProps, CharacterStats, ItemDetailProps, ItemIdentityProps, TradableProps,
 };
@@ -136,9 +137,9 @@ pub struct WarframeCompanion {
 impl ProductCategory for PetEntry {
     fn get_product_categories(&self) -> Vec<String> {
         match self {
-            Self::KubrowPets(_) => vec!["KubrowPets".to_string()],
-            Self::Pistols(_) => vec!["MiscItems".to_string()],
-            Self::SpecialItems(_) => vec!["SpecialItems".to_string()],
+            Self::KubrowPets(_) => vec!["KubrowPets".to_owned()],
+            Self::Pistols(_) => vec!["MiscItems".to_owned()],
+            Self::SpecialItems(_) => vec!["SpecialItems".to_owned()],
         }
     }
 }
@@ -256,7 +257,7 @@ impl Buildable for PetEntry {
     fn bp_cost(&self) -> Option<i64> {
         None
     }
-    fn components(&self) -> &[crate::components::Component] {
+    fn components(&self) -> &[Component] {
         match self {
             Self::Pistols(p) => &p.build.components,
             _ => &[],
@@ -310,7 +311,7 @@ impl Equippable for PetEntry {
             Self::Pistols(_) => &[],
         }
     }
-    fn slot(&self) -> Option<&crate::enums::Slot> {
+    fn slot(&self) -> Option<&Slot> {
         None
     }
 }

@@ -1,9 +1,9 @@
+pub mod pattern;
+mod source;
+
 use serde::{Deserialize, Serialize};
 
 use crate::account::{AccountInfo, Platform};
-
-pub mod pattern;
-mod source;
 
 #[cfg(windows)]
 pub use source::DbwinLogSource;

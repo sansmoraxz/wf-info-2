@@ -147,8 +147,8 @@ pub struct HelminthData {
 impl ProductCategory for WarframeEntry {
     fn get_product_categories(&self) -> Vec<String> {
         match self {
-            Self::Suits(_) => vec!["Suits".to_string()],
-            Self::MechSuits(_) => vec!["MechSuits".to_string()],
+            Self::Suits(_) => vec!["Suits".to_owned()],
+            Self::MechSuits(_) => vec!["MechSuits".to_owned()],
             Self::Helminth(_) => vec![],
         }
     }
