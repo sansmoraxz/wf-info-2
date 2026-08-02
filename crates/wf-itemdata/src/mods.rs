@@ -228,10 +228,10 @@ impl Item for ModEntry {
     }
     fn type_field(&self) -> &str {
         match self {
-            ModEntry::Riven(m) => m.type_field.as_str(),
-            ModEntry::SetMember(m) => m.type_field.as_str(),
-            ModEntry::SetDefinition(m) => m.type_field.as_str(),
-            ModEntry::Regular(m) => m.type_field.as_str(),
+            ModEntry::Riven(m) => m.type_field.as_ref(),
+            ModEntry::SetMember(m) => m.type_field.as_ref(),
+            ModEntry::SetDefinition(m) => m.type_field.as_ref(),
+            ModEntry::Regular(m) => m.type_field.as_ref(),
         }
     }
     fn image_name(&self) -> Option<&str> {

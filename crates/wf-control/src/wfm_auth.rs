@@ -14,7 +14,7 @@ use tokio_tungstenite::tungstenite::http::header;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite};
 
 use crate::requests::{EmptyResponse, HandleOp, Handles};
-use crate::utils::{WFM_AUTH_BASE, WFM_SUB_PROTOCOL, WFM_WS_URL};
+use crate::utils::{HTTP_CLIENT, WFM_AUTH_BASE, WFM_SUB_PROTOCOL, WFM_WS_URL};
 use wf_core::storage::{self, AuthTokenData};
 
 // ── WS message types ──
@@ -87,6 +87,25 @@ impl FromStr for IncomingRoute {
 struct WsReply {
     outcome: ReplyOutcome,
     payload: Option<Value>,
+}
+
+impl WsReply {
+    /// The payload on success, or the server's error message on failure.
+    fn into_result(self) -> Result<Option<Value>> {
+        match self.outcome {
+            ReplyOutcome::Ok => Ok(self.payload),
+            ReplyOutcome::Error => {
+                let msg = self
+                    .payload
+                    .map(|p| match p {
+                        Value::String(s) => s,
+                        other => other.to_string(),
+                    })
+                    .unwrap_or_else(|| "unknown error".into());
+                Err(anyhow!(msg))
+            }
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -303,8 +322,7 @@ async fn actor_loop(handle: WfmHandle, mut rx: mpsc::Receiver<WfmCmd>) {
 
 /// Sign in via v1 API. Returns the JWT access token.
 async fn rest_signin(email: &str, password: &str, device_id: &str) -> Result<String> {
-    let client = reqwest::Client::new();
-    let raw_resp = client
+    let raw_resp = HTTP_CLIENT
         .post(format!("{}/auth/signin", WFM_AUTH_BASE))
         .header("Authorization", "JWT")
         .json(&json!({
@@ -369,16 +387,10 @@ impl WsConnection {
         let rx = self
             .send_command(WsRoute::AuthSignIn, json!({ "token": tokens.access_token }))
             .await?;
-        let reply = await_reply(rx).await?;
-
-        if reply.outcome == ReplyOutcome::Error {
-            let err_msg = reply
-                .payload
-                .as_ref()
-                .and_then(|p| p.as_str())
-                .unwrap_or("unknown error");
-            return Err(anyhow!("WS auth failed: {}", err_msg));
-        }
+        await_reply(rx)
+            .await?
+            .into_result()
+            .map_err(|e| anyhow!("WS auth failed: {}", e))?;
 
         log::info!("WFM WebSocket authenticated");
         Ok(WfmSession {
@@ -563,16 +575,10 @@ pub(crate) async fn handle_wfm_signstatus(
         duration: p.duration,
     })?;
 
-    let reply = wfm.set_status(payload).await?;
-
-    if reply.outcome == ReplyOutcome::Error {
-        let err_msg = reply
-            .payload
-            .as_ref()
-            .map(|p| serde_json::to_string(p).unwrap_or_default())
-            .unwrap_or_else(|| "unknown error".into());
-        return Err(anyhow!("Status update failed: {}", err_msg));
-    }
+    wfm.set_status(payload)
+        .await?
+        .into_result()
+        .map_err(|e| anyhow!("Status update failed: {}", e))?;
 
     wfm.record_status(status).await;
 
@@ -585,27 +591,14 @@ pub(crate) async fn handle_wfm_signstatus(
 pub(crate) struct SigninParams {
     email: String,
     password: String,
-    #[serde(default = "default_client_id")]
+    #[serde(default = "default_app_name")]
     client_id: String,
-    #[serde(default = "default_device_name")]
+    #[serde(default = "default_app_name")]
     device_name: String,
 }
 
-fn default_client_id() -> String {
+fn default_app_name() -> String {
     "wf-info-2".to_string()
-}
-
-fn default_device_name() -> String {
-    "wf-info-2".to_string()
-}
-
-pub(crate) fn parse_signin_params(params: Option<Value>) -> Result<SigninParams> {
-    match params {
-        Some(value) => {
-            serde_json::from_value(value).map_err(|e| anyhow!("Invalid signin params: {}", e))
-        }
-        None => Err(anyhow!("Missing signin params (email, password required)")),
-    }
 }
 
 impl HandleOp for SigninParams {

@@ -21,7 +21,7 @@ enum CaptureBackend {
     #[cfg(feature = "native-wayland-screenshot")]
     WaylandScreenCastPortal,
     Unsupported {
-        reason: &'static str,
+        reason: String,
     },
 }
 
@@ -197,10 +197,10 @@ fn resolve_backend_from_probe(
     // monitor capture; the portal must provide a window PipeWire stream.
     let capture_backend = match detected_environment {
         EnvironmentKind::X11 => CaptureBackend::Unsupported {
-            reason: "X11 was detected but no Warframe X11/XWayland window was found",
+            reason: "X11 was detected but no Warframe X11/XWayland window was found".to_string(),
         },
         EnvironmentKind::XWayland => CaptureBackend::Unsupported {
-            reason: "XWayland was detected but no Warframe X11/XWayland window was found",
+            reason: "XWayland was detected but no Warframe X11/XWayland window was found".to_string(),
         },
         EnvironmentKind::Wayland => {
             #[cfg(feature = "native-wayland-screenshot")]
@@ -210,12 +210,12 @@ fn resolve_backend_from_probe(
             #[cfg(not(feature = "native-wayland-screenshot"))]
             {
                 CaptureBackend::Unsupported {
-                    reason: "Native Wayland screenshot capture requires building with the 'native-wayland-screenshot' feature, or run Warframe under XWayland/X11",
+                    reason: "Native Wayland screenshot capture requires building with the 'native-wayland-screenshot' feature, or run Warframe under XWayland/X11".to_string(),
                 }
             }
         }
         EnvironmentKind::Unknown => CaptureBackend::Unsupported {
-            reason: "Unsupported Unix display environment; run Warframe under XWayland/X11 or use a Wayland session with xdg-desktop-portal ScreenCast window capture",
+            reason: "Unsupported Unix display environment; run Warframe under XWayland/X11 or use a Wayland session with xdg-desktop-portal ScreenCast window capture".to_string(),
         },
     };
 

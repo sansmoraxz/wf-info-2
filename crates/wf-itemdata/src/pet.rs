@@ -167,9 +167,9 @@ impl Item for PetEntry {
     }
     fn type_field(&self) -> &str {
         match self {
-            PetEntry::KubrowPets(p) => p.type_field.as_str(),
-            PetEntry::Pistols(p) => p.type_field.as_str(),
-            PetEntry::SpecialItems(p) => p.type_field.as_str(),
+            PetEntry::KubrowPets(p) => p.type_field.as_ref(),
+            PetEntry::Pistols(p) => p.type_field.as_ref(),
+            PetEntry::SpecialItems(p) => p.type_field.as_ref(),
         }
     }
     fn image_name(&self) -> Option<&str> {

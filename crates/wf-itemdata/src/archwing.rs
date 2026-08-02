@@ -53,7 +53,7 @@ pub struct Archwing {
 
 impl ProductCategory for Archwing {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.as_str().to_string()]
+        vec![self.product_category.as_ref().to_string()]
     }
 }
 
@@ -68,7 +68,7 @@ impl Item for Archwing {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        self.type_field.as_str()
+        self.type_field.as_ref()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()

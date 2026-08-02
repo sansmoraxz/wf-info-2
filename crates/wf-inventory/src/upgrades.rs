@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_with::{PickFirst, Same, json::JsonString, serde_as};
 
 use crate::ObjectId;
 
@@ -20,6 +21,7 @@ pub struct RawUpgrade {
 }
 
 /// Represent upgraded mods
+#[serde_as]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Upgrade {
     #[serde(rename = "ItemType")]
@@ -28,7 +30,10 @@ pub struct Upgrade {
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,
 
+    /// The wire form is usually JSON embedded in a string, but bare objects also occur;
+    /// serialization always emits the string form.
     #[serde(rename = "UpgradeFingerprint")]
+    #[serde_as(as = "PickFirst<(JsonString, Same)>")]
     pub upgrade_fingerprint: UpgradeFingerprint,
 
     #[serde(flatten)]
@@ -80,77 +85,19 @@ pub struct RivenChallenge {
     pub challenge: RivenChallengeDetail,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+// Variant order matters: untagged tries top-down, and RivenChallenge/RivenMod have
+// required fields that ClassicFingerprint's flexible shape would otherwise swallow.
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum UpgradeFingerprint {
-    /// When the fingerprint is stored as a string containing JSON: "{\"lvl\":10}"
-    ClassicObj(ClassicFingerprint),
-    /// Riven mod structure as an object
-    RivenMod(RivenFingerprint),
     /// Riven challenge for veiled riven mods
     RivenChallenge(RivenChallenge),
+    /// Riven mod structure as an object
+    RivenMod(RivenFingerprint),
+    /// When the fingerprint is stored as a string containing JSON: "{\"lvl\":10}"
+    ClassicObj(ClassicFingerprint),
     /// Garbage fallback for unrecognized fingerprint types
     Unknown(Value),
-}
-
-impl serde::Serialize for UpgradeFingerprint {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        // Serialize the inner struct as a JSON string (to match server/client stringified form)
-        let s = match self {
-            UpgradeFingerprint::ClassicObj(c) => serde_json::to_string(c),
-            UpgradeFingerprint::RivenMod(r) => serde_json::to_string(r),
-            UpgradeFingerprint::RivenChallenge(rc) => serde_json::to_string(rc),
-            UpgradeFingerprint::Unknown(v) => serde_json::to_string(v),
-        }
-        .map_err(serde::ser::Error::custom)?;
-        serializer.serialize_str(&s)
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for UpgradeFingerprint {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        // First deserialize into a serde_json::Value so we can handle both string and object forms.
-        let v = serde_json::Value::deserialize(deserializer).map_err(serde::de::Error::custom)?;
-
-        match v {
-            serde_json::Value::String(s) => {
-                // When a string is provided, it should be JSON text we must parse.
-                // Try riven first, then classic.
-                if let Ok(r) = serde_json::from_str::<RivenChallenge>(&s) {
-                    return Ok(UpgradeFingerprint::RivenChallenge(r));
-                }
-                if let Ok(r) = serde_json::from_str::<RivenFingerprint>(&s) {
-                    return Ok(UpgradeFingerprint::RivenMod(r));
-                }
-                if let Ok(c) = serde_json::from_str::<ClassicFingerprint>(&s) {
-                    return Ok(UpgradeFingerprint::ClassicObj(c));
-                }
-                Ok(UpgradeFingerprint::Unknown(serde_json::Value::String(s)))
-            }
-            serde_json::Value::Object(_) => {
-                // When an object is provided directly, try to deserialize into riven then classic.
-                let v_clone = v.clone();
-                if let Ok(r) = serde_json::from_value::<RivenChallenge>(v_clone.clone()) {
-                    return Ok(UpgradeFingerprint::RivenChallenge(r));
-                }
-                if let Ok(r) = serde_json::from_value::<RivenFingerprint>(v_clone.clone()) {
-                    return Ok(UpgradeFingerprint::RivenMod(r));
-                }
-                if let Ok(c) = serde_json::from_value::<ClassicFingerprint>(v_clone.clone()) {
-                    return Ok(UpgradeFingerprint::ClassicObj(c));
-                }
-                Ok(UpgradeFingerprint::Unknown(v_clone))
-            }
-            _ => Err(serde::de::Error::custom(
-                "unexpected type for UpgradeFingerprint; expected string or object",
-            )),
-        }
-    }
 }
 
 #[cfg(test)]

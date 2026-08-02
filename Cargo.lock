@@ -4892,8 +4892,10 @@ name = "wf-inventory"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "derive_more",
  "serde",
  "serde_json",
+ "serde_with",
 ]
 
 [[package]]

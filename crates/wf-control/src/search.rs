@@ -282,8 +282,8 @@ impl_has_other!(
 );
 
 pub(crate) struct ItemView {
-    pub details_name: Option<String>,
-    pub details_desc: Option<String>,
+    pub details_name: Option<&'static str>,
+    pub details_desc: Option<&'static str>,
     pub envelope: InventoryItemEnvelope,
 }
 
@@ -296,8 +296,8 @@ pub(crate) fn collect_inventory_items(
     let mut push_item = |envelope: InventoryItemEnvelope| {
         let info = lookup_item_info(envelope.item_type(), Some(envelope.category().as_ref()));
         items.push(ItemView {
-            details_name: info.as_ref().and_then(|item| item.name.clone()),
-            details_desc: info.as_ref().and_then(|item| item.description.clone()),
+            details_name: info.and_then(|item| item.name.as_deref()),
+            details_desc: info.and_then(|item| item.description.as_deref()),
             envelope,
         });
     };
@@ -323,7 +323,7 @@ pub(crate) fn collect_inventory_items(
     }
 
     // One arm per category: inventory field, envelope variant, and how the
-    // item id is derived (`item_id.oid`, `last_added_id.oid`, or absent).
+    // item id is derived (`item_id`, `last_added_id`, or absent).
     macro_rules! collect {
         ($cat:ident, $field:ident, |$item:ident| $id:expr) => {
             if category.is_none_or(|sel| sel == Category::$cat) {
@@ -338,24 +338,24 @@ pub(crate) fn collect_inventory_items(
         };
     }
 
-    collect!(Suits, suits, |item| Some(item.item_id.oid.clone()));
-    collect!(LongGuns, long_guns, |item| Some(item.item_id.oid.clone()));
-    collect!(Pistols, pistols, |item| Some(item.item_id.oid.clone()));
-    collect!(Melee, melee, |item| Some(item.item_id.oid.clone()));
+    collect!(Suits, suits, |item| Some(item.item_id.to_string()));
+    collect!(LongGuns, long_guns, |item| Some(item.item_id.to_string()));
+    collect!(Pistols, pistols, |item| Some(item.item_id.to_string()));
+    collect!(Melee, melee, |item| Some(item.item_id.to_string()));
     collect!(SpaceSuits, space_suits, |item| Some(
-        item.item_id.oid.clone()
+        item.item_id.to_string()
     ));
-    collect!(SpaceGuns, space_guns, |item| Some(item.item_id.oid.clone()));
+    collect!(SpaceGuns, space_guns, |item| Some(item.item_id.to_string()));
     collect!(SpaceMelee, space_melee, |item| Some(
-        item.item_id.oid.clone()
+        item.item_id.to_string()
     ));
     collect!(RawUpgrades, raw_upgrades, |item| Some(
-        item.last_added_id.oid.clone()
+        item.last_added_id.to_string()
     ));
-    collect!(Upgrades, upgrades, |item| Some(item.item_id.oid.clone()));
+    collect!(Upgrades, upgrades, |item| Some(item.item_id.to_string()));
     collect!(Recipes, recipes, |item| None);
     collect!(PendingRecipes, pending_recipes, |item| Some(
-        item.item_id.oid.clone()
+        item.item_id.to_string()
     ));
 
     items
@@ -574,47 +574,47 @@ mod tests {
         check_category!(
             suits,
             "suits",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::suit::Suit>
+            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::suit::Suit>
         );
         check_category!(
             long_guns,
             "long_guns",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::long_gun::LongGun>
+            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::long_gun::LongGun>
         );
         check_category!(
             pistols,
             "pistols",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::pistol::Pistol>
+            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::pistol::Pistol>
         );
         check_category!(
             melee,
             "melee",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::melee::Melee>
+            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::melee::Melee>
         );
         check_category!(
             space_suits,
             "space_suits",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::space_suit::SpaceSuit>
+            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::space_suit::SpaceSuit>
         );
         check_category!(
             space_guns,
             "space_guns",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::space_gun::SpaceGun>
+            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::space_gun::SpaceGun>
         );
         check_category!(
             space_melee,
             "space_melee",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::space_melee::SpaceMelee>
+            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::space_melee::SpaceMelee>
         );
         check_category!(
             raw_upgrades,
             "raw_upgrades",
-            (|i| Some(i.last_added_id.oid.as_str())) as IdOf<wf_inventory::upgrades::RawUpgrade>
+            (|i| Some(i.last_added_id.as_ref())) as IdOf<wf_inventory::upgrades::RawUpgrade>
         );
         check_category!(
             upgrades,
             "upgrades",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::upgrades::Upgrade>
+            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::upgrades::Upgrade>
         );
         check_category!(
             recipes,
@@ -624,7 +624,7 @@ mod tests {
         check_category!(
             pending_recipes,
             "pending_recipes",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::recipe::PendingRecipe>
+            (|i| Some(i.item_id.as_ref())) as IdOf<wf_inventory::recipe::PendingRecipe>
         );
     }
 
@@ -673,7 +673,7 @@ mod tests {
         let suit = &inventory.suits[0];
         let envelope = InventoryItemEnvelope::Suits(ItemEnvelope {
             item_type: suit.item_type.clone(),
-            item_id: Some(suit.item_id.oid.clone()),
+            item_id: Some(suit.item_id.to_string()),
             details: None,
             market: None,
             item: suit.clone(),

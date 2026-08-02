@@ -178,9 +178,9 @@ impl Item for WarframeEntry {
     }
     fn type_field(&self) -> &str {
         match self {
-            WarframeEntry::Suits(w) => w.type_field.as_str(),
-            WarframeEntry::MechSuits(w) => w.type_field.as_str(),
-            WarframeEntry::Helminth(w) => w.type_field.as_str(),
+            WarframeEntry::Suits(w) => w.type_field.as_ref(),
+            WarframeEntry::MechSuits(w) => w.type_field.as_ref(),
+            WarframeEntry::Helminth(w) => w.type_field.as_ref(),
         }
     }
     fn image_name(&self) -> Option<&str> {

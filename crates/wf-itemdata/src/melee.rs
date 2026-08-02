@@ -63,7 +63,7 @@ pub struct Melee {
 
 impl ProductCategory for Melee {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.as_str().to_string()]
+        vec![self.product_category.as_ref().to_string()]
     }
 }
 
@@ -78,7 +78,7 @@ impl Item for Melee {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        self.type_field.as_str()
+        self.type_field.as_ref()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()
@@ -213,7 +213,7 @@ impl MeleeWeapon for Melee {
         self.melee.range
     }
     fn stance_polarity(&self) -> Option<&str> {
-        self.melee.stance_polarity.as_ref().map(|p| p.as_str())
+        self.melee.stance_polarity.as_ref().map(AsRef::as_ref)
     }
     fn slam_attack(&self) -> Option<i64> {
         self.melee.slam_attack

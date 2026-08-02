@@ -58,7 +58,7 @@ pub struct Primary {
 
 impl ProductCategory for Primary {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.as_str().to_string()]
+        vec![self.product_category.as_ref().to_string()]
     }
 }
 
@@ -73,7 +73,7 @@ impl Item for Primary {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        self.type_field.as_str()
+        self.type_field.as_ref()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()
@@ -202,10 +202,10 @@ impl RangedWeapon for Primary {
         self.gun.multishot
     }
     fn noise(&self) -> &str {
-        self.gun.noise.as_str()
+        self.gun.noise.as_ref()
     }
     fn trigger(&self) -> &str {
-        self.gun.trigger.as_str()
+        self.gun.trigger.as_ref()
     }
     fn magazine_size(&self) -> Option<i64> {
         self.gun.magazine_size

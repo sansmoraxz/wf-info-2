@@ -16,9 +16,9 @@ use super::market::{
 use super::screenshot::{ScreenshotConfig, ScreenshotEvent, ScreenshotParams, ScreenshotState};
 use super::search::InventoryIndexCache;
 use super::subscription::{self, EventFilter, SubscribeParams, SubscribeResponse};
-use super::utils::parse_params;
+use super::utils::{parse_params, parse_required_params};
 use super::wfm_auth::{
-    SignstatusParams, SignstatusResponse, WfmHandle, handle_wfm_signout, parse_signin_params,
+    SigninParams, SignstatusParams, SignstatusResponse, WfmHandle, handle_wfm_signout,
 };
 
 /// Cheaply-cloneable bundle of every per-module handle, assembled once at the
@@ -221,7 +221,7 @@ async fn dispatch(cx: &Handles, op: &str, params: Option<Value>) -> anyhow::Resu
         ControlOp::Wfm(WfmOp::Signstatus) => {
             run(parse_params::<SignstatusParams>(params)?, cx).await?
         }
-        ControlOp::Wfm(WfmOp::Signin) => run(parse_signin_params(params)?, cx).await?,
+        ControlOp::Wfm(WfmOp::Signin) => run(parse_required_params::<SigninParams>(params)?, cx).await?,
         ControlOp::Wfm(WfmOp::Signout) => {
             handle_wfm_signout(&cx.wfm).await?;
             EmptyResponse {}.into()

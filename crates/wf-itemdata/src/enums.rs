@@ -8,69 +8,6 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 use strum::{AsRefStr, Display, EnumString};
 
-/// Borrowed string form for enums with an `Unknown(String)` fallback variant.
-///
-/// strum's derived `AsRefStr` returns the variant *name* ("Unknown") for the
-/// default variant instead of the captured inner string, so `as_str` must
-/// special-case it. Kept as a macro because the impl is identical for all
-/// ~40 enums below.
-macro_rules! impl_as_str {
-    ($($ty:ty),* $(,)?) => {$(
-        impl $ty {
-            pub fn as_str(&self) -> &str {
-                match self {
-                    Self::Unknown(s) => s,
-                    other => other.as_ref(),
-                }
-            }
-        }
-    )*};
-}
-
-impl_as_str!(
-    Trigger,
-    Noise,
-    Rarity,
-    Polarity,
-    Projectile,
-    Disposition,
-    WarframeType,
-    ArcaneType,
-    GearType,
-    ResourceType,
-    PrimaryType,
-    SecondaryType,
-    MeleeType,
-    RailjackType,
-    ArchGunType,
-    ArchMeleeType,
-    ArchwingType,
-    SentinelType,
-    SentinelWeaponType,
-    ModType,
-    RelicType,
-    FishType,
-    GlyphType,
-    SigilType,
-    NodeType,
-    QuestType,
-    SkinType,
-    EnemyType,
-    PetType,
-    MiscType,
-    ResistanceType,
-    ComponentType,
-    PrimaryProductCategory,
-    MeleeProductCategory,
-    Sex,
-    SecondaryProductCategory,
-    ArchwingProductCategory,
-    SentinelProductCategory,
-    SentinelWeaponProductCategory,
-    ArchGunProductCategory,
-    ArchMeleeProductCategory,
-);
-
 // =============================================================================
 // Weapon property enums
 // =============================================================================
@@ -99,7 +36,7 @@ pub enum Trigger {
     Held,
     Melee,
     Semi,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -125,7 +62,7 @@ impl Default for Trigger {
 pub enum Noise {
     Alarming,
     Silent,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -153,7 +90,7 @@ pub enum Rarity {
     Uncommon,
     Rare,
     Legendary,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -188,7 +125,7 @@ pub enum Polarity {
     Vazarin,
     Zenurik,
     Any,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -217,7 +154,7 @@ pub enum Projectile {
     #[strum(serialize = "Projectile")]
     ProjectileType,
     Thrown,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -251,7 +188,7 @@ pub enum Disposition {
     Four,
     #[strum(serialize = "5")]
     Five,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -296,7 +233,7 @@ impl Disposition {
 pub enum WarframeType {
     #[default]
     Warframe,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -335,7 +272,7 @@ pub enum ArcaneType {
     BowArcane,
     #[strum(serialize = "Shotgun Arcane")]
     ShotgunArcane,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -367,7 +304,7 @@ pub enum GearType {
     FishBait,
     Specter,
     Key,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -390,7 +327,7 @@ pub enum ResourceType {
     Resource,
     Gem,
     Plant,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -416,7 +353,7 @@ pub enum PrimaryType {
     Rifle,
     Shotgun,
     Sniper,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -440,7 +377,7 @@ pub enum SecondaryType {
     #[default]
     Pistol,
     Throwing,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -464,7 +401,7 @@ pub enum MeleeType {
     Rifle,
     #[strum(serialize = "Zaw Component")]
     ZawComponent,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -487,7 +424,7 @@ pub enum RailjackType {
     #[strum(serialize = "Railjack Turret")]
     RailjackTurret,
     Shotgun,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -509,7 +446,7 @@ pub enum ArchGunType {
     #[default]
     #[strum(serialize = "Arch-Gun")]
     ArchGun,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -531,7 +468,7 @@ pub enum ArchMeleeType {
     #[default]
     #[strum(serialize = "Arch-Melee")]
     ArchMelee,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -552,7 +489,7 @@ pub enum ArchMeleeType {
 pub enum ArchwingType {
     #[default]
     Archwing,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -573,7 +510,7 @@ pub enum ArchwingType {
 pub enum SentinelType {
     #[default]
     Sentinel,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -595,7 +532,7 @@ pub enum SentinelWeaponType {
     #[default]
     #[strum(serialize = "Companion Weapon")]
     CompanionWeapon,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -671,7 +608,7 @@ pub enum ModType {
     WarframeMod,
     #[strum(serialize = "Zaw Riven Mod")]
     ZawRivenMod,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -698,7 +635,7 @@ impl Default for ModType {
 pub enum RelicType {
     #[default]
     Relic,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -719,7 +656,7 @@ pub enum RelicType {
 pub enum FishType {
     #[default]
     Fish,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -740,7 +677,7 @@ pub enum FishType {
 pub enum GlyphType {
     #[default]
     Glyph,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -761,7 +698,7 @@ pub enum GlyphType {
 pub enum SigilType {
     #[default]
     Sigil,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -782,7 +719,7 @@ pub enum SigilType {
 pub enum NodeType {
     #[default]
     Node,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -803,7 +740,7 @@ pub enum NodeType {
 pub enum QuestType {
     #[default]
     Key,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -847,7 +784,7 @@ pub enum SkinType {
     #[strum(serialize = "Theme Sound")]
     ThemeSound,
     Themes,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -880,7 +817,7 @@ pub enum EnemyType {
     Stalker,
     Tenno,
     Warframe,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -910,7 +847,7 @@ pub enum PetType {
     PetResource,
     Pets,
     Warframe,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -997,7 +934,7 @@ pub enum MiscType {
     Skin,
     #[strum(serialize = "Zaw Riven Mod")]
     ZawRivenMod,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -1035,7 +972,7 @@ pub enum ResistanceType {
     ProtoShield,
     Robotic,
     Shield,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -1062,7 +999,7 @@ impl Default for ResistanceType {
 pub enum ComponentType {
     #[default]
     Resource,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -1088,7 +1025,7 @@ pub enum PrimaryProductCategory {
     #[default]
     LongGuns,
     OperatorAmps,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -1110,7 +1047,7 @@ pub enum MeleeProductCategory {
     #[default]
     Melee,
     Pistols,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -1132,7 +1069,7 @@ pub enum Sex {
     Male,
     #[strum(serialize = "Non-binary")]
     NonBinary,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -1159,7 +1096,7 @@ impl Default for Sex {
 pub enum SecondaryProductCategory {
     #[default]
     Pistols,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -1180,7 +1117,7 @@ pub enum SecondaryProductCategory {
 pub enum ArchwingProductCategory {
     #[default]
     SpaceSuits,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -1201,7 +1138,7 @@ pub enum ArchwingProductCategory {
 pub enum SentinelProductCategory {
     #[default]
     Sentinels,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -1222,7 +1159,7 @@ pub enum SentinelProductCategory {
 pub enum SentinelWeaponProductCategory {
     #[default]
     SentinelWeapons,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -1243,7 +1180,7 @@ pub enum SentinelWeaponProductCategory {
 pub enum ArchGunProductCategory {
     #[default]
     SpaceGuns,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 
@@ -1264,7 +1201,7 @@ pub enum ArchGunProductCategory {
 pub enum ArchMeleeProductCategory {
     #[default]
     SpaceMelee,
-    #[strum(default)]
+    #[strum(default, transparent)]
     Unknown(String),
 }
 

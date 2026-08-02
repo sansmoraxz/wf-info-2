@@ -113,10 +113,24 @@ pub enum FractionSyndicates {
     RedVeilSyndicate,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::AsRef,
+)]
+#[display("{oid}")]
+#[as_ref(str)]
 pub struct ObjectId {
     #[serde(rename = "$oid")]
-    pub oid: String,
+    oid: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]

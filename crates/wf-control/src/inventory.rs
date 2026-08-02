@@ -298,10 +298,10 @@ pub(crate) async fn handle_inventory_filter(
         }
 
         if include_details
-            && let Some(details) =
+            && let Some(info) =
                 lookup_item_info(envelope.item_type(), Some(envelope.category().as_ref()))
         {
-            envelope.set_details(details.details);
+            envelope.set_details(info.details.clone());
         }
 
         filtered_items.push(envelope);

@@ -26,10 +26,32 @@ pub enum ItemDetails {
     Mod(mods::ModEntry),
 }
 
+/// An item's canonical `uniqueName` type path, e.g. `/Lotus/Powersuits/...`.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::AsRef,
+)]
+#[display("{_0}")]
+#[as_ref(str)]
+pub struct UniqueName(String);
+
+impl std::borrow::Borrow<str> for UniqueName {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ItemInfo {
     pub name: Option<String>,
-    pub unique_name: String,
+    pub unique_name: UniqueName,
     pub product_category: Option<String>,
     pub description: Option<String>,
     pub details: ItemDetails,
@@ -39,7 +61,7 @@ impl ItemInfo {
     fn new(details: ItemDetails, product_category: Option<String>) -> Self {
         Self {
             name: Some(details.name().to_string()),
-            unique_name: details.unique_name().to_string(),
+            unique_name: UniqueName(details.unique_name().to_string()),
             product_category,
             description: details.description().map(|s| s.to_string()),
             details,
@@ -48,19 +70,19 @@ impl ItemInfo {
 }
 
 // Maps uniqueName/item_type -> all matching ItemInfo variants (multiple productCategory variants may exist)
-static ITEM_INDEX: LazyLock<HashMap<String, Vec<ItemInfo>>> = LazyLock::new(build_item_index);
+static ITEM_INDEX: LazyLock<HashMap<UniqueName, Vec<ItemInfo>>> = LazyLock::new(build_item_index);
 
-pub fn lookup_item_info(item_type: &str, category: Option<&str>) -> Option<ItemInfo> {
+pub fn lookup_item_info(item_type: &str, category: Option<&str>) -> Option<&'static ItemInfo> {
     let entries = ITEM_INDEX.get(item_type)?;
     if let Some(cat) = category.and_then(category_to_product_category)
         && let Some(found) = entries
             .iter()
             .find(|info| info.product_category.as_deref() == Some(cat))
     {
-        return Some(found.clone());
+        return Some(found);
     }
     // fallback: first entry
-    entries.first().cloned()
+    entries.first()
 }
 
 fn category_to_product_category(cat: &str) -> Option<&'static str> {
@@ -79,8 +101,8 @@ fn category_to_product_category(cat: &str) -> Option<&'static str> {
     }
 }
 
-fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
-    let mut index: HashMap<String, Vec<ItemInfo>> = HashMap::new();
+fn build_item_index() -> HashMap<UniqueName, Vec<ItemInfo>> {
+    let mut index: HashMap<UniqueName, Vec<ItemInfo>> = HashMap::new();
 
     let read_cached = |file: &str| -> Option<String> {
         crate::item_data_fetch::cached_path(file)
@@ -109,7 +131,7 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<primary::Root>(&raw)
     {
         for item in arr {
-            let pc = Some(item.product_category.as_str().to_string());
+            let pc = Some(item.product_category.as_ref().to_string());
             push_info(ItemDetails::Primary(item), pc);
         }
     }
@@ -118,7 +140,7 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<secondary::Root>(&raw)
     {
         for item in arr {
-            let pc = Some(item.product_category.as_str().to_string());
+            let pc = Some(item.product_category.as_ref().to_string());
             push_info(ItemDetails::Secondary(item), pc);
         }
     }
@@ -127,7 +149,7 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<melee::Root>(&raw)
     {
         for item in arr {
-            let pc = Some(item.product_category.as_str().to_string());
+            let pc = Some(item.product_category.as_ref().to_string());
             push_info(ItemDetails::Melee(item), pc);
         }
     }
@@ -136,7 +158,7 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<archwing::Root>(&raw)
     {
         for item in arr {
-            let pc = Some(item.product_category.as_str().to_string());
+            let pc = Some(item.product_category.as_ref().to_string());
             push_info(ItemDetails::Archwing(item), pc);
         }
     }
@@ -145,7 +167,7 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<arch_gun::Root>(&raw)
     {
         for item in arr {
-            let pc = Some(item.product_category.as_str().to_string());
+            let pc = Some(item.product_category.as_ref().to_string());
             push_info(ItemDetails::ArchGun(item), pc);
         }
     }
@@ -154,7 +176,7 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<arch_melee::Root>(&raw)
     {
         for item in arr {
-            let pc = Some(item.product_category.as_str().to_string());
+            let pc = Some(item.product_category.as_ref().to_string());
             push_info(ItemDetails::ArchMelee(item), pc);
         }
     }
@@ -232,7 +254,10 @@ mod tests {
         let item: warframe::WarframeEntry =
             serde_json::from_str(&fixture("warframe_test.json")).unwrap();
         let info = ItemInfo::new(ItemDetails::Warframe(item), Some("Suits".to_string()));
-        assert_eq!(info.unique_name, "/Lotus/Powersuits/Priest/HarrowPrime");
+        assert_eq!(
+            info.unique_name.as_ref(),
+            "/Lotus/Powersuits/Priest/HarrowPrime"
+        );
         assert_eq!(info.name.as_deref(), Some("Harrow Prime"));
         assert!(info.description.is_some());
     }

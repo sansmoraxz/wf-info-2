@@ -54,7 +54,7 @@ mod tests {
         ));
 
         let item: OperatorLoadOut = from_str(json_data).unwrap();
-        assert_eq!(item.item_id.oid, "000000000000000000000000");
+        assert_eq!(item.item_id.as_ref(), "000000000000000000000000");
     }
 
     #[test]
@@ -65,6 +65,6 @@ mod tests {
         ));
 
         let item: AdultOperatorLoadOut = from_str(json_data).unwrap();
-        assert_eq!(item.item_id.oid, "618d769e3348adda0fc130ae");
+        assert_eq!(item.item_id.as_ref(), "618d769e3348adda0fc130ae");
     }
 }

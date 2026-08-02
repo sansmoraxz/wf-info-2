@@ -10,7 +10,7 @@ use wf_core::storage;
 use wf_inventory::Inventory;
 
 use super::requests::{HandleOp, Handles};
-use super::utils::WFM_API_BASE;
+use super::utils::wfm_get;
 use wf_itemdata::item_data::lookup_item_info;
 
 const CACHE_TTL: Duration = Duration::from_secs(3600); // 1 hour
@@ -87,10 +87,29 @@ struct WfmOrdersResponse {
     data: Vec<WfmOrder>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum OrderType {
+    Sell,
+    Buy,
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum UserStatus {
+    Ingame,
+    Online,
+    Offline,
+    #[serde(other)]
+    Other,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct WfmOrder {
     #[serde(rename = "type")]
-    order_type: String,
+    order_type: OrderType,
     platinum: f64,
     #[allow(dead_code)]
     quantity: i64,
@@ -100,7 +119,7 @@ struct WfmOrder {
 
 #[derive(Debug, Clone, Deserialize)]
 struct WfmOrderUser {
-    status: Option<String>,
+    status: Option<UserStatus>,
     #[serde(rename = "ingameName")]
     #[allow(dead_code)]
     ingame_name: Option<String>,
@@ -199,9 +218,7 @@ impl MarketCache {
     }
 
     async fn refresh(&self) -> Result<Arc<WfmCache>> {
-        let url = format!("{}/items", WFM_API_BASE);
-        let client = reqwest::Client::new();
-        let resp: WfmItemsResponse = client.get(&url).send().await?.json().await?;
+        let resp: WfmItemsResponse = wfm_get("items").await?;
 
         let mut game_ref_index = HashMap::new();
         let mut id_index = HashMap::new();
@@ -260,18 +277,14 @@ struct WfmItemDetail {
 }
 
 async fn fetch_item_detail(slug: &str) -> Result<WfmItemDetail> {
-    let url = format!("{}/items/{}", WFM_API_BASE, slug);
-    let client = reqwest::Client::new();
-    let resp: WfmItemDetailResponse = client.get(&url).send().await?.json().await?;
+    let resp: WfmItemDetailResponse = wfm_get(&format!("items/{}", slug)).await?;
     Ok(resp.data)
 }
 
 // ── Order fetching ──
 
 async fn fetch_orders(slug: &str) -> Result<Vec<WfmOrder>> {
-    let url = format!("{}/orders/item/{}", WFM_API_BASE, slug);
-    let client = reqwest::Client::new();
-    let resp: WfmOrdersResponse = client.get(&url).send().await?.json().await?;
+    let resp: WfmOrdersResponse = wfm_get(&format!("orders/item/{}", slug)).await?;
     Ok(resp.data)
 }
 
@@ -302,29 +315,21 @@ pub(crate) struct MarketSummary {
 }
 
 fn summarize_orders(orders: &[WfmOrder]) -> OrderSummary {
-    let sell_prices: Vec<f64> = orders
-        .iter()
-        .filter(|o| {
-            o.order_type == "sell"
-                && o.visible.unwrap_or(true)
-                && o.user.status.as_deref() == Some("ingame")
-        })
-        .map(|o| o.platinum)
-        .collect();
-
-    let buy_prices: Vec<f64> = orders
-        .iter()
-        .filter(|o| {
-            o.order_type == "buy"
-                && o.visible.unwrap_or(true)
-                && o.user.status.as_deref() == Some("ingame")
-        })
-        .map(|o| o.platinum)
-        .collect();
+    let active_prices = |order_type: OrderType| -> Vec<f64> {
+        orders
+            .iter()
+            .filter(|o| {
+                o.order_type == order_type
+                    && o.visible.unwrap_or(true)
+                    && o.user.status == Some(UserStatus::Ingame)
+            })
+            .map(|o| o.platinum)
+            .collect()
+    };
 
     OrderSummary {
-        sell: price_stats(&sell_prices),
-        buy: price_stats(&buy_prices),
+        sell: price_stats(&active_prices(OrderType::Sell)),
+        buy: price_stats(&active_prices(OrderType::Buy)),
         total_listings: orders.len(),
     }
 }
@@ -536,7 +541,7 @@ pub(crate) async fn handle_market_price(
         .game_ref
         .as_ref()
         .and_then(|gr| lookup_item_info(gr.as_ref(), None))
-        .map(|info| info.details);
+        .map(|info| info.details.clone());
 
     // Set parts: detect set items by "set" tag, then fetch detail for setParts
     let include_parts = params.include_parts.unwrap_or(true);
