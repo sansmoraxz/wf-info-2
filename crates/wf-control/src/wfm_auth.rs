@@ -14,7 +14,7 @@ use tokio_tungstenite::tungstenite::http::header;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite};
 
 use crate::requests::{EmptyResponse, HandleOp, Handles};
-use crate::utils::{HTTP_CLIENT, WFM_AUTH_BASE, WFM_SUB_PROTOCOL, WFM_WS_URL};
+use crate::utils::{WFM_AUTH_BASE, WFM_SUB_PROTOCOL, WFM_WS_URL};
 use wf_core::storage::{self, AuthTokenData};
 
 // ── WS message types ──
@@ -321,8 +321,13 @@ async fn actor_loop(handle: WfmHandle, mut rx: mpsc::Receiver<WfmCmd>) {
 // Authorization response header as "JWT <token>".
 
 /// Sign in via v1 API. Returns the JWT access token.
-async fn rest_signin(email: &str, password: &str, device_id: &str) -> Result<String> {
-    let raw_resp = HTTP_CLIENT
+async fn rest_signin(
+    client: &reqwest::Client,
+    email: &str,
+    password: &str,
+    device_id: &str,
+) -> Result<String> {
+    let raw_resp = client
         .post(format!("{}/auth/signin", WFM_AUTH_BASE))
         .header("Authorization", "JWT")
         .json(&json!({
@@ -605,19 +610,23 @@ impl HandleOp for SigninParams {
     type Response = EmptyResponse;
 
     async fn handle(self, cx: &Handles) -> Result<Self::Response> {
-        handle_wfm_signin(&cx.wfm, self).await?;
+        handle_wfm_signin(&cx.http, &cx.wfm, self).await?;
         Ok(EmptyResponse {})
     }
 }
 
-pub(crate) async fn handle_wfm_signin(wfm: &WfmHandle, p: SigninParams) -> Result<()> {
+pub(crate) async fn handle_wfm_signin(
+    client: &reqwest::Client,
+    wfm: &WfmHandle,
+    p: SigninParams,
+) -> Result<()> {
     // Load existing device_id or generate a new stable one
     let device_id = match storage::read_auth_token() {
         Ok(existing) => existing.device_id,
         Err(_) => uuid::Uuid::new_v4().to_string(),
     };
 
-    let jwt = rest_signin(&p.email, &p.password, &device_id).await?;
+    let jwt = rest_signin(client, &p.email, &p.password, &device_id).await?;
 
     let token_data = AuthTokenData {
         access_token: jwt,

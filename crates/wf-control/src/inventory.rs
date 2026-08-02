@@ -22,7 +22,6 @@ use super::search::{
     Category, EnvelopeAccess, IndexedInventory, InventoryIndexCache, InventoryItemEnvelope,
     collect_inventory_items, search_inventory,
 };
-use wf_itemdata::item_data::lookup_item_info;
 use wf_itemdata::traits::Item as _;
 
 #[cfg(feature = "memory")]
@@ -196,13 +195,14 @@ impl HandleOp for FilterParams {
     type Response = InventoryFilterResponse;
 
     async fn handle(self, cx: &Handles) -> Result<Self::Response> {
-        handle_inventory_filter(&cx.inventory_index, &cx.market, self).await
+        handle_inventory_filter(&cx.inventory_index, &cx.market, &cx.item_index, self).await
     }
 }
 
 pub(crate) async fn handle_inventory_filter(
     index: &InventoryIndexCache,
     market: &MarketCache,
+    item_index: &wf_itemdata::item_data::ItemIndex,
     mut params: FilterParams,
 ) -> Result<InventoryFilterResponse> {
     let custom_path = params.path.take().map(|path| InventoryInput::Path {
@@ -225,13 +225,17 @@ pub(crate) async fn handle_inventory_filter(
     // Inventory and its index travel together: a custom path gets a fresh
     // uncached pair; the stored inventory reuses the cached pair.
     let indexed = match custom_path {
-        Some(input) => Arc::new(IndexedInventory::build(input.load().await?, None)?),
-        None => index.get_or_build(&meta)?,
+        Some(input) => Arc::new(IndexedInventory::build(
+            input.load().await?,
+            None,
+            item_index,
+        )?),
+        None => index.get_or_build(&meta, item_index)?,
     };
     let search_index = &indexed.index;
 
     // Count items in selected category for reporting
-    let total = collect_inventory_items(&indexed.inventory, category).len();
+    let total = collect_inventory_items(&indexed.inventory, category, item_index).len();
 
     let mut clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
 
@@ -273,7 +277,7 @@ pub(crate) async fn handle_inventory_filter(
     for mut envelope in envelopes.drain(..) {
         if let Some(tradable) = params.tradable {
             let details =
-                lookup_item_info(envelope.item_type(), Some(envelope.category().as_ref()));
+                item_index.lookup(envelope.item_type(), Some(envelope.category().as_ref()));
             let detail_tradable = details.as_ref().map(|d| d.details.tradable());
             if detail_tradable != Some(tradable) {
                 continue;
@@ -299,7 +303,7 @@ pub(crate) async fn handle_inventory_filter(
 
         if include_details
             && let Some(info) =
-                lookup_item_info(envelope.item_type(), Some(envelope.category().as_ref()))
+                item_index.lookup(envelope.item_type(), Some(envelope.category().as_ref()))
         {
             envelope.set_details(info.details.clone());
         }
@@ -352,7 +356,7 @@ impl HandleOp for RefreshParams {
 
     #[cfg(feature = "memory")]
     async fn handle(self, cx: &Handles) -> Result<Self::Response> {
-        handle_inventory_refresh(&cx.events, self).await
+        handle_inventory_refresh(&cx.http, &cx.events, self).await
     }
 
     #[cfg(not(feature = "memory"))]
@@ -363,6 +367,7 @@ impl HandleOp for RefreshParams {
 
 #[cfg(feature = "memory")]
 pub(crate) async fn handle_inventory_refresh(
+    client: &reqwest::Client,
     events: &EventBus,
     params: RefreshParams,
 ) -> Result<InventoryLoadResponse> {
@@ -372,8 +377,9 @@ pub(crate) async fn handle_inventory_refresh(
     let scan_retries = params.scan_retries.unwrap_or(5);
     let scan_delay = Duration::from_millis(params.scan_delay_ms.unwrap_or(1500));
 
-    let inventory = inventory_refresh::fetch_inventory_from_process(pid, scan_retries, scan_delay)
-        .await?
+    let inventory =
+        inventory_refresh::fetch_inventory_from_process(client, pid, scan_retries, scan_delay)
+            .await?
         .ok_or_else(|| anyhow!("Could not locate auth data in Warframe memory"))?
         .inventory;
 
@@ -550,7 +556,12 @@ mod tests {
             })
         );
 
-        let items = crate::search::collect_inventory_items(&inventory, Some(Category::Suits));
+        let item_index = wf_itemdata::item_data::ItemIndex::default();
+        let items = crate::search::collect_inventory_items(
+            &inventory,
+            Some(Category::Suits),
+            &item_index,
+        );
         let envelopes: Vec<_> = items.into_iter().map(|v| v.envelope).collect();
         let filter = InventoryFilterResponse {
             total: 48,

@@ -12,6 +12,7 @@ pub struct InventoryFetch {
 }
 
 pub async fn fetch_inventory_from_process(
+    client: &reqwest::Client,
     pid: u32,
     scan_retries: u32,
     scan_delay: Duration,
@@ -22,16 +23,17 @@ pub async fn fetch_inventory_from_process(
         None => return Ok(None),
     };
 
-    fetch_inventory_with_auth_from_process(pid, auth, scan_retries, scan_delay).await
+    fetch_inventory_with_auth_from_process(client, pid, auth, scan_retries, scan_delay).await
 }
 
 pub async fn fetch_inventory_with_auth_from_process(
+    client: &reqwest::Client,
     pid: u32,
     auth: process::AuthQuery,
     scan_retries: u32,
     scan_delay: Duration,
 ) -> Result<Option<InventoryFetch>> {
-    match api::fetch_inventory(&auth).await {
+    match api::fetch_inventory(client, &auth).await {
         Ok(inventory) => Ok(Some(InventoryFetch { inventory, auth })),
         Err(error) if api::is_inventory_authorization_rejected(&error) => {
             log::warn!("Inventory authorization was rejected; rescanning process memory once");
@@ -40,7 +42,7 @@ pub async fn fetch_inventory_with_auth_from_process(
             else {
                 return Ok(None);
             };
-            let inventory = api::fetch_inventory(&new_auth).await?;
+            let inventory = api::fetch_inventory(client, &new_auth).await?;
             Ok(Some(InventoryFetch {
                 inventory,
                 auth: new_auth,

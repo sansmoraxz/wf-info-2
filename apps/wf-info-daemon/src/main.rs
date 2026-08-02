@@ -236,7 +236,7 @@ async fn main() {
         native_wayland_capture: cli.screenshot.native_wayland_screenshot,
     });
 
-    if let Err(e) = item_data_fetch::update_cache().await {
+    if let Err(e) = item_data_fetch::update_cache(&cx.http).await {
         log::warn!("Failed to update item data cache: {}", e);
     }
 
@@ -364,11 +364,13 @@ async fn main() {
     let lifecycle = GameLifecycleTracker::default();
     let watcher_lifecycle = lifecycle.clone();
     let watcher_events = cx.events.clone();
+    let watcher_http = cx.http.clone();
     let watcher_screenshot = Arc::clone(&cx.screenshot);
     let game_pid = game.pid();
     let mut log_watcher = tokio::spawn(async move {
         if let Err(e) = wf_control::watcher::observe_warframe_activity_with_lifecycle(
             watcher_events,
+            watcher_http,
             watcher_screenshot,
             log_source,
             Some(game_pid),

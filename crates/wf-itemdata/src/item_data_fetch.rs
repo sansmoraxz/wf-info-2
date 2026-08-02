@@ -39,10 +39,9 @@ pub fn cached_path(file: &str) -> anyhow::Result<PathBuf> {
 /// Uses ETag-based conditional requests: stores ETags in `<file>.etag` sidecar
 /// files and sends `If-None-Match` on subsequent requests. Files that haven't
 /// changed upstream (304) are skipped.
-pub async fn update_cache() -> anyhow::Result<()> {
+pub async fn update_cache(client: &reqwest::Client) -> anyhow::Result<()> {
     let dir = cache_dir()?;
     let base = base_url();
-    let client = reqwest::Client::new();
 
     for &file in FILE_NAMES {
         let url = format!("{}{}", base, file);

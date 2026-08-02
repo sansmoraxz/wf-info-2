@@ -16,7 +16,7 @@ use tantivy::tokenizer::NgramTokenizer;
 use wf_core::storage;
 use wf_inventory::Inventory;
 
-use wf_itemdata::item_data::lookup_item_info;
+use wf_itemdata::item_data::ItemIndex;
 
 #[derive(Clone)]
 pub(crate) struct InventorySearchIndex {
@@ -40,8 +40,12 @@ pub(crate) struct IndexedInventory {
 }
 
 impl IndexedInventory {
-    pub(crate) fn build(inventory: Inventory, last_updated: Option<DateTime<Utc>>) -> Result<Self> {
-        let items = collect_inventory_items(&inventory, None);
+    pub(crate) fn build(
+        inventory: Inventory,
+        last_updated: Option<DateTime<Utc>>,
+        item_index: &ItemIndex,
+    ) -> Result<Self> {
+        let items = collect_inventory_items(&inventory, None, item_index);
         let index = build_tantivy_index(&items)?;
         Ok(Self {
             inventory,
@@ -64,6 +68,7 @@ impl InventoryIndexCache {
     pub(crate) fn get_or_build(
         &self,
         meta: &storage::InventoryMeta,
+        item_index: &ItemIndex,
     ) -> Result<Arc<IndexedInventory>> {
         if let Some(cached) = self.0.load().as_ref()
             && cached.last_updated == meta.last_updated
@@ -72,7 +77,11 @@ impl InventoryIndexCache {
         }
 
         let inventory = storage::read_inventory()?;
-        let indexed = Arc::new(IndexedInventory::build(inventory, meta.last_updated)?);
+        let indexed = Arc::new(IndexedInventory::build(
+            inventory,
+            meta.last_updated,
+            item_index,
+        )?);
         self.0.store(Some(Arc::clone(&indexed)));
 
         Ok(indexed)
@@ -281,20 +290,21 @@ impl_has_other!(
     wf_inventory::recipe::PendingRecipe,
 );
 
-pub(crate) struct ItemView {
-    pub details_name: Option<&'static str>,
-    pub details_desc: Option<&'static str>,
+pub(crate) struct ItemView<'a> {
+    pub details_name: Option<&'a str>,
+    pub details_desc: Option<&'a str>,
     pub envelope: InventoryItemEnvelope,
 }
 
-pub(crate) fn collect_inventory_items(
+pub(crate) fn collect_inventory_items<'a>(
     inventory: &Inventory,
     category: Option<Category>,
-) -> Vec<ItemView> {
+    item_index: &'a ItemIndex,
+) -> Vec<ItemView<'a>> {
     let mut items = Vec::new();
 
     let mut push_item = |envelope: InventoryItemEnvelope| {
-        let info = lookup_item_info(envelope.item_type(), Some(envelope.category().as_ref()));
+        let info = item_index.lookup(envelope.item_type(), Some(envelope.category().as_ref()));
         items.push(ItemView {
             details_name: info.and_then(|item| item.name.as_deref()),
             details_desc: info.and_then(|item| item.description.as_deref()),
@@ -503,7 +513,8 @@ mod tests {
     #[test]
     fn envelope_round_trips_through_json_for_all_categories() {
         let inventory = sample_inventory();
-        let items = collect_inventory_items(&inventory, None);
+        let item_index = ItemIndex::default();
+        let items = collect_inventory_items(&inventory, None, &item_index);
         assert!(!items.is_empty());
 
         let mut seen = std::collections::HashSet::new();
@@ -536,6 +547,7 @@ mod tests {
     #[test]
     fn collected_envelopes_match_legacy_injected_shape() {
         let inventory = sample_inventory();
+        let item_index = ItemIndex::default();
 
         fn legacy<T: serde::Serialize>(
             item: &T,
@@ -555,7 +567,8 @@ mod tests {
 
         macro_rules! check_category {
             ($field:ident, $cat:literal, $id:expr) => {
-                let views = collect_inventory_items(&inventory, Some($cat.parse().unwrap()));
+                let views =
+                    collect_inventory_items(&inventory, Some($cat.parse().unwrap()), &item_index);
                 assert_eq!(views.len(), inventory.$field.len(), $cat);
                 for (view, item) in views.iter().zip(&inventory.$field) {
                     let id: Option<&str> = $id(item);
@@ -644,7 +657,8 @@ mod tests {
 
         let mut poisoned = inventory.clone();
         poisoned.suits = vec![suit];
-        let items = collect_inventory_items(&poisoned, Some(Category::Suits));
+        let item_index = ItemIndex::default();
+        let items = collect_inventory_items(&poisoned, Some(Category::Suits), &item_index);
         assert_eq!(items.len(), 1);
 
         let raw = serde_json::to_string(&items[0].envelope).unwrap();

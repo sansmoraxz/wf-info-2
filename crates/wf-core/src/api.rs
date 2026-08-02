@@ -17,8 +17,11 @@ pub fn is_inventory_authorization_rejected(error: &anyhow::Error) -> bool {
 
 /// Fetches the player's profile data from the Warframe API using the provided account ID.
 /// Returns a ProfileData struct on success.
-pub async fn fetch_player_profile(account_id: &str) -> Result<ProfileData, reqwest::Error> {
-    reqwest::Client::new()
+pub async fn fetch_player_profile(
+    client: &reqwest::Client,
+    account_id: &str,
+) -> Result<ProfileData, reqwest::Error> {
+    client
         .get(PLAYER_INFO_URL)
         .query(&[("playerId", account_id)])
         .send()
@@ -29,10 +32,13 @@ pub async fn fetch_player_profile(account_id: &str) -> Result<ProfileData, reqwe
 
 /// Fetches the player's full inventory using the authenticated query.
 /// Returns the deserialized Inventory on success.
-pub async fn fetch_inventory(auth: &AuthQuery) -> anyhow::Result<Inventory> {
+pub async fn fetch_inventory(
+    client: &reqwest::Client,
+    auth: &AuthQuery,
+) -> anyhow::Result<Inventory> {
     log::info!("Fetching inventory from API...");
 
-    let response = reqwest::Client::new()
+    let response = client
         .get(INVENTORY_URL)
         .query(&[("accountId", &auth.account_id), ("nonce", &auth.nonce)])
         .send()

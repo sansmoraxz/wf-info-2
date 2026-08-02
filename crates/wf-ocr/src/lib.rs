@@ -7,7 +7,7 @@ use std::{
 
 mod ocr;
 
-pub use ocr::{DEFAULT_OCR_ENGINE, new_default_ocr_engine};
+pub use ocr::new_default_ocr_engine;
 
 pub fn load_image(bytes: &[u8]) -> anyhow::Result<image::DynamicImage> {
     Ok(ImageReader::new(Cursor::new(bytes))
@@ -16,11 +16,24 @@ pub fn load_image(bytes: &[u8]) -> anyhow::Result<image::DynamicImage> {
 }
 
 pub struct RelicRecognizer {
-    ocr_engine: &'static OcrEngine,
+    ocr_engine: OcrEngine,
     pub start_x: u32,
     pub start_y: u32,
     pub box_w: u32,
     pub box_h: u32,
+}
+
+impl From<OcrEngine> for RelicRecognizer {
+    fn from(ocr_engine: OcrEngine) -> Self {
+        // TODO: handle non default scales + widescreen etc.
+        Self {
+            ocr_engine,
+            start_x: 477,
+            start_y: 373,
+            box_w: 1435 - 477,
+            box_h: 91,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -31,17 +44,6 @@ pub struct RelicRecogizeText {
 }
 
 impl RelicRecognizer {
-    pub fn new(ocr_engine: &'static OcrEngine) -> RelicRecognizer {
-        // TODO: handle non default scales + widescreen etc.
-        RelicRecognizer {
-            ocr_engine,
-            start_x: 477,
-            start_y: 373,
-            box_w: 1435 - 477,
-            box_h: 91,
-        }
-    }
-
     pub fn recognize_and_list(
         &self,
         img: &DynamicImage,

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fs;
-use std::sync::LazyLock;
 
 use serde::Serialize;
 
@@ -69,20 +68,30 @@ impl ItemInfo {
     }
 }
 
-// Maps uniqueName/item_type -> all matching ItemInfo variants (multiple productCategory variants may exist)
-static ITEM_INDEX: LazyLock<HashMap<UniqueName, Vec<ItemInfo>>> = LazyLock::new(build_item_index);
+/// Index of all known items, keyed by uniqueName/item_type. Multiple
+/// productCategory variants may exist per key. Built once from the cached
+/// item-data files; own it at the composition root and share by reference.
+pub struct ItemIndex(HashMap<UniqueName, Vec<ItemInfo>>);
 
-pub fn lookup_item_info(item_type: &str, category: Option<&str>) -> Option<&'static ItemInfo> {
-    let entries = ITEM_INDEX.get(item_type)?;
-    if let Some(cat) = category.and_then(category_to_product_category)
-        && let Some(found) = entries
-            .iter()
-            .find(|info| info.product_category.as_deref() == Some(cat))
-    {
-        return Some(found);
+impl Default for ItemIndex {
+    fn default() -> Self {
+        Self(build_item_index())
     }
-    // fallback: first entry
-    entries.first()
+}
+
+impl ItemIndex {
+    pub fn lookup(&self, item_type: &str, category: Option<&str>) -> Option<&ItemInfo> {
+        let entries = self.0.get(item_type)?;
+        if let Some(cat) = category.and_then(category_to_product_category)
+            && let Some(found) = entries
+                .iter()
+                .find(|info| info.product_category.as_deref() == Some(cat))
+        {
+            return Some(found);
+        }
+        // fallback: first entry
+        entries.first()
+    }
 }
 
 fn category_to_product_category(cat: &str) -> Option<&'static str> {

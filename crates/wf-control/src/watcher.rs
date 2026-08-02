@@ -1,7 +1,7 @@
 use chrono::Utc;
 use std::collections::HashSet;
 use std::sync::{
-    Arc, LazyLock,
+    Arc,
     atomic::{AtomicBool, Ordering},
 };
 use std::time::Duration;
@@ -132,6 +132,8 @@ impl TradeState {
 
 struct WatchState {
     events: EventBus,
+    #[cfg_attr(not(feature = "memory"), allow(dead_code))]
+    http: reqwest::Client,
     screenshot: Arc<ScreenshotState>,
     #[cfg_attr(not(feature = "memory"), allow(dead_code))]
     warframe_pid: Option<u32>,
@@ -143,17 +145,28 @@ struct WatchState {
     self_initiated_dms: HashSet<String>,
     trade: TradeState,
     relic: RelicState,
+    /// `None` when the OCR engine failed to initialize; relic OCR is skipped.
+    relic_recognizer: Option<Arc<RelicRecognizer>>,
 }
 
 impl WatchState {
     fn new(
         events: EventBus,
+        http: reqwest::Client,
         screenshot: Arc<ScreenshotState>,
         warframe_pid: Option<u32>,
         auto_callbacks: AutoCallbacks,
     ) -> Self {
+        let relic_recognizer = match wf_ocr::new_default_ocr_engine() {
+            Ok(engine) => Some(Arc::new(RelicRecognizer::from(engine))),
+            Err(e) => {
+                log::error!("OCR engine unavailable, relic OCR disabled: {e}");
+                None
+            }
+        };
         Self {
             events,
+            http,
             screenshot,
             warframe_pid,
             auto_callbacks,
@@ -161,6 +174,7 @@ impl WatchState {
             self_initiated_dms: HashSet::new(),
             trade: TradeState::default(),
             relic: RelicState::default(),
+            relic_recognizer,
         }
     }
 }
@@ -187,6 +201,7 @@ fn event_emitter_fn(
                 #[cfg(feature = "memory")]
                 tokio::spawn(handle_login_event(
                     state.events.clone(),
+                    state.http.clone(),
                     username,
                     state.warframe_pid,
                     state.auto_callbacks,
@@ -273,9 +288,14 @@ fn event_emitter_fn(
                     continue;
                 }
                 log::info!("Relic selection window opened");
+                let Some(ref recognizer) = state.relic_recognizer else {
+                    log::error!("OCR engine unavailable; skipping relic recognition");
+                    continue;
+                };
                 tokio::spawn(handle_relic_selection_popup(
                     state.events.clone(),
                     Arc::clone(&state.screenshot),
+                    Arc::clone(recognizer),
                 ));
             }
             LogEvent::RelicClose => {
@@ -294,6 +314,7 @@ fn event_emitter_fn(
 #[cfg(feature = "memory")]
 async fn handle_login_event(
     events: EventBus,
+    http: reqwest::Client,
     user_name: String,
     known_pid: Option<u32>,
     auto_callbacks: AutoCallbacks,
@@ -323,7 +344,7 @@ async fn handle_login_event(
     };
 
     log::info!("Resolved account authorization from process memory");
-    match api::fetch_player_profile(&auth.account_id).await {
+    match api::fetch_player_profile(&http, &auth.account_id).await {
         Ok(profile) => {
             log::info!("Fetched profile for {}: {:?}", user_name, profile);
             if let Err(e) = storage::save_encrypted_profile(&profile) {
@@ -346,6 +367,7 @@ async fn handle_login_event(
     }
 
     match inventory_refresh::fetch_inventory_with_auth_from_process(
+        &http,
         pid,
         auth,
         5,
@@ -380,23 +402,12 @@ async fn handle_login_event(
     }
 }
 
-static RELIC_RECOG_ENGINE: LazyLock<Result<wf_ocr::RelicRecognizer, &'static anyhow::Error>> =
-    LazyLock::new(|| {
-        wf_ocr::DEFAULT_OCR_ENGINE
-            .as_ref()
-            .map(RelicRecognizer::new)
-    });
-
-async fn handle_relic_selection_popup(events: EventBus, shots: Arc<ScreenshotState>) {
+async fn handle_relic_selection_popup(
+    events: EventBus,
+    shots: Arc<ScreenshotState>,
+    recognizer: Arc<RelicRecognizer>,
+) {
     tokio::time::sleep(Duration::from_millis(500)).await;
-
-    let recognizer = match RELIC_RECOG_ENGINE.as_ref() {
-        Ok(recognizer) => recognizer,
-        Err(e) => {
-            log::error!("OCR engine unavailable: {e}");
-            return;
-        }
-    };
 
     let res = capture_screen(&shots).await;
     match res {
@@ -418,6 +429,7 @@ async fn handle_relic_selection_popup(events: EventBus, shots: Arc<ScreenshotSta
 
 pub async fn observe_warframe_activity<S: LogSource>(
     events: EventBus,
+    http: reqwest::Client,
     screenshot: Arc<ScreenshotState>,
     source: S,
     warframe_pid: Option<u32>,
@@ -425,6 +437,7 @@ pub async fn observe_warframe_activity<S: LogSource>(
 ) -> Result<(), Box<dyn std::error::Error>> {
     observe_warframe_activity_with_lifecycle(
         events,
+        http,
         screenshot,
         source,
         warframe_pid,
@@ -436,6 +449,7 @@ pub async fn observe_warframe_activity<S: LogSource>(
 
 pub async fn observe_warframe_activity_with_lifecycle<S: LogSource>(
     events: EventBus,
+    http: reqwest::Client,
     screenshot: Arc<ScreenshotState>,
     mut source: S,
     warframe_pid: Option<u32>,
@@ -444,7 +458,7 @@ pub async fn observe_warframe_activity_with_lifecycle<S: LogSource>(
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Watching for Warframe activity...");
     let log_processor = LogProcessingEngine::new()?;
-    let mut state = WatchState::new(events, screenshot, warframe_pid, auto_callbacks);
+    let mut state = WatchState::new(events, http, screenshot, warframe_pid, auto_callbacks);
     let mut assembler = LineAssembler::default();
 
     loop {
@@ -629,6 +643,7 @@ mod tests {
         event_emitter_fn(
             WatchState::new(
                 EventBus::new(),
+                reqwest::Client::new(),
                 Arc::new(ScreenshotState::default()),
                 None,
                 AutoCallbacks::Skip,
@@ -884,6 +899,7 @@ mod tests {
 
         observe_warframe_activity(
             EventBus::new(),
+            reqwest::Client::new(),
             Arc::new(ScreenshotState::default()),
             source,
             Some(1234),

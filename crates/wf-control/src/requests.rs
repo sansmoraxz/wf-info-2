@@ -27,8 +27,11 @@ use super::wfm_auth::{
 pub struct Handles {
     pub events: EventBus,
     pub wfm: WfmHandle,
+    /// Process-wide HTTP client; clones share the same connection pool.
+    pub http: reqwest::Client,
     pub(crate) market: Arc<MarketCache>,
     pub(crate) inventory_index: Arc<InventoryIndexCache>,
+    pub(crate) item_index: Arc<wf_itemdata::item_data::ItemIndex>,
     pub screenshot: Arc<ScreenshotState>,
 }
 
@@ -36,11 +39,14 @@ impl Handles {
     /// Build all handles, spawning the WFM actor. Must run inside a tokio
     /// runtime.
     pub fn new(screenshot: ScreenshotConfig) -> Self {
+        let http = reqwest::Client::new();
         Self {
             events: EventBus::new(),
             wfm: WfmHandle::spawn(),
-            market: Arc::default(),
+            market: Arc::new(MarketCache::from(http.clone())),
+            http,
             inventory_index: Arc::default(),
+            item_index: Arc::default(),
             screenshot: Arc::new(screenshot.into()),
         }
     }

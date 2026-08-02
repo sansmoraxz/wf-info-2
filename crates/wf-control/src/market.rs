@@ -11,7 +11,7 @@ use wf_inventory::Inventory;
 
 use super::requests::{HandleOp, Handles};
 use super::utils::wfm_get;
-use wf_itemdata::item_data::lookup_item_info;
+use wf_itemdata::item_data::ItemIndex;
 
 const CACHE_TTL: Duration = Duration::from_secs(3600); // 1 hour
 
@@ -204,21 +204,33 @@ impl WfmCache {
 
 /// Shared, lazily refreshed handle to the WFM item cache. Owned by the
 /// composition root as `Arc<MarketCache>`; handlers take snapshots from it.
-#[derive(Default)]
-pub(crate) struct MarketCache(arc_swap::ArcSwapOption<WfmCache>);
+/// Holds a clone of the process-wide HTTP client for all market REST calls.
+pub(crate) struct MarketCache {
+    http: reqwest::Client,
+    cache: arc_swap::ArcSwapOption<WfmCache>,
+}
+
+impl From<reqwest::Client> for MarketCache {
+    fn from(http: reqwest::Client) -> Self {
+        Self {
+            http,
+            cache: arc_swap::ArcSwapOption::empty(),
+        }
+    }
+}
 
 impl MarketCache {
     /// Return a snapshot of the item cache, refreshing it first if stale or
     /// absent. Callers do all lookups against the returned snapshot.
     async fn ensure(&self) -> Result<Arc<WfmCache>> {
-        match self.0.load().as_ref() {
+        match self.cache.load().as_ref() {
             Some(cache) if !cache.is_stale() => Ok(Arc::clone(cache)),
             _ => self.refresh().await,
         }
     }
 
     async fn refresh(&self) -> Result<Arc<WfmCache>> {
-        let resp: WfmItemsResponse = wfm_get("items").await?;
+        let resp: WfmItemsResponse = wfm_get(&self.http, "items").await?;
 
         let mut game_ref_index = HashMap::new();
         let mut id_index = HashMap::new();
@@ -257,7 +269,7 @@ impl MarketCache {
             last_refreshed_at: Utc::now(),
         });
 
-        self.0.store(Some(Arc::clone(&cache)));
+        self.cache.store(Some(Arc::clone(&cache)));
 
         Ok(cache)
     }
@@ -276,15 +288,15 @@ struct WfmItemDetail {
     set_parts: Option<Vec<WfmId>>,
 }
 
-async fn fetch_item_detail(slug: &str) -> Result<WfmItemDetail> {
-    let resp: WfmItemDetailResponse = wfm_get(&format!("items/{}", slug)).await?;
+async fn fetch_item_detail(client: &reqwest::Client, slug: &str) -> Result<WfmItemDetail> {
+    let resp: WfmItemDetailResponse = wfm_get(client, &format!("items/{}", slug)).await?;
     Ok(resp.data)
 }
 
 // ── Order fetching ──
 
-async fn fetch_orders(slug: &str) -> Result<Vec<WfmOrder>> {
-    let resp: WfmOrdersResponse = wfm_get(&format!("orders/item/{}", slug)).await?;
+async fn fetch_orders(client: &reqwest::Client, slug: &str) -> Result<Vec<WfmOrder>> {
+    let resp: WfmOrdersResponse = wfm_get(client, &format!("orders/item/{}", slug)).await?;
     Ok(resp.data)
 }
 
@@ -493,12 +505,13 @@ impl HandleOp for MarketPriceParams {
     type Response = MarketPriceResponse;
 
     async fn handle(self, cx: &Handles) -> Result<Self::Response> {
-        handle_market_price(&cx.market, self).await
+        handle_market_price(&cx.market, &cx.item_index, self).await
     }
 }
 
 pub(crate) async fn handle_market_price(
     market: &MarketCache,
+    item_index: &ItemIndex,
     params: MarketPriceParams,
 ) -> Result<MarketPriceResponse> {
     if params.item_type.is_none() && params.search.is_none() {
@@ -524,7 +537,7 @@ pub(crate) async fn handle_market_price(
     let wfm_item = wfm_item.ok_or_else(|| anyhow!("Item not found on warframe.market"))?;
 
     // Fetch orders
-    let orders = fetch_orders(&wfm_item.slug).await?;
+    let orders = fetch_orders(&market.http, &wfm_item.slug).await?;
     let prices = summarize_orders(&orders);
 
     // Inventory count (graceful)
@@ -540,14 +553,14 @@ pub(crate) async fn handle_market_price(
     let details = wfm_item
         .game_ref
         .as_ref()
-        .and_then(|gr| lookup_item_info(gr.as_ref(), None))
+        .and_then(|gr| item_index.lookup(gr.as_ref(), None))
         .map(|info| info.details.clone());
 
     // Set parts: detect set items by "set" tag, then fetch detail for setParts
     let include_parts = params.include_parts.unwrap_or(true);
     let is_set = wfm_item.tags.contains(&"set".to_string());
     let set_parts = if include_parts && is_set {
-        match fetch_item_detail(&wfm_item.slug).await {
+        match fetch_item_detail(&market.http, &wfm_item.slug).await {
             Ok(detail) => {
                 if let Some(ref part_ids) = detail.set_parts {
                     let mut parts = Vec::new();
@@ -557,7 +570,7 @@ pub(crate) async fn handle_market_price(
                             continue;
                         }
                         if let Some(part) = cache.lookup_by_id(part_id) {
-                            let part_orders = fetch_orders(&part.slug).await?;
+                            let part_orders = fetch_orders(&market.http, &part.slug).await?;
                             let part_prices = summarize_orders(&part_orders);
 
                             let part_owned = inventory.as_ref().and_then(|inv| {
@@ -621,7 +634,7 @@ pub(crate) async fn fetch_market_summary(
 ) -> Option<MarketSummary> {
     let cache = market.ensure().await.ok()?;
     let wfm_item = cache.lookup_by_game_ref(game_ref)?;
-    let orders = fetch_orders(&wfm_item.slug).await.ok()?;
+    let orders = fetch_orders(&market.http, &wfm_item.slug).await.ok()?;
     let prices = summarize_orders(&orders);
 
     Some(MarketSummary {
