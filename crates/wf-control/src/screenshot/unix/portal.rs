@@ -1,4 +1,5 @@
 use std::fs;
+use std::num::NonZeroI32;
 use std::os::fd::{AsRawFd, OwnedFd};
 use std::time::{Duration, Instant};
 
@@ -14,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use wf_core::storage;
 
-use super::common::{ensure_bmp_bytes, new_bmp_rgb24};
+use super::common::BmpRgb24;
 
 const RESTORE_TOKEN_FILE: &str = "unix_screencast_token.json";
 const FRAME_TIMEOUT: Duration = Duration::from_secs(5);
@@ -188,14 +189,18 @@ fn sample_to_bmp(sample: gst::Sample) -> Result<Vec<u8>> {
 
     let width = info.width();
     let height = info.height();
-    if width == 0 || height == 0 {
-        bail!("Wayland ScreenCast returned an invalid frame size: {width}x{height}");
-    }
+    let frame_dim = |dim: u32, name: &str| {
+        i32::try_from(dim)
+            .ok()
+            .and_then(NonZeroI32::new)
+            .ok_or_else(|| {
+                anyhow!("Wayland ScreenCast returned an invalid frame {name}: {width}x{height}")
+            })
+    };
 
     let source_row_len = width as usize * 4;
     let stride = info.stride()[0] as usize;
-    let (mut bmp, bmp_stride) = new_bmp_rgb24(width, height)?;
-    let pixel_offset = 54usize;
+    let mut bmp = BmpRgb24::new(frame_dim(width, "width")?, frame_dim(height, "height")?)?;
 
     let convert_start = Instant::now();
     for row in 0..height as usize {
@@ -209,24 +214,18 @@ fn sample_to_bmp(sample: gst::Sample) -> Result<Vec<u8>> {
             .as_slice()
             .get(start..end)
             .ok_or_else(|| anyhow!("Wayland ScreenCast frame buffer is smaller than expected"))?;
-        let bmp_row_start = pixel_offset + row * bmp_stride;
-        let bmp_row = &mut bmp[bmp_row_start..bmp_row_start + width as usize * 3];
-        for (out, pixel) in bmp_row.chunks_exact_mut(3).zip(row_bytes.chunks_exact(4)) {
-            out.copy_from_slice(&pixel[..3]);
-        }
+        bmp.copy_bgrx_row(row, row_bytes);
     }
     log::trace!(
         "Screenshot Wayland portal BGRA-to-BMP pixel conversion completed in {:?}",
         convert_start.elapsed()
     );
-
-    ensure_bmp_bytes(&bmp, "Wayland ScreenCast portal capture")?;
     log::trace!(
         "Screenshot Wayland portal sample_to_bmp completed in {:?}",
         total_start.elapsed()
     );
 
-    Ok(bmp)
+    Ok(bmp.into_bytes())
 }
 
 fn restore_token_path() -> Result<std::path::PathBuf> {

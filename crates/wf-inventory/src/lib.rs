@@ -251,9 +251,7 @@ where
 }
 
 fn ms_to_dt(ms: i64) -> Option<DateTime<Utc>> {
-    let secs = ms / 1000;
-    let nsec = ((ms % 1000).unsigned_abs() as u32) * 1_000_000;
-    Utc.timestamp_opt(secs, nsec).single()
+    Utc.timestamp_millis_opt(ms).single()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

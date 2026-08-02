@@ -77,6 +77,8 @@ pub struct ScreenshotEvent {
     pub content_type: String,
 }
 
+/// What gets persisted to the events log: everything except the pixel data,
+/// which only ever lives in memory.
 #[derive(Debug, Serialize)]
 struct ScreenshotEventLogEntry<'a> {
     id: &'a str,

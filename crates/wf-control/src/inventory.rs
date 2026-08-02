@@ -486,16 +486,12 @@ pub fn inventory_summary(inventory: &Inventory) -> InventorySummary {
 }
 
 fn epoch_to_datetime(value: i64) -> DateTime<Utc> {
-    let (secs, nsec) = if value > 1_000_000_000_000 {
-        let secs = value / 1000;
-        let nsec = ((value % 1000).unsigned_abs() as u32) * 1_000_000;
-        (secs, nsec)
+    let result = if value > 1_000_000_000_000 {
+        Utc.timestamp_millis_opt(value)
     } else {
-        (value, 0)
+        Utc.timestamp_opt(value, 0)
     };
-    Utc.timestamp_opt(secs, nsec)
-        .single()
-        .unwrap_or_else(Utc::now)
+    result.single().unwrap_or_else(Utc::now)
 }
 
 #[cfg(test)]

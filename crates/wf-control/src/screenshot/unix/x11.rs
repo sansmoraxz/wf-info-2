@@ -1,3 +1,4 @@
+use std::num::NonZeroI32;
 use std::time::Instant;
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -9,7 +10,7 @@ use x11rb::protocol::xproto::{
 };
 use x11rb::rust_connection::RustConnection;
 
-use super::common::{WARFRAME_CLASS_HINTS, WARFRAME_TITLE_HINTS, ensure_bmp_bytes, new_bmp_rgb24};
+use super::common::{BmpRgb24, WARFRAME_CLASS_HINTS, WARFRAME_TITLE_HINTS};
 
 struct X11Context {
     conn: RustConnection,
@@ -109,7 +110,6 @@ pub(super) fn capture_window(window_id: &str) -> Result<Vec<u8>> {
         bytes.len(),
         encode_start.elapsed()
     );
-    ensure_bmp_bytes(&bytes, "X11 window capture")?;
     log::trace!(
         "Screenshot X11 capture_window completed in {:?}",
         total_start.elapsed()
@@ -262,8 +262,12 @@ fn encode_x11_image_bmp(
         .len()
         .checked_div(height_usize)
         .ok_or_else(|| anyhow!("Invalid X11 image height"))?;
-    let (mut bmp, bmp_stride) = new_bmp_rgb24(u32::from(width), u32::from(height))?;
-    let pixel_offset = 54usize;
+    let mut bmp = BmpRgb24::new(
+        NonZeroI32::new(i32::from(width))
+            .ok_or_else(|| anyhow!("X11 image has invalid width"))?,
+        NonZeroI32::new(i32::from(height))
+            .ok_or_else(|| anyhow!("X11 image has invalid height"))?,
+    )?;
 
     if bytes_per_pixel == 4
         && conn.setup().image_byte_order == ImageOrder::LSB_FIRST
@@ -278,13 +282,9 @@ fn encode_x11_image_bmp(
                 .data
                 .get(source_start..source_end)
                 .ok_or_else(|| anyhow!("X11 image data ended unexpectedly"))?;
-            let bmp_row_start = pixel_offset + y * bmp_stride;
-            let bmp_row = &mut bmp[bmp_row_start..bmp_row_start + width_usize * 3];
-            for (out, pixel) in bmp_row.chunks_exact_mut(3).zip(source_row.chunks_exact(4)) {
-                out.copy_from_slice(&pixel[..3]);
-            }
+            bmp.copy_bgrx_row(y, source_row);
         }
-        return Ok(bmp);
+        return Ok(bmp.into_bytes());
     }
 
     for y in 0..height_usize {
@@ -296,14 +296,19 @@ fn encode_x11_image_bmp(
                 bytes_per_pixel,
                 conn.setup().image_byte_order,
             )?;
-            let bmp_offset = pixel_offset + y * bmp_stride + x * 3;
-            bmp[bmp_offset] = component(pixel, visual.blue_mask);
-            bmp[bmp_offset + 1] = component(pixel, visual.green_mask);
-            bmp[bmp_offset + 2] = component(pixel, visual.red_mask);
+            bmp.set_pixel_bgr(
+                x,
+                y,
+                [
+                    component(pixel, visual.blue_mask),
+                    component(pixel, visual.green_mask),
+                    component(pixel, visual.red_mask),
+                ],
+            );
         }
     }
 
-    Ok(bmp)
+    Ok(bmp.into_bytes())
 }
 
 fn read_pixel(
@@ -338,7 +343,8 @@ fn component(pixel: u32, mask: u32) -> u8 {
     }
 
     let shift = mask.trailing_zeros();
-    let max = mask >> shift;
-    let value = (pixel & mask) >> shift;
-    ((value * 255 + max / 2) / max) as u8
+    let max = u64::from(mask >> shift);
+    let value = u64::from((pixel & mask) >> shift);
+    // value <= max, so the rounded scale is always <= 255.
+    u8::try_from((value * 255 + max / 2) / max).unwrap_or(u8::MAX)
 }

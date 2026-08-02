@@ -407,15 +407,16 @@ pub fn count_in_inventory(inventory: &Inventory, item_type: &str) -> i64 {
     // Equipment categories: each entry is 1 owned
     macro_rules! count_vec {
         ($field:expr) => {
-            $field.iter().filter(|i| i.item_type == item_type).count() as i64
+            i64::try_from($field.iter().filter(|i| i.item_type == item_type).count())
+                .unwrap_or(i64::MAX)
         };
     }
     macro_rules! count_opt_vec {
         ($field:expr) => {
-            $field
-                .as_ref()
-                .map(|v| v.iter().filter(|i| i.item_type == item_type).count() as i64)
-                .unwrap_or(0)
+            $field.as_ref().map_or(0, |v| {
+                i64::try_from(v.iter().filter(|i| i.item_type == item_type).count())
+                    .unwrap_or(i64::MAX)
+            })
         };
     }
 
