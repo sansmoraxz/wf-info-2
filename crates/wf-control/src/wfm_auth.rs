@@ -79,12 +79,30 @@ struct WsMessage {
 // ── WS routes ──
 
 /// Outbound command routes on the WFM socket.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    strum::Display,
+    strum::EnumString,
+    serde_with::SerializeDisplay,
+)]
 enum WsRoute {
     #[strum(serialize = "@wfm|cmd/auth/signIn")]
     AuthSignIn,
     #[strum(serialize = "@wfm|cmd/status/set")]
     StatusSet,
+}
+
+/// Outbound message envelope on the WFM socket:
+/// `{"route": ..., "payload": ...}`.
+#[derive(Serialize)]
+struct WsCommand<'a, T> {
+    route: WsRoute,
+    payload: &'a T,
 }
 
 /// Server-pushed event routes on the WFM socket.
@@ -218,8 +236,18 @@ impl WsConnection {
     /// Authenticate on the socket, consuming the connection. On failure the
     /// connection is dropped — an unauthenticated session can never leak out.
     async fn authenticate(mut self, tokens: AuthTokenData) -> Result<WfmSession, WfmError> {
+        #[derive(Serialize)]
+        struct SignInPayload<'a> {
+            token: &'a str,
+        }
+
         let rx = self
-            .send_command(WsRoute::AuthSignIn, json!({ "token": tokens.access_token }))
+            .send_command(
+                WsRoute::AuthSignIn,
+                &SignInPayload {
+                    token: &tokens.access_token,
+                },
+            )
             .await?;
         await_reply(rx)
             .await?
@@ -236,20 +264,20 @@ impl WsConnection {
 
     /// Register a pending reply slot and send the command. The returned
     /// receiver resolves when the recv loop delivers the matching reply.
-    async fn send_command(
+    async fn send_command<T>(
         &mut self,
         route: WsRoute,
-        payload: Value,
-    ) -> Result<oneshot::Receiver<WsReply>, WfmError> {
+        payload: &T,
+    ) -> Result<oneshot::Receiver<WsReply>, WfmError>
+    where
+        T: Serialize,
+    {
         let (tx, rx) = oneshot::channel();
-        let json_msg = json!({
-            "route": route.to_string(),
-            "payload": payload,
-        });
+        let json_msg = serde_json::to_string(&WsCommand { route, payload })?;
 
         self.pending.lock().await.insert(route, tx);
         self.ws_tx
-            .send(tungstenite::Message::Text(json_msg.to_string().into()))
+            .send(tungstenite::Message::Text(json_msg.into()))
             .await
             .map_err(|e| WfmError::WsSend(e.to_string()))?;
         Ok(rx)
@@ -322,7 +350,7 @@ enum WfmCmd {
     },
     SignOut,
     SetStatus {
-        payload: Value,
+        payload: StatusSetPayload,
         reply: oneshot::Sender<Result<oneshot::Receiver<WsReply>, WfmError>>,
     },
     GetSession {
@@ -375,7 +403,7 @@ impl WfmHandle {
 
     /// Send a status/set command and wait for the server reply. The actor
     /// only performs the (fast) WS write; this method awaits the reply.
-    async fn set_status(&self, payload: Value) -> Result<WsReply, WfmError> {
+    async fn set_status(&self, payload: StatusSetPayload) -> Result<WsReply, WfmError> {
         let (tx, rx) = oneshot::channel();
         self.send(WfmCmd::SetStatus { payload, reply: tx }).await?;
         let reply_rx = rx.await??;
@@ -496,7 +524,7 @@ async fn actor_loop(handle: WfmHandle, mut rx: mpsc::Receiver<WfmCmd>) {
             WfmCmd::SignOut | WfmCmd::Disconnected => state.sign_out(),
             WfmCmd::SetStatus { payload, reply } => {
                 let result = match state.session_mut() {
-                    Some(session) => session.conn.send_command(WsRoute::StatusSet, payload).await,
+                    Some(session) => session.conn.send_command(WsRoute::StatusSet, &payload).await,
                     None => Err(WfmError::NotConnected),
                 };
                 reply.send(result).ok();
@@ -665,15 +693,13 @@ pub(crate) async fn handle_wfm_signstatus(
         .parse::<Status>()
         .map_err(|_| WfmError::InvalidStatus(raw_status))?;
 
-    // Build payload with PATCH semantics for duration:
+    // PATCH semantics for duration:
     // None serializes as omitted, Some(None) as null, Some(Some(n)) as n
-    let payload = serde_json::to_value(StatusSetPayload {
+    wfm.set_status(StatusSetPayload {
         status,
         duration: p.duration,
-    })?;
-
-    wfm.set_status(payload)
-        .await?
+    })
+    .await?
         .into_result()
         .map_err(|e| WfmError::StatusUpdateFailed(e.to_string()))?;
 
@@ -763,7 +789,11 @@ pub async fn set_status_if_connected(wfm: &WfmHandle, status: Status) {
         return;
     }
 
-    match wfm.set_status(json!({ "status": status })).await {
+    let payload = StatusSetPayload {
+        status,
+        duration: None,
+    };
+    match wfm.set_status(payload).await {
         Ok(_) => {
             wfm.record_status(status).await;
             log::info!("WFM status set to '{status}'");
