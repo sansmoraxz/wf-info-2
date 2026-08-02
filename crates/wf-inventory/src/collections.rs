@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::ObjectId;
+use crate::{ItemType, ObjectId};
 
 /// Represents a fusion treasure (relic) with socket info.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FusionTreasure {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "ItemCount")]
     pub item_count: i64,
@@ -20,7 +20,7 @@ pub struct FusionTreasure {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QuestKey {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "Completed")]
     pub completed: Option<bool>,
@@ -38,7 +38,7 @@ pub struct QuestKey {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Booster {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "ExpiryDate")]
     pub expiry_date: Option<i64>,
@@ -48,7 +48,7 @@ pub struct Booster {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct XPInfoEntry {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "XP")]
     pub xp: i64,
@@ -58,7 +58,7 @@ pub struct XPInfoEntry {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CrewShipSalvagedWeapon {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,
@@ -86,7 +86,7 @@ pub struct CrewShipSalvagedWeapon {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CrewShipWeaponSkin {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,
@@ -102,7 +102,7 @@ pub struct CrewShipWeaponSkin {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KubrowPetPrint {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,
@@ -124,7 +124,7 @@ pub struct KubrowPetPrint {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvolutionProgress {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "Progress")]
     pub progress: Option<i64>,
@@ -137,7 +137,7 @@ pub struct EvolutionProgress {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpectreLoadout {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "Suits")]
     pub suits: Option<String>,

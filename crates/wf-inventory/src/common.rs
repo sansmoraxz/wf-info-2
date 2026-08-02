@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::ObjectId;
+use crate::{ItemType, ObjectId};
 
 /// Simple countable item (Consumables, MiscItems, ShipDecorations, LevelKeys, etc.)
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CountableItem {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "ItemCount")]
     pub item_count: i64,
@@ -20,7 +20,7 @@ pub struct CountableItem {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TypeOnlyItem {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(flatten)]
     pub other: Option<Value>,
@@ -30,7 +30,7 @@ pub struct TypeOnlyItem {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WeaponSkin {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,

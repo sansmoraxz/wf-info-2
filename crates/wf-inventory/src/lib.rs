@@ -133,6 +133,37 @@ pub struct ObjectId {
     oid: String,
 }
 
+/// An item's canonical `ItemType` type path, e.g. `/Lotus/Powersuits/...`.
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::AsRef,
+)]
+#[serde(transparent)]
+#[from(forward)]
+#[as_ref(str)]
+pub struct ItemType(String);
+
+impl std::borrow::Borrow<str> for ItemType {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
+impl PartialEq<&str> for ItemType {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Polarity {
     #[serde(rename = "Value")]

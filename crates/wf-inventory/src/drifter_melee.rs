@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::ObjectId;
+use crate::{ItemType, ObjectId};
 
 /// Represents a Drifter melee weapon in the inventory.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DrifterMelee {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,

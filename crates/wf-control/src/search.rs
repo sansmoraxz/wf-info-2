@@ -14,7 +14,7 @@ use tantivy::schema::{
 use tantivy::tokenizer::NgramTokenizer;
 
 use wf_core::storage;
-use wf_inventory::Inventory;
+use wf_inventory::{Inventory, ItemType};
 
 use wf_itemdata::item_data::ItemIndex;
 
@@ -90,7 +90,7 @@ impl InventoryIndexCache {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ItemEnvelope<T> {
-    pub item_type: String,
+    pub item_type: ItemType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub item_id: Option<String>,
     // details/market are injected after tantivy retrieval and are never part
@@ -205,7 +205,7 @@ pub trait EnvelopeAccess {
 
 impl<T: HasOther> EnvelopeAccess for ItemEnvelope<T> {
     fn item_type(&self) -> &str {
-        &self.item_type
+        self.item_type.as_ref()
     }
     fn set_details(&mut self, details: wf_itemdata::item_data::ItemDetails) {
         self.details = Some(details);
@@ -331,7 +331,7 @@ pub fn collect_inventory_items<'a>(
 
     fn envelope<T: Clone + HasOther>(
         item: &T,
-        item_type: &str,
+        item_type: &ItemType,
         item_id: Option<String>,
     ) -> ItemEnvelope<T> {
         let mut item = item.clone();
@@ -341,7 +341,7 @@ pub fn collect_inventory_items<'a>(
             }
         }
         ItemEnvelope {
-            item_type: item_type.to_string(),
+            item_type: item_type.clone(),
             item_id,
             details: None,
             market: None,
@@ -589,7 +589,7 @@ mod tests {
                 assert_eq!(views.len(), inventory.$field.len(), $cat);
                 for (view, item) in views.iter().zip(&inventory.$field) {
                     let id: Option<&str> = $id(item);
-                    let expected = legacy(item, $cat, &item.item_type, id);
+                    let expected = legacy(item, $cat, item.item_type.as_ref(), id);
                     assert_eq!(
                         serde_json::to_value(&view.envelope).unwrap(),
                         expected,

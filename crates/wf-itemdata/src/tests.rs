@@ -1634,7 +1634,7 @@ fn test_map_warframe_inventory() {
         .iter()
         .map(
             |(key, info): (&String, &itemdata::warframe::WarframeEntry)| {
-                let inv_data = inv_index.get(key).cloned();
+                let inv_data = inv_index.get(key.as_str()).cloned();
                 Data {
                     info: info.clone(),
                     inventory: inv_data,

@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use crate::ItemType;
 
 /// Represents syndicate/faction standing.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -50,7 +51,7 @@ pub struct ChallengeProgressEntry {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LoreFragmentScan {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "Progress")]
     pub progress: Option<i64>,

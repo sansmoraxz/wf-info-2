@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{ObjectId, Polarity};
+use crate::{ItemType, ObjectId, Polarity};
 
 /// Represents a Railjack reactor/harness in the inventory.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CrewShipHarness {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,

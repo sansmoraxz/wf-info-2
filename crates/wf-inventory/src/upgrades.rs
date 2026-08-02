@@ -2,13 +2,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{PickFirst, Same, json::JsonString, serde_as};
 
-use crate::ObjectId;
+use crate::{ItemType, ObjectId};
 
 /// Represent unupgraded mods
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RawUpgrade {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "LastAdded")]
     pub last_added_id: ObjectId,
@@ -25,7 +25,7 @@ pub struct RawUpgrade {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Upgrade {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{DateWrapper, ObjectId, Polarity};
+use crate::{DateWrapper, ItemType, ObjectId, Polarity};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArchonCrystalUpgrade {
@@ -22,7 +22,7 @@ pub enum ArchonCrystalUpgradeWrapper {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Suit {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,

@@ -53,6 +53,31 @@ pub struct GameRef(String);
 #[as_ref(str)]
 pub struct WfmId(String);
 
+/// warframe.market URL slug (e.g. `harrow_prime_set`), used to build API
+/// paths. Not a [`GameRef`] and not a display name.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::AsRef,
+)]
+#[serde(transparent)]
+#[from(forward)]
+#[as_ref(str)]
+pub struct Slug(String);
+
+impl Slug {
+    fn contains(&self, needle: &str) -> bool {
+        self.0.contains(needle)
+    }
+}
+
 // ── Types for WFM API responses ──
 
 #[derive(Debug, Clone, Deserialize)]
@@ -63,7 +88,7 @@ struct WfmItemsResponse {
 #[derive(Debug, Clone, Deserialize)]
 struct WfmItemRaw {
     id: WfmId,
-    slug: String,
+    slug: Slug,
     #[serde(rename = "gameRef")]
     game_ref: Option<GameRef>,
     #[serde(default)]
@@ -130,7 +155,7 @@ struct WfmOrderUser {
 #[derive(Debug, Clone)]
 pub struct WfmItem {
     pub id: WfmId,
-    pub slug: String,
+    pub slug: Slug,
     pub game_ref: Option<GameRef>,
     pub name: String,
     pub tags: Vec<String>,
@@ -242,7 +267,7 @@ impl MarketCache {
                 .as_ref()
                 .and_then(|i| i.en.as_ref())
                 .and_then(|l| l.name.clone())
-                .unwrap_or_else(|| raw.slug.replace('_', " "));
+                .unwrap_or_else(|| raw.slug.as_ref().replace('_', " "));
 
             let item = WfmItem {
                 id: raw.id,
@@ -288,14 +313,14 @@ struct WfmItemDetail {
     set_parts: Option<Vec<WfmId>>,
 }
 
-async fn fetch_item_detail(client: &reqwest::Client, slug: &str) -> Result<WfmItemDetail> {
+async fn fetch_item_detail(client: &reqwest::Client, slug: &Slug) -> Result<WfmItemDetail> {
     let resp: WfmItemDetailResponse = wfm_get(client, &format!("items/{slug}")).await?;
     Ok(resp.data)
 }
 
 // ── Order fetching ──
 
-async fn fetch_orders(client: &reqwest::Client, slug: &str) -> Result<Vec<WfmOrder>> {
+async fn fetch_orders(client: &reqwest::Client, slug: &Slug) -> Result<Vec<WfmOrder>> {
     let resp: WfmOrdersResponse = wfm_get(client, &format!("orders/item/{slug}")).await?;
     Ok(resp.data)
 }
@@ -320,7 +345,7 @@ pub struct OrderSummary {
 /// Market price summary for a single item
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MarketSummary {
-    pub slug: String,
+    pub slug: Slug,
     pub ducats: Option<i64>,
     pub prices: OrderSummary,
     pub cache_age_secs: Option<i64>,
@@ -461,7 +486,7 @@ pub struct MarketPriceParams {
 #[derive(Debug, Serialize)]
 pub struct MarketItemInfo {
     pub name: String,
-    pub slug: String,
+    pub slug: Slug,
     pub game_ref: Option<GameRef>,
     pub ducats: Option<i64>,
     pub tags: Vec<String>,
@@ -476,7 +501,7 @@ pub struct OwnedCount {
 #[derive(Debug, Serialize)]
 pub struct SetPartInfo {
     pub name: String,
-    pub slug: String,
+    pub slug: Slug,
     pub game_ref: Option<GameRef>,
     pub ducats: Option<i64>,
     pub prices: OrderSummary,
@@ -498,7 +523,7 @@ pub struct MarketPriceResponse {
 #[derive(Debug, Serialize)]
 pub struct MarketRefreshResponse {
     pub items_count: usize,
-    pub refreshed_at: String,
+    pub refreshed_at: DateTime<Utc>,
 }
 
 impl HandleOp for MarketPriceParams {
@@ -622,7 +647,7 @@ pub async fn handle_market_refresh(market: &MarketCache) -> Result<MarketRefresh
 
     Ok(MarketRefreshResponse {
         items_count: cache.item_count,
-        refreshed_at: cache.last_refreshed_at.to_rfc3339(),
+        refreshed_at: cache.last_refreshed_at,
     })
 }
 
@@ -668,7 +693,7 @@ mod tests {
     #[test]
     fn market_summary_matches_legacy_shape() {
         let summary = MarketSummary {
-            slug: "harrow_prime_set".to_string(),
+            slug: Slug::from("harrow_prime_set"),
             ducats: Some(100),
             prices: OrderSummary {
                 sell: price_stats(&[15.0]),
@@ -697,7 +722,7 @@ mod tests {
         let response = MarketPriceResponse {
             item: MarketItemInfo {
                 name: "Harrow Prime Set".to_string(),
-                slug: "harrow_prime_set".to_string(),
+                slug: Slug::from("harrow_prime_set"),
                 game_ref: None,
                 ducats: None,
                 tags: vec!["set".to_string()],
