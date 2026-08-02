@@ -191,6 +191,52 @@ impl Response {
     }
 }
 
+/// Client-side view of a [`Response`] line, mirroring [`ResponseBody`]:
+/// success and failure are mutually exclusive, discriminated by the `ok`
+/// wire marker. `data` stays unparsed JSON for printing or forwarding.
+/// The daemon serializes [`Response`]; clients deserialize this.
+///
+/// Deserialized via [`ResponseEnvelopeWire`] rather than `untagged`:
+/// untagged enums buffer into serde's internal representation, which
+/// [`RawValue`] cannot be recovered from.
+#[derive(Debug, Deserialize)]
+#[serde(from = "ResponseEnvelopeWire")]
+pub enum ResponseEnvelope {
+    Ok {
+        id: Option<String>,
+        data: Option<Box<RawValue>>,
+    },
+    Err {
+        id: Option<String>,
+        error: String,
+    },
+}
+
+/// Flat wire shape [`ResponseEnvelope`] derives its `Deserialize` through.
+#[derive(Deserialize)]
+struct ResponseEnvelopeWire {
+    id: Option<String>,
+    ok: bool,
+    error: Option<String>,
+    data: Option<Box<RawValue>>,
+}
+
+impl From<ResponseEnvelopeWire> for ResponseEnvelope {
+    fn from(wire: ResponseEnvelopeWire) -> Self {
+        if wire.ok {
+            Self::Ok {
+                id: wire.id,
+                data: wire.data,
+            }
+        } else {
+            Self::Err {
+                id: wire.id,
+                error: wire.error.unwrap_or_else(|| "unknown error".to_owned()),
+            }
+        }
+    }
+}
+
 /// Outcome of handling a request line: either a plain reply, or a reply that
 /// transitions the connection into subscription mode.
 pub(super) enum HandleOutcome {
@@ -349,6 +395,35 @@ mod tests {
             json!(["game_start"])
         );
         assert!(matches!(outcome, HandleOutcome::EnterSubscription { .. }));
+    }
+
+    /// [`ResponseEnvelope`] must keep parsing whatever [`Response`]
+    /// serializes — ok and error shapes both.
+    #[test]
+    fn response_envelope_round_trips_both_response_shapes() {
+        let ok = Response::ok(
+            Some("7".into()),
+            PingResponse {
+                pong: monostate::MustBe!(true),
+            }
+            .into(),
+        );
+        let raw = serde_json::to_string(&ok).unwrap();
+        let envelope: ResponseEnvelope = serde_json::from_str(&raw).unwrap();
+        let ResponseEnvelope::Ok { id, data, .. } = envelope else {
+            panic!("ok response parsed as Err variant");
+        };
+        assert_eq!(id.as_deref(), Some("7"));
+        assert_eq!(data.unwrap().get(), r#"{"pong":true}"#);
+
+        let err = Response::error(None, "boom".into());
+        let raw = serde_json::to_string(&err).unwrap();
+        let envelope: ResponseEnvelope = serde_json::from_str(&raw).unwrap();
+        let ResponseEnvelope::Err { id, error, .. } = envelope else {
+            panic!("error response parsed as Ok variant");
+        };
+        assert_eq!(id, None);
+        assert_eq!(error, "boom");
     }
 
     #[test]

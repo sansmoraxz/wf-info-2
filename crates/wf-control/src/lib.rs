@@ -21,7 +21,7 @@ pub use inventory::{
     TimestampParam,
 };
 pub use market::MarketPriceParams;
-pub use requests::{Handles, Request};
+pub use requests::{Handles, Request, ResponseEnvelope};
 pub use screenshot::{ScreenshotConfig, ScreenshotParams, ScreenshotState, WaylandCapture};
 pub use subscription::SubscribeParams;
 pub use server::{

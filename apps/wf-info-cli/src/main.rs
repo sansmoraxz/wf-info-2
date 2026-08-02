@@ -9,8 +9,8 @@ use tokio::net::TcpStream;
 use wf_control::control_ops::{ControlOp, InventoryOp, ScreenshotOp, WfmOp};
 use wf_control::{
     ControlConfig, ControlEndpoint, FilterParams, LoadInventoryParams, MarketPriceParams,
-    RefreshParams, Request, ScreenshotParams, SigninParams, SignstatusParams, StaleParams,
-    SubscribeParams,
+    RefreshParams, Request, ResponseEnvelope, ScreenshotParams, SigninParams, SignstatusParams,
+    StaleParams, SubscribeParams,
 };
 
 #[cfg(unix)]
@@ -452,13 +452,7 @@ where
 
     // Read subscribe response
     reader.read_line(&mut line).await?;
-    let response: Value = serde_json::from_str(&line)?;
-
-    if response.get("ok") != Some(&Value::Bool(true)) {
-        let error = response
-            .get("error")
-            .and_then(|e| e.as_str())
-            .unwrap_or("Unknown error");
+    if let ResponseEnvelope::Err { error, .. } = serde_json::from_str(&line)? {
         anyhow::bail!("Subscribe failed: {error}");
     }
 
