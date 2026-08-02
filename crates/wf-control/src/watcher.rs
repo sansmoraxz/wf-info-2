@@ -23,6 +23,8 @@ use crate::{
 #[cfg(feature = "memory")]
 use crate::events::Source;
 #[cfg(feature = "memory")]
+use crate::inventory::inventory_summary;
+#[cfg(feature = "memory")]
 use crate::{InventoryFetchedEvent, ProfileUpdatedEvent};
 #[cfg(feature = "memory")]
 use wf_core::{api, inventory_refresh, process, storage};
@@ -351,7 +353,24 @@ async fn handle_login_event(
     };
 
     log::info!("Resolved account authorization from process memory");
-    match api::fetch_player_profile(&http, &auth.account_id).await {
+    refresh_profile(&events, &http, &user_name, &auth.account_id).await;
+
+    if auto_callbacks == AutoCallbacks::Skip {
+        log::info!("Skipping auto fetch inventory. Fetch manually if required.");
+        return;
+    }
+
+    refresh_inventory(&events, &http, pid, auth).await;
+}
+
+#[cfg(feature = "memory")]
+async fn refresh_profile(
+    events: &EventBus,
+    http: &reqwest::Client,
+    user_name: &str,
+    account_id: &str,
+) {
+    match api::fetch_player_profile(http, account_id).await {
         Ok(profile) => {
             log::info!("Fetched profile for {user_name}: {profile:?}");
             if let Err(e) = storage::save_encrypted_profile(&profile) {
@@ -359,7 +378,7 @@ async fn handle_login_event(
             } else {
                 events.emit(DaemonEvent::ProfileUpdated(ProfileUpdatedEvent {
                     timestamp: Utc::now(),
-                    account_id: auth.account_id.clone(),
+                    account_id: account_id.to_owned(),
                 }));
             }
         }
@@ -367,14 +386,17 @@ async fn handle_login_event(
             log::error!("Failed to fetch profile for {user_name}: {e}");
         }
     }
+}
 
-    if auto_callbacks == AutoCallbacks::Skip {
-        log::info!("Skipping auto fetch inventory. Fetch manually if required.");
-        return;
-    }
-
+#[cfg(feature = "memory")]
+async fn refresh_inventory(
+    events: &EventBus,
+    http: &reqwest::Client,
+    pid: u32,
+    auth: process::AuthQuery,
+) {
     match inventory_refresh::fetch_inventory_with_auth_from_process(
-        &http,
+        http,
         pid,
         auth,
         5,
@@ -393,7 +415,7 @@ async fn handle_login_event(
                 events.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
                     timestamp: Utc::now(),
                     source: Source::Auto,
-                    summary: crate::inventory::inventory_summary(&result.inventory),
+                    summary: inventory_summary(&result.inventory),
                 }));
             }
         }
