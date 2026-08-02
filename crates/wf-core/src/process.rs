@@ -301,7 +301,7 @@ fn find_new_warframe_pid(
 /// Warframe.x64.exe hands off to the real game process, and on slow systems
 /// the successor may not be up yet. Tradeoff: a genuine quit is only reported
 /// after this window. Tunable via WF_HANDOFF_GRACE_SECS.
-pub(crate) fn handoff_grace() -> Duration {
+pub fn handoff_grace() -> Duration {
     env::var("WF_HANDOFF_GRACE_SECS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())

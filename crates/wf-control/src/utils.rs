@@ -1,7 +1,7 @@
 use serde::de::DeserializeOwned;
-use serde_json::value::RawValue;
 #[cfg(feature = "cli")]
 use serde_json::Value;
+use serde_json::value::RawValue;
 
 pub(super) const WFM_API_BASE: &str = "https://api.warframe.market/v2";
 pub(super) const WFM_WS_URL: &str = "wss://ws.warframe.market/socket";

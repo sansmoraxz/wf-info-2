@@ -141,9 +141,7 @@ impl InventoryInput {
                 }
             }
             Self::Raw(raw) => serde_json::from_str(&raw).map_err(InventoryError::ParseJson),
-            Self::Json(json) => {
-                serde_json::from_str(json.get()).map_err(InventoryError::ParseJson)
-            }
+            Self::Json(json) => serde_json::from_str(json.get()).map_err(InventoryError::ParseJson),
         }
     }
 }

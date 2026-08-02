@@ -524,7 +524,12 @@ async fn actor_loop(handle: WfmHandle, mut rx: mpsc::Receiver<WfmCmd>) {
             WfmCmd::SignOut | WfmCmd::Disconnected => state.sign_out(),
             WfmCmd::SetStatus { payload, reply } => {
                 let result = match state.session_mut() {
-                    Some(session) => session.conn.send_command(WsRoute::StatusSet, &payload).await,
+                    Some(session) => {
+                        session
+                            .conn
+                            .send_command(WsRoute::StatusSet, &payload)
+                            .await
+                    }
                     None => Err(WfmError::NotConnected),
                 };
                 reply.send(result).ok();
@@ -700,8 +705,8 @@ pub(crate) async fn handle_wfm_signstatus(
         duration: p.duration,
     })
     .await?
-        .into_result()
-        .map_err(|e| WfmError::StatusUpdateFailed(e.to_string()))?;
+    .into_result()
+    .map_err(|e| WfmError::StatusUpdateFailed(e.to_string()))?;
 
     wfm.record_status(status).await;
 

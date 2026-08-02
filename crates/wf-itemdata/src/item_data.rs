@@ -137,7 +137,10 @@ fn build_item_index() -> HashMap<UniqueName, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<warframe::Root>(&raw)
     {
         for item in arr {
-            push_info(Arc::new(ItemDetails::Warframe(item)), Some("Suits".to_owned()));
+            push_info(
+                Arc::new(ItemDetails::Warframe(item)),
+                Some("Suits".to_owned()),
+            );
         }
     }
     // Primary

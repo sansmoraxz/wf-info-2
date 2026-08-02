@@ -287,9 +287,7 @@ impl Commands {
             Self::Screenshot(params) => {
                 request_mode(ControlOp::Screenshot(ScreenshotOp::Trigger), Some(params))
             }
-            Self::WFMarketPrice(params) => {
-                request_mode(ControlOp::Wfm(WfmOp::Price), Some(params))
-            }
+            Self::WFMarketPrice(params) => request_mode(ControlOp::Wfm(WfmOp::Price), Some(params)),
             Self::WFMarketRefresh => request_mode(ControlOp::Wfm(WfmOp::Refresh), NO_PARAMS),
             Self::WfmSignin(params) => request_mode(ControlOp::Wfm(WfmOp::Signin), Some(params)),
             Self::WfmSignout => request_mode(ControlOp::Wfm(WfmOp::Signout), NO_PARAMS),
@@ -328,9 +326,7 @@ fn pretty_print_json(raw: &str) -> Result<String, serde_json::Error> {
 fn request_mode(op: ControlOp, params: Option<impl Serialize>) -> anyhow::Result<CliMode> {
     Ok(CliMode::Request {
         op: op.to_string(),
-        params: params
-            .map(|params| to_raw_value(&params))
-            .transpose()?,
+        params: params.map(|params| to_raw_value(&params)).transpose()?,
     })
 }
 

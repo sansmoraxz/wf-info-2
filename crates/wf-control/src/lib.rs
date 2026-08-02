@@ -23,9 +23,9 @@ pub use inventory::{
 pub use market::MarketPriceParams;
 pub use requests::{Handles, Request, ResponseEnvelope};
 pub use screenshot::{ScreenshotConfig, ScreenshotParams, ScreenshotState, WaylandCapture};
-pub use subscription::SubscribeParams;
 pub use server::{
     ControlConfig, ControlEndpoint, ControlServer, start_control_server,
     start_control_server_from_env,
 };
+pub use subscription::SubscribeParams;
 pub use wfm_auth::{SigninParams, SignstatusParams, WfmHandle};

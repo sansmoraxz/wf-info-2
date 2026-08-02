@@ -14,9 +14,9 @@ use crate::traits::{
     MeleeWeapon as _, Prime as _, RangedWeapon as _, Weapon as _, WikiaLinked as _,
 };
 use crate::{
-    arcane, arch_gun, arch_melee, archwing, enemy, fish, gear, glyph, melee, misc,
-    mods, node, pet, primary, quest, railjack, relics, resource, secondary, sentinel,
-    sentinel_weapon, sigil, skin, warframe,
+    arcane, arch_gun, arch_melee, archwing, enemy, fish, gear, glyph, melee, misc, mods, node, pet,
+    primary, quest, railjack, relics, resource, secondary, sentinel, sentinel_weapon, sigil, skin,
+    warframe,
 };
 use wf_inventory as inventory;
 use wf_inventory::suit::Suit;
