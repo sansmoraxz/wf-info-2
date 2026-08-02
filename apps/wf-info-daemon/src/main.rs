@@ -22,7 +22,7 @@ use wf_control::watcher::{AutoCallbacks, GameLifecycleTracker};
 use wf_control::wfm_auth::WfmHandle;
 use wf_control::{
     self, ControlConfig, ControlEndpoint, DaemonEvent, EventBus, GameStartEvent, Handles,
-    ScreenshotConfig, SystemQuitEvent,
+    ScreenshotConfig, SystemQuitEvent, WaylandCapture,
 };
 #[cfg(windows)]
 use wf_core::logs::DbwinLogSource;
@@ -233,7 +233,11 @@ async fn main() {
     log::info!("Warframe Account Info Scanner started");
 
     let cx = Handles::new(ScreenshotConfig {
-        native_wayland_capture: cli.screenshot.native_wayland_screenshot,
+        wayland_capture: if cli.screenshot.native_wayland_screenshot {
+            WaylandCapture::ForceNative
+        } else {
+            WaylandCapture::PreferXWayland
+        },
     });
 
     if let Err(e) = item_data_fetch::update_cache(&cx.http).await {

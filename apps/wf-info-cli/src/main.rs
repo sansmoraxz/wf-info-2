@@ -273,6 +273,25 @@ struct CallArgs {
 
 // Internal types for request handling
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OutputFormat {
+    Compact,
+    Pretty,
+}
+
+impl OutputFormat {
+    fn print_json_line(self, raw: &str) -> anyhow::Result<()> {
+        match self {
+            Self::Pretty => match serde_json::from_str::<Value>(raw) {
+                Ok(value) => println!("{}", serde_json::to_string_pretty(&value)?),
+                Err(_) => println!("{raw}"),
+            },
+            Self::Compact => println!("{raw}"),
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 struct CliConfig {
     tcp_addr: Option<String>,
@@ -280,7 +299,7 @@ struct CliConfig {
     unix_path: Option<PathBuf>,
     #[cfg(windows)]
     npipe: Option<String>,
-    pretty: bool,
+    output: OutputFormat,
     id: Option<String>,
 }
 
@@ -343,14 +362,14 @@ fn parse_jsonish(raw: &str) -> Value {
 // Conversion implementations
 
 impl ConnectionArgs {
-    fn into_cli_config(self, pretty: bool, id: Option<String>) -> anyhow::Result<CliConfig> {
+    fn into_cli_config(self, output: OutputFormat, id: Option<String>) -> anyhow::Result<CliConfig> {
         let mut cfg = CliConfig {
             tcp_addr: self.tcp,
             #[cfg(unix)]
             unix_path: self.unix,
             #[cfg(windows)]
             npipe: self.npipe,
-            pretty,
+            output,
             id,
         };
 
@@ -643,19 +662,18 @@ impl WFMarketPriceArgs {
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    let cfg = cli.connection.into_cli_config(cli.pretty, cli.id)?;
+    let output = if cli.pretty {
+        OutputFormat::Pretty
+    } else {
+        OutputFormat::Compact
+    };
+    let cfg = cli.connection.into_cli_config(output, cli.id)?;
     let mode = cli.command.into_cli_mode();
 
     match mode {
         CliMode::Request(cmd) => {
             let response = send_request(&cfg, cmd).await?;
-
-            if cfg.pretty {
-                let value: Value = serde_json::from_str(&response)?;
-                println!("{}", serde_json::to_string_pretty(&value)?);
-            } else {
-                println!("{}", response.trim_end());
-            }
+            cfg.output.print_json_line(response.trim_end())?;
         }
         CliMode::Watch(watch_cfg) => {
             run_watch(&cfg, watch_cfg).await?;
@@ -726,7 +744,7 @@ async fn run_watch(cfg: &CliConfig, watch_cfg: WatchConfig) -> anyhow::Result<()
 
     if let Some(addr) = cfg.tcp_addr.as_ref() {
         let stream = TcpStream::connect(&addr).await?;
-        return watch_stream(stream, &payload, cfg.pretty).await;
+        return watch_stream(stream, &payload, cfg.output).await;
     }
 
     #[cfg(windows)]
@@ -734,7 +752,7 @@ async fn run_watch(cfg: &CliConfig, watch_cfg: WatchConfig) -> anyhow::Result<()
         if let Some(pipe) = cfg.npipe.as_ref() {
             let pipe = normalize_npipe_path(pipe);
             let stream = ClientOptions::new().open(&pipe)?;
-            return watch_stream(stream, &payload, cfg.pretty).await;
+            return watch_stream(stream, &payload, cfg.output).await;
         }
     }
 
@@ -742,14 +760,18 @@ async fn run_watch(cfg: &CliConfig, watch_cfg: WatchConfig) -> anyhow::Result<()
     {
         if let Some(path) = cfg.unix_path.as_ref() {
             let stream = UnixStream::connect(&path).await?;
-            return watch_stream(stream, &payload, cfg.pretty).await;
+            return watch_stream(stream, &payload, cfg.output).await;
         }
     }
 
     anyhow::bail!("No valid connection target")
 }
 
-async fn watch_stream<S>(mut stream: S, subscribe_payload: &str, pretty: bool) -> anyhow::Result<()>
+async fn watch_stream<S>(
+    mut stream: S,
+    subscribe_payload: &str,
+    output: OutputFormat,
+) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
@@ -772,7 +794,7 @@ where
         anyhow::bail!("Subscribe failed: {error}");
     }
 
-    if pretty {
+    if output == OutputFormat::Pretty {
         eprintln!("Subscribed. Waiting for events... (Ctrl+C to exit)");
     }
 
@@ -790,15 +812,7 @@ where
             continue;
         }
 
-        if pretty {
-            if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
-                println!("{}", serde_json::to_string_pretty(&value)?);
-            } else {
-                println!("{trimmed}");
-            }
-        } else {
-            println!("{trimmed}");
-        }
+        output.print_json_line(trimmed)?;
     }
 
     Ok(())

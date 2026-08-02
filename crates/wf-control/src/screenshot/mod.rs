@@ -15,9 +15,18 @@ use wf_core::storage;
 use super::events::{DaemonEvent, EventBus, ScreenshotTriggeredEvent};
 use super::requests::{HandleOp, Handles};
 
+/// How to capture in Wayland sessions: prefer the XWayland window when one
+/// exists, or always go through the native ScreenCast portal.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum WaylandCapture {
+    #[default]
+    PreferXWayland,
+    ForceNative,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ScreenshotConfig {
-    pub native_wayland_capture: bool,
+    pub wayland_capture: WaylandCapture,
 }
 
 #[derive(Default)]

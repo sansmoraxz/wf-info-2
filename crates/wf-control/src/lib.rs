@@ -17,7 +17,7 @@ pub use events::{
     ProfileUpdatedEvent, ScreenshotTriggeredEvent, SystemQuitEvent, SystemQuitReason,
 };
 pub use requests::Handles;
-pub use screenshot::{ScreenshotConfig, ScreenshotState};
+pub use screenshot::{ScreenshotConfig, ScreenshotState, WaylandCapture};
 pub use server::{
     ControlConfig, ControlEndpoint, ControlServer, start_control_server,
     start_control_server_from_env,
