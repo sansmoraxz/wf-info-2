@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::value::RawValue;
 use std::sync::Arc;
 
 use tantivy::query::QueryParserError;
@@ -98,13 +98,15 @@ pub(super) trait HandleOp {
 }
 
 /// Wire request envelope, shared by the daemon (deserialize) and CLI (serialize).
+/// `params` stays unparsed JSON text ([`RawValue`]) so the payload is
+/// deserialized exactly once, directly into the op's typed params struct.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Request {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     pub op: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub params: Option<Value>,
+    pub params: Option<Box<RawValue>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -246,7 +248,7 @@ async fn handle_request(cx: &Handles, req: Request) -> HandleOutcome {
 async fn dispatch(
     cx: &Handles,
     op: &str,
-    params: Option<Value>,
+    params: Option<Box<RawValue>>,
 ) -> Result<ResponseData, ControlError> {
     let op: ControlOp = op
         .parse()

@@ -1,6 +1,7 @@
 use clap::{Args, Parser, Subcommand};
 use serde::Serialize;
 use serde_json::Value;
+use serde_json::value::{RawValue, to_raw_value};
 #[cfg(unix)]
 use std::path::PathBuf;
 use tokio::io::{AsyncBufReadExt as _, AsyncRead, AsyncWrite, AsyncWriteExt as _, BufReader};
@@ -116,7 +117,7 @@ struct CallArgs {
 
     /// Parameters as JSON
     #[arg(long, value_parser = parse_json_value)]
-    params: Option<Value>,
+    params: Option<Box<RawValue>>,
 }
 
 // Internal types for request handling
@@ -153,7 +154,10 @@ struct CliConfig {
 
 #[derive(Debug)]
 enum CliMode {
-    Request { op: String, params: Option<Value> },
+    Request {
+        op: String,
+        params: Option<Box<RawValue>>,
+    },
     Watch(SubscribeParams),
 }
 
@@ -292,7 +296,10 @@ impl Commands {
             }
             Self::Call(args) => Ok(CliMode::Request {
                 op: args.op,
-                params: Some(args.params.unwrap_or_else(|| Value::Object(Default::default()))),
+                params: Some(match args.params {
+                    Some(params) => params,
+                    None => to_raw_value(&serde_json::Map::new())?,
+                }),
             }),
         }
     }
@@ -300,14 +307,18 @@ impl Commands {
 
 // Value parsers for clap
 
-fn parse_json_value(raw: &str) -> Result<Value, String> {
-    serde_json::from_str(raw).map_err(|e| format!("Invalid JSON: {e}"))
+/// Validates the argument is JSON but keeps it as unparsed text: it is only
+/// ever re-embedded verbatim into the outgoing request.
+fn parse_json_value(raw: &str) -> Result<Box<RawValue>, String> {
+    RawValue::from_string(raw.to_owned()).map_err(|e| format!("Invalid JSON: {e}"))
 }
 
 fn request_mode(op: ControlOp, params: Option<impl Serialize>) -> anyhow::Result<CliMode> {
     Ok(CliMode::Request {
         op: op.to_string(),
-        params: params.map(serde_json::to_value).transpose()?,
+        params: params
+            .map(|params| to_raw_value(&params))
+            .transpose()?,
     })
 }
 
@@ -342,7 +353,7 @@ async fn main() -> anyhow::Result<()> {
 async fn send_request(
     cfg: &CliConfig,
     op: String,
-    params: Option<Value>,
+    params: Option<Box<RawValue>>,
 ) -> anyhow::Result<String> {
     let request = Request {
         id: cfg.id.clone(),
@@ -395,7 +406,7 @@ async fn run_watch(cfg: &CliConfig, params: SubscribeParams) -> anyhow::Result<(
     let request = Request {
         id: None,
         op: ControlOp::Subscribe.to_string(),
-        params: Some(serde_json::to_value(&params)?),
+        params: Some(to_raw_value(&params)?),
     };
     let payload = serde_json::to_string(&request)?;
 

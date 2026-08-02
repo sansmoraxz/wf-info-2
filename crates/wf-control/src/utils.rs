@@ -1,4 +1,6 @@
 use serde::de::DeserializeOwned;
+use serde_json::value::RawValue;
+#[cfg(feature = "cli")]
 use serde_json::Value;
 
 pub(super) const WFM_API_BASE: &str = "https://api.warframe.market/v2";
@@ -15,10 +17,11 @@ pub(super) enum ParamsError {
     Missing,
 }
 
-/// Strict JSON value parser for clap args.
+/// Strict JSON parser for clap args: validates the text and keeps it
+/// unparsed for single-pass deserialization at the destination type.
 #[cfg(feature = "cli")]
-pub(crate) fn parse_json_value(raw: &str) -> Result<Value, String> {
-    serde_json::from_str(raw).map_err(|e| format!("Invalid JSON: {e}"))
+pub(crate) fn parse_json_value(raw: &str) -> Result<Box<RawValue>, String> {
+    RawValue::from_string(raw.to_owned()).map_err(|e| format!("Invalid JSON: {e}"))
 }
 
 /// Lenient parser for clap args: JSON if it parses, then number, bool,
@@ -49,21 +52,21 @@ where
     client.get(&url).send().await?.json().await
 }
 
-pub(super) fn parse_params<T>(params: Option<Value>) -> Result<T, ParamsError>
+pub(super) fn parse_params<T>(params: Option<Box<RawValue>>) -> Result<T, ParamsError>
 where
     T: DeserializeOwned + Default,
 {
     params.map_or_else(
         || Ok(T::default()),
-        |value| serde_json::from_value(value).map_err(ParamsError::Invalid),
+        |raw| serde_json::from_str(raw.get()).map_err(ParamsError::Invalid),
     )
 }
 
 /// Like [`parse_params`], but params must be present (no default).
-pub(super) fn parse_required_params<T>(params: Option<Value>) -> Result<T, ParamsError>
+pub(super) fn parse_required_params<T>(params: Option<Box<RawValue>>) -> Result<T, ParamsError>
 where
     T: DeserializeOwned,
 {
-    let value = params.ok_or(ParamsError::Missing)?;
-    serde_json::from_value(value).map_err(ParamsError::Invalid)
+    let raw = params.ok_or(ParamsError::Missing)?;
+    serde_json::from_str(raw.get()).map_err(ParamsError::Invalid)
 }

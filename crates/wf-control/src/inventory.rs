@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, TimeZone as _, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::value::RawValue;
 use tantivy::Term;
 use tantivy::query::{Occur, Query, QueryParser, QueryParserError, TermQuery};
 use tantivy::schema::IndexRecordOption;
@@ -78,10 +78,12 @@ pub struct LoadInventoryParams {
     #[cfg_attr(feature = "cli", arg(long))]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
-    /// JSON value to load
+    /// JSON value to load, kept unparsed until it deserializes directly into
+    /// [`Inventory`] — the (potentially huge) payload is never materialized
+    /// as a `serde_json::Value` tree.
     #[cfg_attr(feature = "cli", arg(long, value_parser = crate::utils::parse_json_value))]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub json: Option<Value>,
+    pub json: Option<Box<RawValue>>,
     /// Raw JSON string
     #[cfg_attr(feature = "cli", arg(long))]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -111,7 +113,7 @@ pub struct LoadInventoryParams {
 #[derive(Debug)]
 pub(super) enum InventoryInput {
     Path { path: String, encrypted: bool },
-    Json(Value),
+    Json(Box<RawValue>),
     Raw(String),
 }
 
@@ -139,7 +141,9 @@ impl InventoryInput {
                 }
             }
             Self::Raw(raw) => serde_json::from_str(&raw).map_err(InventoryError::ParseJson),
-            Self::Json(json) => serde_json::from_value(json).map_err(InventoryError::ParseJson),
+            Self::Json(json) => {
+                serde_json::from_str(json.get()).map_err(InventoryError::ParseJson)
+            }
         }
     }
 }
