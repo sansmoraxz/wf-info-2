@@ -599,10 +599,10 @@ pub(crate) fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanEr
                         )
                     };
 
-                    let chunk = if success != FALSE {
-                        buffer.get(..bytes_read).filter(|chunk| !chunk.is_empty())
-                    } else {
+                    let chunk = if success == FALSE {
                         None
+                    } else {
+                        buffer.get(..bytes_read).filter(|chunk| !chunk.is_empty())
                     };
                     let Some(chunk) = chunk else {
                         break; // Failed to read, move to next region
