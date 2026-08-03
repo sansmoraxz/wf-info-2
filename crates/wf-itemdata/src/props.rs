@@ -8,7 +8,7 @@ use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
 
-use crate::common::{Introduced, deserialize_option_number_to_f64};
+use crate::common::Introduced;
 use crate::components::Component;
 use crate::damage::{Attack, DamageBreakdown};
 use crate::enums::{Noise, Polarity, ResistanceType, Slot, Trigger};
@@ -129,10 +129,10 @@ pub struct MeleeProps {
     pub blocking_angle: Option<i64>,
     pub combo_duration: Option<i64>,
 
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub follow_through: Option<f64>,
 
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub range: Option<f64>,
 
     #[serde(default)]
@@ -147,7 +147,7 @@ pub struct MeleeProps {
     pub heavy_slam_radial_damage: Option<i64>,
     pub heavy_slam_radius: Option<i64>,
 
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub wind_up: Option<f64>,
 }
 
@@ -163,19 +163,19 @@ pub struct ComponentWeaponData {
     #[serde(default)]
     pub damage_per_shot: Vec<f64>,
 
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub critical_chance: Option<f64>,
 
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub critical_multiplier: Option<f64>,
 
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub proc_chance: Option<f64>,
 
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub fire_rate: Option<f64>,
 
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub omega_attenuation: Option<f64>,
 
     pub damage: Option<DamageBreakdown>,
@@ -186,7 +186,7 @@ pub struct ComponentWeaponData {
     pub disposition: Option<i64>,
 
     // Gun-specific
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub accuracy: Option<f64>,
 
     #[serde(default)]
@@ -197,7 +197,7 @@ pub struct ComponentWeaponData {
 
     pub magazine_size: Option<i64>,
 
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub reload_time: Option<f64>,
 
     pub multishot: Option<i64>,
@@ -396,10 +396,10 @@ pub struct CharacterStats {
     pub power: i64,
     pub stamina: i64,
 
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub sprint: Option<f64>,
 
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub sprint_speed: Option<f64>,
 }
 

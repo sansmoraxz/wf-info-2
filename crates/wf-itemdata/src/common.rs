@@ -1,8 +1,6 @@
 //! Common types shared across all item categories.
 
-use std::fmt;
-
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::enums::Rarity;
 
@@ -31,13 +29,10 @@ pub struct Introduced {
 }
 
 /// Drop location and chance information
-///
-/// Uses Option<f64> for chance to handle null values, with a custom
-/// deserializer for both integer and float values from the JSON source.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Drop {
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub chance: Option<f64>,
     pub location: String,
     #[serde(default)]
@@ -65,121 +60,6 @@ pub struct Ability {
     pub description: String,
     #[serde(default)]
     pub image_name: String,
-}
-
-/// Custom deserializer for numeric fields that may be i64 or f64 in JSON.
-///
-/// The warframe-items-data source sometimes uses integers and sometimes
-/// floats for the same field across different items. This deserializer
-/// handles both cases uniformly.
-pub fn deserialize_number_to_f64<'de, D>(deserializer: D) -> Result<f64, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    use serde::de::{self, Visitor};
-
-    struct NumberVisitor;
-
-    #[allow(
-        clippy::cast_precision_loss,
-        reason = "integers beyond f64's 52-bit mantissa lose precision by design: the schema field is f64, so the coercion is the point of this deserializer"
-    )]
-    impl Visitor<'_> for NumberVisitor {
-        type Value = f64;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("a number (integer or float)")
-        }
-
-        fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            Ok(v as f64)
-        }
-
-        fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            Ok(v as f64)
-        }
-
-        fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            Ok(v)
-        }
-    }
-
-    deserializer.deserialize_any(NumberVisitor)
-}
-
-/// Custom deserializer for optional numeric fields.
-pub fn deserialize_option_number_to_f64<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    use serde::de::{self, Visitor};
-
-    struct OptionNumberVisitor;
-
-    #[allow(
-        clippy::cast_precision_loss,
-        reason = "integers beyond f64's 52-bit mantissa lose precision by design: the schema field is f64, so the coercion is the point of this deserializer"
-    )]
-    impl<'de> Visitor<'de> for OptionNumberVisitor {
-        type Value = Option<f64>;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("null or a number")
-        }
-
-        fn visit_none<E>(self) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            Ok(None)
-        }
-
-        fn visit_unit<E>(self) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            Ok(None)
-        }
-
-        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            deserialize_number_to_f64(deserializer).map(Some)
-        }
-
-        fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            Ok(Some(v as f64))
-        }
-
-        fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            Ok(Some(v as f64))
-        }
-
-        fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
-        where
-            E: de::Error,
-        {
-            Ok(Some(v))
-        }
-    }
-
-    deserializer.deserialize_any(OptionNumberVisitor)
 }
 
 #[cfg(test)]
