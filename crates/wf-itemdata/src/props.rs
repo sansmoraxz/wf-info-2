@@ -370,7 +370,7 @@ impl WeaponTypeStats {
 
     /// Get melee weapon data if available
     #[must_use]
-    pub fn as_melee(&self) -> Option<&MeleeWeaponData> {
+    pub const fn as_melee(&self) -> Option<&MeleeWeaponData> {
         match self {
             Self::Melee(data) => Some(data),
             _ => None,

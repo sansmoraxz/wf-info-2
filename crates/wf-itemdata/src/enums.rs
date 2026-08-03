@@ -201,7 +201,7 @@ impl Default for Disposition {
 impl Disposition {
     /// Convert disposition to numeric value (1-5), returns 0 for Unknown
     #[must_use]
-    pub fn as_u8(&self) -> u8 {
+    pub const fn as_u8(&self) -> u8 {
         match self {
             Self::One => 1,
             Self::Two => 2,
@@ -1249,12 +1249,12 @@ pub enum VaultStatus {
 
 impl VaultStatus {
     #[must_use]
-    pub fn is_prime(&self) -> bool {
+    pub const fn is_prime(&self) -> bool {
         !self.is_not_prime()
     }
 
     #[must_use]
-    pub fn is_accessible(&self) -> bool {
+    pub const fn is_accessible(&self) -> bool {
         !self.is_vaulted()
     }
 
@@ -1293,7 +1293,7 @@ pub enum ModCategory {
 
 impl ModCategory {
     #[must_use]
-    pub fn is_set(&self) -> bool {
+    pub const fn is_set(&self) -> bool {
         self.is_set_member() || self.is_set_definition()
     }
 
@@ -1306,7 +1306,7 @@ impl ModCategory {
     }
 
     #[must_use]
-    pub fn num_upgrades_in_set(&self) -> Option<i64> {
+    pub const fn num_upgrades_in_set(&self) -> Option<i64> {
         match self {
             Self::SetDefinition {
                 num_upgrades_in_set,

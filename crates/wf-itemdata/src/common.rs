@@ -84,7 +84,7 @@ where
         clippy::cast_precision_loss,
         reason = "integers beyond f64's 52-bit mantissa lose precision by design: the schema field is f64, so the coercion is the point of this deserializer"
     )]
-    impl<'de> Visitor<'de> for NumberVisitor {
+    impl Visitor<'_> for NumberVisitor {
         type Value = f64;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

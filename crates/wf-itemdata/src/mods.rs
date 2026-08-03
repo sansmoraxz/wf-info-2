@@ -198,7 +198,7 @@ impl ModEntry {
     }
 
     #[must_use]
-    pub fn is_set(&self) -> bool {
+    pub const fn is_set(&self) -> bool {
         self.is_set_member() || self.is_set_definition()
     }
 }

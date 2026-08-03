@@ -66,7 +66,7 @@ pub struct Launcher {
 
 impl Launcher {
     #[must_use]
-    pub fn new(pid: u32, existing_pids: HashSet<u32>) -> Self {
+    pub const fn new(pid: u32, existing_pids: HashSet<u32>) -> Self {
         Self { pid, existing_pids }
     }
 
@@ -112,7 +112,7 @@ pub struct RunningGame {
 
 impl RunningGame {
     #[must_use]
-    pub fn pid(&self) -> u32 {
+    pub const fn pid(&self) -> u32 {
         self.pid
     }
 

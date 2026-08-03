@@ -407,7 +407,7 @@ async fn main() {
                 _ = &mut game_exit => true,
             }
         }
-        _ = &mut game_exit => true,
+        () = &mut game_exit => true,
     };
 
     if game_exited {
