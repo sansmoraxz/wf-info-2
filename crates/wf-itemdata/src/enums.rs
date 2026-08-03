@@ -148,6 +148,10 @@ impl Default for Polarity {
     SerializeDisplay,
     DeserializeFromStr,
 )]
+#[expect(
+    clippy::enum_variant_names,
+    reason = "wire value for the projectile-launching variant is literally \"Projectile\""
+)]
 pub enum Projectile {
     Discharge,
     Hitscan,

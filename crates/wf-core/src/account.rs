@@ -1,28 +1,29 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum Platform {
-    PC,
-    XBOX,
-    PLAYSTATION,
-    NINTENDO,
-    IOS,
-    ANDROID,
-    UNKNOWN,
+    Pc,
+    Xbox,
+    Playstation,
+    Nintendo,
+    Ios,
+    Android,
+    Unknown,
 }
 
 /// Lossy lookup from the private-use glyph Warframe appends to player
-/// names in chat logs; unrecognized glyphs map to `UNKNOWN`.
+/// names in chat logs; unrecognized glyphs map to `Unknown`.
 impl From<&str> for Platform {
     fn from(glyph: &str) -> Self {
         match glyph {
-            "\u{e000}" => Self::PC,
-            "\u{e001}" => Self::XBOX,
-            "\u{e002}" => Self::PLAYSTATION,
-            "\u{e003}" => Self::NINTENDO,
-            "\u{e004}" => Self::IOS,
-            "\u{e005}" => Self::ANDROID,
-            _ => Self::UNKNOWN,
+            "\u{e000}" => Self::Pc,
+            "\u{e001}" => Self::Xbox,
+            "\u{e002}" => Self::Playstation,
+            "\u{e003}" => Self::Nintendo,
+            "\u{e004}" => Self::Ios,
+            "\u{e005}" => Self::Android,
+            _ => Self::Unknown,
         }
     }
 }

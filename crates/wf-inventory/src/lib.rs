@@ -108,11 +108,16 @@ use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FractionSyndicates {
-    SteelMeridianSyndicate,
-    ArbitersSyndicate,
-    CephalonSudaSyndicate,
-    PerrinSyndicate,
-    RedVeilSyndicate,
+    #[serde(rename = "SteelMeridianSyndicate")]
+    SteelMeridian,
+    #[serde(rename = "ArbitersSyndicate")]
+    Arbiters,
+    #[serde(rename = "CephalonSudaSyndicate")]
+    CephalonSuda,
+    #[serde(rename = "PerrinSyndicate")]
+    Perrin,
+    #[serde(rename = "RedVeilSyndicate")]
+    RedVeil,
 }
 
 #[derive(

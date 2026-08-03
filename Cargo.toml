@@ -34,6 +34,12 @@ trivially_copy_pass_by_ref = "warn"
 needless_pass_by_value = "warn"
 rc_buffer = "warn"
 iter_with_drain = "warn"
+large_futures = "warn"
+large_stack_arrays = "warn"
+ref_option = "warn"
+ref_option_ref = "warn"
+stable_sort_primitive = "warn"
+unnecessary_box_returns = "warn"
 cognitive_complexity = "warn" # threshold in clippy.toml
 
 # ── Casts & numbers
@@ -63,6 +69,7 @@ mutex_integer = "warn"
 let_underscore_must_use = "warn"
 let_underscore_untyped = "warn"
 else_if_without_else = "warn"
+if_not_else = "warn"
 
 # ── API design
 must_use_candidate = "warn"
@@ -73,6 +80,9 @@ error_impl_error = "warn"
 unnecessary_wraps = "warn"
 option_option = "warn"
 unused_async = "warn"
+unsafe_derive_deserialize = "warn"
+used_underscore_items = "warn"
+zero_sized_map_values = "warn"
 
 # ── Module & item organization
 arbitrary_source_item_ordering = "warn" # ordering scope in clippy.toml
@@ -81,6 +91,7 @@ items_after_statements = "warn"
 cfg_not_test = "warn"
 absolute_paths = "warn" # max segments in clippy.toml
 unused_trait_names = "warn"
+struct_excessive_bools = "warn"
 too_many_lines = "warn" # threshold in clippy.toml
 
 # ── Idiom & readability
@@ -109,6 +120,18 @@ str_to_string = "warn"
 string_add = "warn"
 needless_raw_strings = "warn"
 allow_attributes_without_reason = "warn"
+inconsistent_struct_constructor = "warn"
+needless_continue = "warn"
+needless_for_each = "warn"
+needless_raw_string_hashes = "warn"
+overly_complex_bool_expr = "warn"
+range_minus_one = "warn"
+range_plus_one = "warn"
+same_functions_in_if_condition = "warn"
+same_length_and_capacity = "warn"
+single_char_pattern = "warn"
+unnecessary_join = "warn"
+unused_self = "warn"
 
 # ── Test hygiene
 missing_assert_message = "warn"

@@ -282,11 +282,10 @@ fn clear_cached_resolution(state: &ScreenshotState) {
 
 fn cached_warframe_pid(state: &ScreenshotState) -> Option<(u32, &'static str)> {
     if let Some(pid) = state.warframe_pid.load().as_deref().copied() {
-        if !process::is_warframe_pid(pid) {
-            clear_cached_warframe_pid(state);
-        } else {
+        if process::is_warframe_pid(pid) {
             return Some((pid, "cached"));
         }
+        clear_cached_warframe_pid(state);
     }
 
     let pid = process::get_warframe_pid()?;

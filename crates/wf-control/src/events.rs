@@ -245,12 +245,12 @@ mod tests {
         let event = DmTabOpenedEvent {
             timestamp: Utc::now(),
             username: "player".into(),
-            platform: Platform::PLAYSTATION,
+            platform: Platform::Playstation,
         };
         let value = serde_json::to_value(&event).unwrap();
         assert_eq!(value["platform"], "PLAYSTATION");
 
-        let unknown = serde_json::to_value(Platform::UNKNOWN).unwrap();
+        let unknown = serde_json::to_value(Platform::Unknown).unwrap();
         assert_eq!(unknown, "UNKNOWN");
     }
 }

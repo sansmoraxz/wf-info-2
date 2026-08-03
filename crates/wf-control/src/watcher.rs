@@ -597,7 +597,7 @@ mod tests {
         match &events[0] {
             LogEvent::Login(info) => {
                 assert_eq!(info.username, USERNAME);
-                assert_eq!(info.platform, Platform::PC);
+                assert_eq!(info.platform, Platform::Pc);
                 assert_eq!(info.clan, "TestC#963");
             }
             _ => panic!("expected Login from name-change"),
@@ -648,7 +648,7 @@ mod tests {
         match &events[0] {
             LogEvent::Login(info) => {
                 assert_eq!(info.username, USERNAME);
-                assert_eq!(info.platform, Platform::PLAYSTATION);
+                assert_eq!(info.platform, Platform::Playstation);
                 assert_eq!(info.clan, "Test Clan#963");
             }
             _ => panic!("expected Login from legacy name-change line"),
@@ -706,7 +706,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_alpha");
-                assert_eq!(info.platform, Platform::PC);
+                assert_eq!(info.platform, Platform::Pc);
             }
             _ => panic!("expected DirectMessage"),
         }
@@ -718,7 +718,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_bravo");
-                assert_eq!(info.platform, Platform::PC);
+                assert_eq!(info.platform, Platform::Pc);
             }
             _ => panic!("expected DirectMessage"),
         }
@@ -735,7 +735,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_charlie");
-                assert_eq!(info.platform, Platform::PC);
+                assert_eq!(info.platform, Platform::Pc);
             }
             _ => panic!("expected DirectMessage"),
         }
@@ -747,7 +747,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_delta");
-                assert_eq!(info.platform, Platform::XBOX);
+                assert_eq!(info.platform, Platform::Xbox);
             }
             _ => panic!("expected DirectMessage"),
         }
@@ -790,7 +790,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_echo");
-                assert_eq!(info.platform, Platform::PC);
+                assert_eq!(info.platform, Platform::Pc);
             }
             _ => panic!("expected DmTabOpened"),
         }
@@ -826,7 +826,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_foxtrot");
-                assert_eq!(info.platform, Platform::PLAYSTATION);
+                assert_eq!(info.platform, Platform::Playstation);
             }
             _ => panic!("expected DmTabOpened"),
         }
@@ -853,7 +853,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_echo");
-                assert_eq!(info.platform, Platform::PC);
+                assert_eq!(info.platform, Platform::Pc);
             }
             _ => panic!("expected DmTabOpened"),
         }
