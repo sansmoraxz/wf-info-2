@@ -7,3 +7,4 @@ cognitive-complexity-threshold = 25
 # Only enforce ordering of module-level items and impl blocks; struct fields
 # and enum variants keep their layout-/wire-sensitive order.
 source-item-ordering = ["module", "trait"]
+too-many-lines-threshold = 250

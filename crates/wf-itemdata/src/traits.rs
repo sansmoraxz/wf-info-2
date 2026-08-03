@@ -121,12 +121,12 @@ pub trait Prime: Item {
                 date: self.vault_date().map(str::to_owned),
             };
         }
-        match self.estimated_vault_date() {
-            Some(estimated_date) => VaultStatus::EstimatedVault {
-                estimated_date: estimated_date.to_owned(),
-            },
-            None => VaultStatus::Active,
-        }
+        self.estimated_vault_date()
+            .map_or(VaultStatus::Active, |estimated_date| {
+                VaultStatus::EstimatedVault {
+                    estimated_date: estimated_date.to_owned(),
+                }
+            })
     }
 
     /// Whether the item is currently vaulted (relics no longer drop)

@@ -506,13 +506,13 @@ pub(super) async fn handle_inventory_filter(
         clauses.push((Occur::Must, query));
     }
 
-    let (_total_matches, mut envelopes) = search_inventory(search_index, clauses)?;
+    let (_total_matches, envelopes) = search_inventory(search_index, clauses)?;
     let offset = params.offset.unwrap_or(0);
     let limit = params.limit.unwrap_or(usize::MAX);
 
     // Apply non-indexable filters and optional detail expansion
     let mut filtered_items = Vec::new();
-    for mut envelope in envelopes.drain(..) {
+    for mut envelope in envelopes {
         if let Some(tradable) = params.tradable {
             let details =
                 item_index.lookup(envelope.item_type(), Some(envelope.category().as_ref()));

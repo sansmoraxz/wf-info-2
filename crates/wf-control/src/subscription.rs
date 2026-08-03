@@ -38,10 +38,9 @@ impl From<SubscribeParams> for EventFilter {
 impl EventFilter {
     /// Returns true if the event should be sent to the subscriber.
     pub(crate) fn matches(&self, event: &DaemonEvent) -> bool {
-        match &self.allowed_events {
-            Some(allowed) => allowed.contains(&event.kind()),
-            None => true,
-        }
+        self.allowed_events
+            .as_ref()
+            .is_none_or(|allowed| allowed.contains(&event.kind()))
     }
 
     /// Returns the list of allowed events, if any filter is set.

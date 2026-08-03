@@ -32,15 +32,11 @@ pub(crate) fn parse_json_value(raw: &str) -> Result<Box<RawValue>, String> {
     reason = "clap value_parser requires a Result-returning signature"
 )]
 pub(crate) fn parse_jsonish(raw: &str) -> Result<Value, String> {
-    Ok(if let Ok(v) = serde_json::from_str(raw) {
-        v
-    } else if let Ok(num) = raw.parse::<i64>() {
-        Value::Number(num.into())
-    } else if let Ok(b) = raw.parse::<bool>() {
-        Value::Bool(b)
-    } else {
-        Value::String(raw.to_owned())
-    })
+    Ok(serde_json::from_str(raw)
+        .ok()
+        .or_else(|| raw.parse::<i64>().ok().map(|num| Value::Number(num.into())))
+        .or_else(|| raw.parse::<bool>().ok().map(Value::Bool))
+        .unwrap_or_else(|| Value::String(raw.to_owned())))
 }
 
 /// GET a v2 WFM API path (relative to [`WFM_API_BASE`]) and parse the JSON body.

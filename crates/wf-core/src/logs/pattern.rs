@@ -52,7 +52,7 @@ impl LogProcessingEngine {
             .collect();
 
         v.make_contiguous().sort_by_key(|a| a.pos);
-        v.drain(..).map(move |rec| rec.event).collect()
+        v.into_iter().map(|rec| rec.event).collect()
     }
 }
 

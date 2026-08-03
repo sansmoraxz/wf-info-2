@@ -440,9 +440,9 @@ async fn handle_relic_selection_popup(
     match res {
         Ok((image_bytes, _)) => match load_image(&image_bytes) {
             Ok(img) => match recognizer.recognize_and_list(&img) {
-                Ok(mut v) => {
+                Ok(v) => {
                     log::info!("Got relic items: {v:?}");
-                    let filtered: Vec<String> = v.drain(..).map(|e| e.text).collect();
+                    let filtered: Vec<String> = v.into_iter().map(|e| e.text).collect();
                     let popup = RelicSelectionPopup { items: filtered };
                     events.emit(DaemonEvent::RelicSelectionOpen(popup));
                 }

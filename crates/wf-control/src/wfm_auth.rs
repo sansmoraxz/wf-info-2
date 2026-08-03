@@ -682,17 +682,17 @@ pub(crate) async fn handle_wfm_signstatus(
 ) -> Result<SignstatusResponse, WfmError> {
     // If no status provided, return current state
     let Some(raw_status) = p.status else {
-        return match wfm.session().await {
-            Some(session) => {
+        return wfm.session().await.map_or_else(
+            || Ok(SignstatusResponse::Unauthenticated),
+            |session| {
                 let expired = session.expires_at < Utc::now();
                 Ok(SignstatusResponse::Authenticated {
                     status: session.status,
                     expires_at: session.expires_at.to_rfc3339(),
                     expired,
                 })
-            }
-            None => Ok(SignstatusResponse::Unauthenticated),
-        };
+            },
+        );
     };
     let status = raw_status
         .parse::<Status>()

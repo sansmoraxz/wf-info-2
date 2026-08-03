@@ -33,6 +33,7 @@ large_types_passed_by_value = "warn"
 trivially_copy_pass_by_ref = "warn"
 needless_pass_by_value = "warn"
 rc_buffer = "warn"
+iter_with_drain = "warn"
 cognitive_complexity = "warn" # threshold in clippy.toml
 
 # ── Casts & numbers
@@ -80,6 +81,7 @@ items_after_statements = "warn"
 cfg_not_test = "warn"
 absolute_paths = "warn" # max segments in clippy.toml
 unused_trait_names = "warn"
+too_many_lines = "warn" # threshold in clippy.toml
 
 # ── Idiom & readability
 use_self = "warn"
@@ -88,6 +90,7 @@ map_unwrap_or = "warn"
 manual_let_else = "warn"
 redundant_closure_for_method_calls = "warn"
 redundant_else = "warn"
+option_if_let_else = "warn"
 redundant_type_annotations = "warn"
 explicit_iter_loop = "warn"
 explicit_into_iter_loop = "warn"
