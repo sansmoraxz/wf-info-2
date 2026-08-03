@@ -1,7 +1,5 @@
 use std::collections::HashSet;
 use std::env;
-#[cfg(feature = "memory")]
-use std::io;
 use std::time::Duration;
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 use tokio::time::{Instant, sleep};
@@ -12,7 +10,7 @@ use {memchr::memmem, std::collections::HashMap};
 #[cfg(all(feature = "memory", target_os = "linux"))]
 use std::{
     fs::File,
-    io::{BufRead as _, BufReader, Read as _, Seek as _, SeekFrom},
+    io::{self, BufRead as _, BufReader, Read as _, Seek as _, SeekFrom},
 };
 
 const DEFAULT_HANDOFF_GRACE: Duration = Duration::from_secs(10);
@@ -519,6 +517,8 @@ pub(crate) fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanEr
 /// Requires appropriate process access rights (PROCESS_VM_READ | PROCESS_QUERY_INFORMATION)
 #[cfg(all(feature = "memory", target_os = "windows"))]
 pub(crate) fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanError> {
+    use std::mem::zeroed;
+
     use winapi::shared::minwindef::{FALSE, LPVOID};
     use winapi::um::handleapi::CloseHandle;
     use winapi::um::memoryapi::ReadProcessMemory;
@@ -529,10 +529,7 @@ pub(crate) fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanEr
         PAGE_READONLY, PAGE_READWRITE, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
     };
 
-    log::info!(
-        "Scanning Windows memory for account authorization (PID: {})",
-        pid
-    );
+    log::info!("Scanning Windows memory for account authorization (PID: {pid})");
 
     // Open process with read permissions
     let process_handle =
@@ -551,9 +548,9 @@ pub(crate) fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanEr
     let mut tracker = AuthCandidateTracker::default();
 
     // 4MB buffer for reading memory regions
-    let mut buffer = vec![0u8; 4 * 1024 * 1024];
+    let mut buffer = vec![0_u8; 4 * 1024 * 1024];
     let mut address: usize = 0;
-    let mut mbi: MEMORY_BASIC_INFORMATION = unsafe { std::mem::zeroed() };
+    let mut mbi: MEMORY_BASIC_INFORMATION = unsafe { zeroed() };
 
     // Enumerate memory regions
     loop {
@@ -561,8 +558,8 @@ pub(crate) fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanEr
             VirtualQueryEx(
                 process_handle,
                 address as LPVOID,
-                &mut mbi,
-                std::mem::size_of::<MEMORY_BASIC_INFORMATION>(),
+                &raw mut mbi,
+                size_of::<MEMORY_BASIC_INFORMATION>(),
             )
         };
 
@@ -584,11 +581,11 @@ pub(crate) fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanEr
             // Skip empty or excessively large regions
             if region_size > 0 && region_size <= 500 * 1024 * 1024 {
                 // Read region in chunks
-                let mut offset = 0usize;
+                let mut offset = 0_usize;
                 let mut allocation_candidates = HashSet::new();
                 let mut previous_tail = Vec::new();
                 while offset < region_size {
-                    let chunk_size = std::cmp::min(buffer.len(), region_size - offset);
+                    let chunk_size = buffer.len().min(region_size - offset);
                     let read_addr = (region_base + offset) as LPVOID;
                     let mut bytes_read: usize = 0;
 
@@ -598,16 +595,19 @@ pub(crate) fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanEr
                             read_addr,
                             buffer.as_mut_ptr() as LPVOID,
                             chunk_size,
-                            &mut bytes_read,
+                            &raw mut bytes_read,
                         )
                     };
 
-                    if success != FALSE && bytes_read > 0 {
-                        let chunk = &buffer[..bytes_read];
-                        add_chunk_candidates(&mut allocation_candidates, &mut previous_tail, chunk);
+                    let chunk = if success != FALSE {
+                        buffer.get(..bytes_read).filter(|chunk| !chunk.is_empty())
                     } else {
+                        None
+                    };
+                    let Some(chunk) = chunk else {
                         break; // Failed to read, move to next region
-                    }
+                    };
+                    add_chunk_candidates(&mut allocation_candidates, &mut previous_tail, chunk);
 
                     offset += chunk_size;
                 }
@@ -615,8 +615,7 @@ pub(crate) fn scan_memory_for_auth(pid: u32) -> Result<Option<AuthQuery>, ScanEr
 
                 if let Some(auth) = tracker.observe_allocation(allocation_candidates) {
                     log::info!(
-                        "Confirmed account authorization in {} readable allocations",
-                        REQUIRED_AUTH_ALLOCATIONS
+                        "Confirmed account authorization in {REQUIRED_AUTH_ALLOCATIONS} readable allocations"
                     );
                     return Ok(Some(auth));
                 }

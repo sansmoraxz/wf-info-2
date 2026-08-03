@@ -97,7 +97,7 @@ pub(crate) async fn capture_screen(
         ExtendedColorType::Rgb8,
     )?;
 
-    Ok((bmp_bytes, "image/bmp".to_string()))
+    Ok((bmp_bytes, "image/bmp".to_owned()))
 }
 
 fn cached_warframe_pid(state: &ScreenshotState) -> Option<u32> {
@@ -136,20 +136,19 @@ fn resolve_warframe_window(
     state: &ScreenshotState,
     warframe_pid: u32,
 ) -> Result<Arc<WindowCacheEntry>, CaptureError> {
-    let candidates: Vec<_> = win_screenshot::utils::window_list()
+    use win_screenshot::utils::window_list;
+
+    let candidates: Vec<_> = window_list()
         .map_err(|e| CaptureError::EnumerateWindows(format!("{e:?}")))?
         .into_iter()
         .filter(|window| window_process_id(window.hwnd) == warframe_pid)
         .collect::<Vec<_>>();
 
-    if candidates.is_empty() {
-        return Err(CaptureError::WindowNotFound(warframe_pid));
-    }
-
     let selected = candidates
         .iter()
         .find(|window| window.window_name.to_ascii_lowercase().contains("warframe"))
-        .unwrap_or(&candidates[0]);
+        .or_else(|| candidates.first())
+        .ok_or(CaptureError::WindowNotFound(warframe_pid))?;
 
     log::info!(
         "Capturing Warframe window {} for PID {} ({})",
@@ -171,7 +170,7 @@ fn resolve_warframe_window(
 fn window_process_id(hwnd: isize) -> u32 {
     let mut pid: DWORD = 0;
     unsafe {
-        GetWindowThreadProcessId(hwnd as HWND, &mut pid);
+        GetWindowThreadProcessId(hwnd as HWND, &raw mut pid);
     }
     pid
 }

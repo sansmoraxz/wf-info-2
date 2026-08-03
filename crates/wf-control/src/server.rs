@@ -175,7 +175,7 @@ pub async fn start_control_server(
             }
             #[cfg(windows)]
             ControlEndpoint::Npipe(path) => {
-                handles.push(spawn_npipe_server(&path, cx.clone()).await?);
+                handles.push(spawn_npipe_server(&path, cx.clone()));
             }
         }
     }
@@ -217,11 +217,11 @@ async fn spawn_tcp_server(addr: &str, cx: Handles) -> Result<JoinHandle<()>, Ser
 }
 
 #[cfg(windows)]
-async fn spawn_npipe_server(path: &str, cx: Handles) -> Result<JoinHandle<()>, ServerError> {
+fn spawn_npipe_server(path: &str, cx: Handles) -> JoinHandle<()> {
     let pipe_path = normalize_npipe_path(path);
-    log::info!("Control API listening on npipe {}", pipe_path);
+    log::info!("Control API listening on npipe {pipe_path}");
 
-    Ok(tokio::spawn(async move {
+    tokio::spawn(async move {
         let mut first_instance = true;
 
         loop {
@@ -232,7 +232,7 @@ async fn spawn_npipe_server(path: &str, cx: Handles) -> Result<JoinHandle<()>, S
             let server = match server {
                 Ok(server) => server,
                 Err(e) => {
-                    log::error!("Failed to create npipe {}: {}", pipe_path, e);
+                    log::error!("Failed to create npipe {pipe_path}: {e}");
                     break;
                 }
             };
@@ -244,17 +244,17 @@ async fn spawn_npipe_server(path: &str, cx: Handles) -> Result<JoinHandle<()>, S
                     let cx = cx.clone();
                     tokio::spawn(async move {
                         if let Err(e) = handle_stream(server, cx).await {
-                            log::warn!("Control connection error: {}", e);
+                            log::warn!("Control connection error: {e}");
                         }
                     });
                 }
                 Err(e) => {
-                    log::error!("Control npipe accept error: {}", e);
+                    log::error!("Control npipe accept error: {e}");
                     break;
                 }
             }
         }
-    }))
+    })
 }
 
 #[cfg(unix)]
@@ -443,7 +443,7 @@ fn default_tcp_addr() -> String {
 
 #[cfg(windows)]
 fn default_npipe_path() -> String {
-    "wf-info-2-control".to_string()
+    "wf-info-2-control".to_owned()
 }
 
 #[cfg(windows)]
@@ -451,7 +451,7 @@ fn normalize_npipe_path(pipe: impl AsRef<str>) -> String {
     let raw = pipe.as_ref();
     let lower = raw.to_ascii_lowercase();
     if lower.starts_with(r"\\.\pipe\") {
-        raw.to_string()
+        raw.to_owned()
     } else {
         format!(r"\\.\pipe\{}", raw.trim_start_matches(['\\', '/']))
     }

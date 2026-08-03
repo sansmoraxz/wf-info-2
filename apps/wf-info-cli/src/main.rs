@@ -493,7 +493,7 @@ fn normalize_npipe_path(pipe: impl AsRef<str>) -> String {
     let raw = pipe.as_ref();
     let lower = raw.to_ascii_lowercase();
     if lower.starts_with(r"\\.\pipe\") {
-        raw.to_string()
+        raw.to_owned()
     } else {
         format!(r"\\.\pipe\{}", raw.trim_start_matches(['\\', '/']))
     }

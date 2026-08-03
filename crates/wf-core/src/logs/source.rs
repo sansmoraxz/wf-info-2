@@ -1,3 +1,125 @@
+#[cfg(windows)]
+mod platform {
+    use super::{DBWIN_BUFFER_SIZE, DbwinFrame, decode_dbwin_frame};
+    use std::io;
+    use std::ptr::null_mut;
+    use std::slice;
+    use std::time::Duration;
+
+    use winapi::ctypes::c_void;
+    use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
+    use winapi::um::memoryapi::{FILE_MAP_READ, MapViewOfFile, UnmapViewOfFile};
+    use winapi::um::synchapi::{CreateEventA, SetEvent, WaitForSingleObject};
+    use winapi::um::winbase::{CreateFileMappingA, WAIT_OBJECT_0};
+    use winapi::um::winnt::{HANDLE, PAGE_READWRITE};
+
+    const DBWIN_BUFFER_NAME: &[u8] = b"DBWIN_BUFFER\0";
+    const DBWIN_BUFFER_READY_NAME: &[u8] = b"DBWIN_BUFFER_READY\0";
+    const DBWIN_DATA_READY_NAME: &[u8] = b"DBWIN_DATA_READY\0";
+    const WAIT_TIMEOUT: u32 = 258;
+
+    pub(super) struct DbwinMonitor {
+        mapping: HANDLE,
+        view: *mut u8,
+        buffer_ready: HANDLE,
+        data_ready: HANDLE,
+    }
+
+    unsafe impl Send for DbwinMonitor {}
+
+    impl DbwinMonitor {
+        pub(super) fn new() -> io::Result<Self> {
+            let buffer_size = u32::try_from(DBWIN_BUFFER_SIZE)
+                .map_err(|_| io::Error::other("DBWIN buffer size exceeds u32 range"))?;
+
+            unsafe {
+                let mapping = CreateFileMappingA(
+                    INVALID_HANDLE_VALUE,
+                    null_mut(),
+                    PAGE_READWRITE,
+                    0,
+                    buffer_size,
+                    DBWIN_BUFFER_NAME.as_ptr().cast(),
+                );
+                if mapping.is_null() {
+                    return Err(io::Error::last_os_error());
+                }
+
+                let view = MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, DBWIN_BUFFER_SIZE);
+                if view.is_null() {
+                    CloseHandle(mapping);
+                    return Err(io::Error::last_os_error());
+                }
+
+                let buffer_ready =
+                    CreateEventA(null_mut(), 0, 0, DBWIN_BUFFER_READY_NAME.as_ptr().cast());
+                if buffer_ready.is_null() {
+                    UnmapViewOfFile(view);
+                    CloseHandle(mapping);
+                    return Err(io::Error::last_os_error());
+                }
+
+                let data_ready =
+                    CreateEventA(null_mut(), 0, 0, DBWIN_DATA_READY_NAME.as_ptr().cast());
+                if data_ready.is_null() {
+                    CloseHandle(buffer_ready);
+                    UnmapViewOfFile(view);
+                    CloseHandle(mapping);
+                    return Err(io::Error::last_os_error());
+                }
+
+                if SetEvent(buffer_ready) == 0 {
+                    CloseHandle(data_ready);
+                    CloseHandle(buffer_ready);
+                    UnmapViewOfFile(view);
+                    CloseHandle(mapping);
+                    return Err(io::Error::last_os_error());
+                }
+
+                Ok(Self {
+                    mapping,
+                    view: view.cast(),
+                    buffer_ready,
+                    data_ready,
+                })
+            }
+        }
+
+        pub(super) fn wait_for_message(
+            &mut self,
+            timeout: Duration,
+        ) -> io::Result<Option<DbwinFrame>> {
+            let millis = u32::try_from(timeout.as_millis()).unwrap_or(u32::MAX);
+
+            unsafe {
+                match WaitForSingleObject(self.data_ready, millis) {
+                    WAIT_OBJECT_0 => {
+                        let raw = slice::from_raw_parts(self.view.cast::<u8>(), DBWIN_BUFFER_SIZE);
+                        let frame = decode_dbwin_frame(raw);
+                        if SetEvent(self.buffer_ready) == 0 {
+                            return Err(io::Error::last_os_error());
+                        }
+                        Ok(frame)
+                    }
+                    WAIT_TIMEOUT => Ok(None),
+                    _ => Err(io::Error::last_os_error()),
+                }
+            }
+        }
+    }
+
+    impl Drop for DbwinMonitor {
+        fn drop(&mut self) {
+            unsafe {
+                CloseHandle(self.data_ready);
+                CloseHandle(self.buffer_ready);
+                UnmapViewOfFile(self.view.cast::<c_void>());
+                CloseHandle(self.mapping);
+            }
+        }
+    }
+}
+
 use std::future::Future;
 use std::io;
 use std::mem;
@@ -112,7 +234,7 @@ impl DbwinLogSource {
         let worker_shutdown = Arc::clone(&shutdown);
 
         let worker = thread::Builder::new()
-            .name("dbwin-log-source".to_string())
+            .name("dbwin-log-source".to_owned())
             .spawn(move || {
                 while !worker_shutdown.load(Ordering::Relaxed) {
                     match monitor.wait_for_message(DBWIN_POLL_INTERVAL) {
@@ -123,7 +245,9 @@ impl DbwinLogSource {
                         }
                         Ok(None) => {}
                         Err(error) => {
-                            let _ = sender.send(Err(error));
+                            if sender.send(Err(error)).is_err() {
+                                log::debug!("dbwin receiver dropped before error delivery");
+                            }
                             break;
                         }
                     }
@@ -147,8 +271,10 @@ impl DbwinLogSource {
 impl Drop for DbwinLogSource {
     fn drop(&mut self) {
         self.shutdown.store(true, Ordering::Relaxed);
-        if let Some(worker) = self.worker.take() {
-            let _ = worker.join();
+        if let Some(worker) = self.worker.take()
+            && worker.join().is_err()
+        {
+            log::warn!("dbwin log source worker thread panicked");
         }
     }
 }
@@ -188,21 +314,14 @@ struct DbwinFrame {
 
 #[cfg(windows)]
 fn decode_dbwin_frame(buffer: &[u8]) -> Option<DbwinFrame> {
-    if buffer.len() < std::mem::size_of::<u32>() {
-        return None;
-    }
-
-    let pid = u32::from_le_bytes(buffer[..4].try_into().ok()?);
-    let payload = &buffer[4..];
+    let (pid_bytes, payload) = buffer.split_at_checked(size_of::<u32>())?;
+    let pid = u32::from_le_bytes(pid_bytes.try_into().ok()?);
     let end = payload
         .iter()
         .position(|byte| *byte == 0)
         .unwrap_or(payload.len());
-    if end == 0 {
-        return None;
-    }
 
-    let text = String::from_utf8_lossy(&payload[..end]).into_owned();
+    let text = String::from_utf8_lossy(payload.get(..end)?).into_owned();
     if text.is_empty() {
         return None;
     }
@@ -275,125 +394,6 @@ fn decode_wine_debug_payload(payload: &str) -> Option<String> {
     None
 }
 
-#[cfg(windows)]
-mod platform {
-    use super::{DBWIN_BUFFER_SIZE, DbwinFrame, decode_dbwin_frame};
-    use std::io;
-    use std::ptr::null_mut;
-    use std::slice;
-    use std::time::Duration;
-
-    use winapi::ctypes::c_void;
-    use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
-    use winapi::um::memoryapi::{FILE_MAP_READ, MapViewOfFile, UnmapViewOfFile};
-    use winapi::um::synchapi::{CreateEventA, SetEvent, WaitForSingleObject};
-    use winapi::um::winbase::{CreateFileMappingA, WAIT_OBJECT_0};
-    use winapi::um::winnt::{HANDLE, PAGE_READWRITE};
-
-    const DBWIN_BUFFER_NAME: &[u8] = b"DBWIN_BUFFER\0";
-    const DBWIN_BUFFER_READY_NAME: &[u8] = b"DBWIN_BUFFER_READY\0";
-    const DBWIN_DATA_READY_NAME: &[u8] = b"DBWIN_DATA_READY\0";
-    const WAIT_TIMEOUT: u32 = 258;
-
-    pub(super) struct DbwinMonitor {
-        mapping: HANDLE,
-        view: *mut u8,
-        buffer_ready: HANDLE,
-        data_ready: HANDLE,
-    }
-
-    unsafe impl Send for DbwinMonitor {}
-
-    impl DbwinMonitor {
-        pub(super) fn new() -> io::Result<Self> {
-            unsafe {
-                let mapping = CreateFileMappingA(
-                    INVALID_HANDLE_VALUE,
-                    null_mut(),
-                    PAGE_READWRITE,
-                    0,
-                    DBWIN_BUFFER_SIZE as u32,
-                    DBWIN_BUFFER_NAME.as_ptr().cast(),
-                );
-                if mapping.is_null() {
-                    return Err(io::Error::last_os_error());
-                }
-
-                let view = MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, DBWIN_BUFFER_SIZE);
-                if view.is_null() {
-                    CloseHandle(mapping);
-                    return Err(io::Error::last_os_error());
-                }
-
-                let buffer_ready =
-                    CreateEventA(null_mut(), 0, 0, DBWIN_BUFFER_READY_NAME.as_ptr().cast());
-                if buffer_ready.is_null() {
-                    UnmapViewOfFile(view);
-                    CloseHandle(mapping);
-                    return Err(io::Error::last_os_error());
-                }
-
-                let data_ready =
-                    CreateEventA(null_mut(), 0, 0, DBWIN_DATA_READY_NAME.as_ptr().cast());
-                if data_ready.is_null() {
-                    CloseHandle(buffer_ready);
-                    UnmapViewOfFile(view);
-                    CloseHandle(mapping);
-                    return Err(io::Error::last_os_error());
-                }
-
-                if SetEvent(buffer_ready) == 0 {
-                    CloseHandle(data_ready);
-                    CloseHandle(buffer_ready);
-                    UnmapViewOfFile(view);
-                    CloseHandle(mapping);
-                    return Err(io::Error::last_os_error());
-                }
-
-                Ok(Self {
-                    mapping,
-                    view: view.cast(),
-                    buffer_ready,
-                    data_ready,
-                })
-            }
-        }
-
-        pub(super) fn wait_for_message(
-            &mut self,
-            timeout: Duration,
-        ) -> io::Result<Option<DbwinFrame>> {
-            let millis = u32::try_from(timeout.as_millis()).unwrap_or(u32::MAX);
-
-            unsafe {
-                match WaitForSingleObject(self.data_ready, millis) {
-                    WAIT_OBJECT_0 => {
-                        let raw = slice::from_raw_parts(self.view.cast::<u8>(), DBWIN_BUFFER_SIZE);
-                        let frame = decode_dbwin_frame(raw);
-                        if SetEvent(self.buffer_ready) == 0 {
-                            return Err(io::Error::last_os_error());
-                        }
-                        Ok(frame)
-                    }
-                    WAIT_TIMEOUT => Ok(None),
-                    _ => Err(io::Error::last_os_error()),
-                }
-            }
-        }
-    }
-
-    impl Drop for DbwinMonitor {
-        fn drop(&mut self) {
-            unsafe {
-                CloseHandle(self.data_ready);
-                CloseHandle(self.buffer_ready);
-                UnmapViewOfFile(self.view.cast::<c_void>());
-                CloseHandle(self.mapping);
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::LineAssembler;
@@ -406,7 +406,7 @@ mod tests {
     #[test]
     fn decode_dbwin_frame_reads_pid_and_message() {
         let mut frame = Vec::new();
-        frame.extend_from_slice(&1234u32.to_le_bytes());
+        frame.extend_from_slice(&1234_u32.to_le_bytes());
         frame.extend_from_slice(b"72.458 Sys [Info]: Logged in sample_account\0ignored");
 
         let decoded = decode_dbwin_frame(&frame).unwrap();
@@ -421,7 +421,7 @@ mod tests {
         assert!(decode_dbwin_frame(&[1, 2, 3]).is_none());
 
         let mut frame = Vec::new();
-        frame.extend_from_slice(&77u32.to_le_bytes());
+        frame.extend_from_slice(&77_u32.to_le_bytes());
         frame.push(0);
         assert!(decode_dbwin_frame(&frame).is_none());
     }

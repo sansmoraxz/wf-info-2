@@ -12,8 +12,6 @@ use std::pin::Pin;
 use std::process::Stdio;
 use std::process::{ExitStatus, exit};
 use std::sync::Arc;
-#[cfg(windows)]
-use std::time::Duration;
 use std::time::SystemTime;
 use tokio::process::Command;
 use tokio::signal;
@@ -203,15 +201,15 @@ async fn wait_for_game_start_or_launcher_exit(
             result = &mut *child_handle, if timeout.is_none() => {
                 match result {
                     Ok(Ok(status)) => {
-                        log::info!("Warframe launcher exited with status: {}", status);
+                        log::info!("Warframe launcher exited with status: {status}");
                         timeout = Some(Box::pin(sleep(process::handoff_grace())));
                     }
                     Ok(Err(e)) => {
-                        log::error!("Error waiting for Warframe launcher process: {}", e);
+                        log::error!("Error waiting for Warframe launcher process: {e}");
                         exit(1);
                     }
                     Err(e) => {
-                        log::error!("Warframe launcher task failed: {}", e);
+                        log::error!("Warframe launcher task failed: {e}");
                         exit(1);
                     }
                 }
@@ -265,7 +263,7 @@ async fn main() {
 
     #[cfg(windows)]
     let mut log_source = DbwinLogSource::new().unwrap_or_else(|e| {
-        eprintln!("Error: Failed to start DBWIN monitor: {}", e);
+        eprintln!("Error: Failed to start DBWIN monitor: {e}");
         exit(1);
     });
 
