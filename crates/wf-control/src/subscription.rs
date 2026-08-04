@@ -54,7 +54,7 @@ impl EventFilter {
 /// Response data for successful subscribe.
 #[derive(Debug, Serialize)]
 pub(super) struct SubscribeResponse {
-    pub subscribed: bool,
+    pub subscribed: monostate::MustBe!(true),
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filter: Option<SubscribeFilterInfo>,
 }
@@ -81,7 +81,7 @@ pub(super) fn handle_subscribe(params: SubscribeParams) -> SubscribeResult {
     });
 
     let response = SubscribeResponse {
-        subscribed: true,
+        subscribed: monostate::MustBe!(true),
         filter: filter_info,
     };
 
