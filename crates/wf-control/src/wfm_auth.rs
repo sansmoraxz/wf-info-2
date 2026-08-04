@@ -457,7 +457,7 @@ struct StatusSetPayload {
 pub(crate) enum SignstatusResponse {
     Authenticated {
         status: Option<Status>,
-        expires_at: String,
+        expires_at: DateTime<Utc>,
         expired: bool,
     },
     Unauthenticated,
@@ -688,7 +688,7 @@ pub(crate) async fn handle_wfm_signstatus(
                 let expired = session.expires_at < Utc::now();
                 Ok(SignstatusResponse::Authenticated {
                     status: session.status,
-                    expires_at: session.expires_at.to_rfc3339(),
+                    expires_at: session.expires_at,
                     expired,
                 })
             },

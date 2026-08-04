@@ -44,10 +44,10 @@ impl EventFilter {
     }
 
     /// Returns the list of allowed events, if any filter is set.
-    pub(crate) fn allowed_events(&self) -> Option<Vec<String>> {
+    pub(crate) fn allowed_events(&self) -> Option<Vec<DaemonEventKind>> {
         self.allowed_events
             .as_ref()
-            .map(|s| s.iter().map(ToString::to_string).collect())
+            .map(|s| s.iter().copied().collect())
     }
 }
 
@@ -59,9 +59,11 @@ pub(super) struct SubscribeResponse {
     pub filter: Option<SubscribeFilterInfo>,
 }
 
+#[serde_with::serde_as]
 #[derive(Debug, Serialize)]
 pub(super) struct SubscribeFilterInfo {
-    pub allowed_events: Vec<String>,
+    #[serde_as(as = "Vec<serde_with::DisplayFromStr>")]
+    pub allowed_events: Vec<DaemonEventKind>,
 }
 
 /// Result of handling a subscribe request.

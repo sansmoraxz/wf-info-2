@@ -3,7 +3,7 @@ mod source;
 
 use serde::{Deserialize, Serialize};
 
-use crate::account::{AccountInfo, Platform};
+use crate::account::{AccountInfo, Platform, Username};
 
 #[cfg(windows)]
 pub use source::DbwinLogSource;
@@ -21,7 +21,7 @@ pub enum LogEvent {
     DmTabOpened(DirectMessageInfo),
     /// The local client issued an `IRC out: WHO <username>` query,
     /// indicating the user initiated a DM conversation.
-    WhoQuery(String),
+    WhoQuery(Username),
     TradeConfirmPopup(TradeInfo),
     TradeSuccess,
     /// Trade failed with wrapped reason
@@ -37,7 +37,7 @@ pub enum LogEvent {
 pub struct TradeInfo {
     pub sent: Vec<TradeItem>,
     pub received: Vec<TradeItem>,
-    pub name: String,
+    pub name: Username,
     pub platform: Platform,
 }
 
@@ -49,6 +49,6 @@ pub struct TradeItem {
 
 #[derive(Debug)]
 pub struct DirectMessageInfo {
-    pub username: String,
+    pub username: Username,
     pub platform: Platform,
 }

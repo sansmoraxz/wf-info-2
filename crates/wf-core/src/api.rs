@@ -46,7 +46,10 @@ pub(crate) async fn fetch_inventory(
 
     let response = client
         .get(INVENTORY_URL)
-        .query(&[("accountId", &auth.account_id), ("nonce", &auth.nonce)])
+        .query(&[
+            ("accountId", auth.account_id.as_ref()),
+            ("nonce", auth.nonce.as_ref()),
+        ])
         .send()
         .await
         .map_err(|error| ApiError::Request(error.without_url()))?;

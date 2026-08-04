@@ -33,7 +33,7 @@ impl LogProcessingEngine {
         let transformers = vec![
             Transformer::new(
                 r"(?Rmu)^\d+\.\d+ Net \[Info\]: IRC out: WHO (?<name>[\w\.\-]+)\?\?\? n%nu$",
-                |c| Some(LogEvent::WhoQuery(c.name("name")?.as_str().to_owned())),
+                |c| Some(LogEvent::WhoQuery(c.name("name")?.as_str().into())),
             )?,
             Transformer::new(
                 r"(?Rums)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOkCancel\(description=Are you sure you want to accept this trade\? You are offering:(?<sent>.*?)and will receive from (?<name>.*?)(?<platform>.) the following:(?<received>.*?), title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel\)$",
@@ -41,7 +41,7 @@ impl LogProcessingEngine {
                     Some(LogEvent::TradeConfirmPopup(TradeInfo {
                         sent: extract_trade_items(c.name("sent")?.as_str()),
                         received: extract_trade_items(c.name("received")?.as_str()),
-                        name: c.name("name")?.as_str().to_owned(),
+                        name: c.name("name")?.as_str().into(),
                         platform: Platform::from(c.name("platform")?.as_str()),
                     }))
                 },
@@ -61,9 +61,9 @@ impl LogProcessingEngine {
                     let clan_name = c.name("clan")?.as_str();
                     let clan_id = c.name("clan_id")?.as_str();
                     Some(LogEvent::Login(AccountInfo {
-                        username: c.name("name")?.as_str().to_owned(),
+                        username: c.name("name")?.as_str().into(),
                         platform: Platform::from(c.name("platform")?.as_str()),
-                        clan: format!("{clan_name}#{clan_id}"),
+                        clan: format!("{clan_name}#{clan_id}").into(),
                     }))
                 },
             )?,
@@ -78,7 +78,7 @@ impl LogProcessingEngine {
                 r"(?Rmu)^\d+\.\d+ Script \[Info\]: ChatRedux\.lua: ChatRedux::AddTab: Adding tab with channel name: F(?<name>[\w\.\-]+)(?<platform>.) to index \d+$",
                 |c| {
                     Some(LogEvent::DmTabOpened(DirectMessageInfo {
-                        username: c.name("name")?.as_str().to_owned(),
+                        username: c.name("name")?.as_str().into(),
                         platform: Platform::from(c.name("platform")?.as_str()),
                     }))
                 },

@@ -1,5 +1,6 @@
 use std::convert::Infallible;
 use std::io;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 #[cfg(feature = "memory")]
@@ -35,9 +36,9 @@ use wf_core::{inventory_refresh, process};
 pub(super) enum InventoryError {
     #[error("inventory.load expects exactly one of 'path', 'json', or 'raw'")]
     AmbiguousSource,
-    #[error("Failed to read inventory file {path}")]
+    #[error("Failed to read inventory file {}", path.display())]
     ReadFile {
-        path: String,
+        path: PathBuf,
         #[source]
         source: io::Error,
     },
@@ -77,7 +78,7 @@ pub struct LoadInventoryParams {
     /// Path to inventory JSON file
     #[cfg_attr(feature = "cli", arg(long))]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
+    pub path: Option<PathBuf>,
     /// JSON value to load, kept unparsed until it deserializes directly into
     /// [`Inventory`] — the (potentially huge) payload is never materialized
     /// as a `serde_json::Value` tree.
@@ -112,7 +113,7 @@ pub struct LoadInventoryParams {
 /// sense for file reads, so it lives inside `Path`.
 #[derive(Debug)]
 pub(super) enum InventoryInput {
-    Path { path: String, encrypted: bool },
+    Path { path: PathBuf, encrypted: bool },
     Json(Box<RawValue>),
     Raw(String),
 }
@@ -248,7 +249,7 @@ pub struct FilterParams {
     /// Path to inventory JSON file
     #[cfg_attr(feature = "cli", arg(long))]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
+    pub path: Option<PathBuf>,
     /// Treat the file as AES-128-CBC encrypted
     #[cfg_attr(
         feature = "cli",

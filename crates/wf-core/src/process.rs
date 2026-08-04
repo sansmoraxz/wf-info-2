@@ -47,11 +47,35 @@ pub enum ScanError {
     Unsupported,
 }
 
+/// A 24-character hexadecimal Warframe account object ID.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::AsRef,
+)]
+#[serde(transparent)]
+#[as_ref(str)]
+pub struct AccountId(String);
+
+/// The session nonce paired with an [`AccountId`] in authorization queries.
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, derive_more::Display, derive_more::From, derive_more::AsRef,
+)]
+#[as_ref(str)]
+pub struct Nonce(String);
+
 /// Authorization query string containing accountId and nonce
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AuthQuery {
-    pub account_id: String,
-    pub(crate) nonce: String,
+    pub account_id: AccountId,
+    pub(crate) nonce: Nonce,
 }
 
 /// The Warframe launcher has been spawned; the game process is not up yet.
@@ -377,7 +401,10 @@ fn auth_candidates_in_bytes(allocation: &[u8], boundary: NonceBoundary) -> HashS
                 let nonce =
                     String::from_utf8_lossy(allocation.get(nonce_start..nonce_end).unwrap_or(&[]))
                         .into_owned();
-                candidates.insert(AuthQuery { account_id, nonce });
+                candidates.insert(AuthQuery {
+                    account_id: account_id.into(),
+                    nonce: nonce.into(),
+                });
             }
         }
 
@@ -698,8 +725,8 @@ mod tests {
     #[test]
     fn extracts_a_valid_authorization_candidate() {
         let candidate = only_candidate(query(ACCOUNT_A, "1234567890").as_bytes());
-        assert_eq!(candidate.account_id, ACCOUNT_A);
-        assert_eq!(candidate.nonce, "1234567890");
+        assert_eq!(candidate.account_id.as_ref() as &str, ACCOUNT_A);
+        assert_eq!(candidate.nonce.as_ref() as &str, "1234567890");
     }
 
     #[test]
@@ -729,8 +756,8 @@ mod tests {
         assert!(tracker.observe_allocation(candidates.clone()).is_none());
         assert!(tracker.observe_allocation(candidates.clone()).is_none());
         let confirmed = tracker.observe_allocation(candidates).unwrap();
-        assert_eq!(confirmed.account_id, ACCOUNT_A);
-        assert_eq!(confirmed.nonce, "123");
+        assert_eq!(confirmed.account_id.as_ref() as &str, ACCOUNT_A);
+        assert_eq!(confirmed.nonce.as_ref() as &str, "123");
     }
 
     #[test]
@@ -759,8 +786,8 @@ mod tests {
         assert!(tracker.observe_allocation(candidate_a.clone()).is_none());
         assert!(tracker.observe_allocation(candidate_b).is_none());
         let confirmed = tracker.observe_allocation(candidate_a).unwrap();
-        assert_eq!(confirmed.account_id, ACCOUNT_A);
-        assert_eq!(confirmed.nonce, "123");
+        assert_eq!(confirmed.account_id.as_ref() as &str, ACCOUNT_A);
+        assert_eq!(confirmed.nonce.as_ref() as &str, "123");
     }
 
     #[test]
@@ -783,7 +810,7 @@ mod tests {
 
         assert_eq!(candidates.len(), 1);
         let candidate = candidates.into_iter().next().unwrap();
-        assert_eq!(candidate.account_id, ACCOUNT_A);
-        assert_eq!(candidate.nonce, "123456");
+        assert_eq!(candidate.account_id.as_ref() as &str, ACCOUNT_A);
+        assert_eq!(candidate.nonce.as_ref() as &str, "123456");
     }
 }

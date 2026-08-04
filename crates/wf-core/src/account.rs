@@ -28,9 +28,57 @@ impl From<&str> for Platform {
     }
 }
 
+/// An in-game player name as it appears in chat logs (platform glyph stripped).
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::AsRef,
+)]
+#[serde(transparent)]
+#[from(forward)]
+#[as_ref(str)]
+pub struct Username(String);
+
+impl PartialEq<&str> for Username {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
+
+/// A clan tag as reported in the login log line, in `Name#id` form.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::AsRef,
+)]
+#[serde(transparent)]
+#[from(forward)]
+#[as_ref(str)]
+pub struct Clan(String);
+
+impl PartialEq<&str> for Clan {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct AccountInfo {
-    pub username: String,
+    pub username: Username,
     pub platform: Platform,
-    pub clan: String,
+    pub clan: Clan,
 }

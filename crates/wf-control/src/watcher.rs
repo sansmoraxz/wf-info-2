@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use chrono::Utc;
 use tokio::time::sleep;
-use wf_core::account::AccountInfo;
+use wf_core::account::{AccountInfo, Username};
 use wf_core::logs::pattern::LogProcessingEngine;
 use wf_core::logs::{self, LineAssembler, LogEvent, LogSource};
 use wf_ocr::{RelicRecognizer, load_image};
@@ -96,19 +96,19 @@ enum SessionState {
     #[default]
     LoggedOut,
     LoggedIn {
-        username: String,
+        username: Username,
     },
 }
 
 impl SessionState {
     /// Transition to logged-in. Returns `false` when this is a duplicate
     /// login for the same username (dedup lives in the transition).
-    fn login(&mut self, username: &str) -> bool {
+    fn login(&mut self, username: &Username) -> bool {
         if matches!(self, Self::LoggedIn { username: u } if u == username) {
             return false;
         }
         *self = Self::LoggedIn {
-            username: username.to_owned(),
+            username: username.clone(),
         };
         true
     }
@@ -161,7 +161,7 @@ struct WatchState {
     session: SessionState,
     /// Usernames for which we issued `IRC out: WHO` (self-initiated DMs).
     /// Used to suppress DmTabOpened events for tabs we opened ourselves.
-    self_initiated_dms: HashSet<String>,
+    self_initiated_dms: HashSet<Username>,
     trade: TradeState,
     relic: RelicState,
     /// `None` when the OCR engine failed to initialize; relic OCR is skipped.
@@ -327,7 +327,7 @@ fn event_emitter_fn(
 async fn handle_login_event(
     events: EventBus,
     http: reqwest::Client,
-    user_name: String,
+    user_name: Username,
     known_pid: Option<u32>,
     auto_callbacks: AutoCallbacks,
 ) {
@@ -367,10 +367,10 @@ async fn handle_login_event(
 async fn refresh_profile(
     events: &EventBus,
     http: &reqwest::Client,
-    user_name: &str,
-    account_id: &str,
+    user_name: &Username,
+    account_id: &process::AccountId,
 ) {
-    match api::fetch_player_profile(http, account_id).await {
+    match api::fetch_player_profile(http, account_id.as_ref()).await {
         Ok(profile) => {
             log::info!("Fetched profile for {user_name}: {profile:?}");
             if let Err(e) = storage::save_encrypted_profile(&profile) {
@@ -378,7 +378,7 @@ async fn refresh_profile(
             } else {
                 events.emit(DaemonEvent::ProfileUpdated(ProfileUpdatedEvent {
                     timestamp: Utc::now(),
-                    account_id: account_id.to_owned(),
+                    account_id: account_id.clone(),
                 }));
             }
         }
@@ -659,13 +659,15 @@ mod tests {
     fn test_duplicate_login_suppression_resets_on_logout() {
         let mut session = SessionState::default();
 
-        assert!(session.login(USERNAME));
-        assert!(!session.login(USERNAME));
-        assert!(session.login("AnotherPlayer"));
-        assert!(!session.login("AnotherPlayer"));
+        let jasper = Username::from(USERNAME);
+        let another = Username::from("AnotherPlayer");
+        assert!(session.login(&jasper));
+        assert!(!session.login(&jasper));
+        assert!(session.login(&another));
+        assert!(!session.login(&another));
 
         session.logout();
-        assert!(session.login("AnotherPlayer"));
+        assert!(session.login(&another));
     }
 
     #[test]
@@ -756,10 +758,10 @@ mod tests {
     #[test]
     fn test_self_initiated_dm_filtered_out() {
         let mut harness = ChunkHarness::new();
-        let mut self_initiated: HashSet<String> = HashSet::new();
+        let mut self_initiated: HashSet<Username> = HashSet::new();
 
         let filter_events =
-            |events: Vec<LogEvent>, initiated: &mut HashSet<String>| -> Vec<LogEvent> {
+            |events: Vec<LogEvent>, initiated: &mut HashSet<Username>| -> Vec<LogEvent> {
                 events
                     .into_iter()
                     .filter(|e| match e {

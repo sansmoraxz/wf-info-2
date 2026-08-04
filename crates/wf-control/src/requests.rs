@@ -441,7 +441,7 @@ mod tests {
 
         let auth = SignstatusResponse::Authenticated {
             status: Some(Status::Online),
-            expires_at: "2026-07-27T00:00:00+00:00".into(),
+            expires_at: "2026-07-27T00:00:00Z".parse().unwrap(),
             expired: false,
         };
         assert_eq!(
@@ -449,7 +449,7 @@ mod tests {
             json!({
                 "state": "authenticated",
                 "status": "online",
-                "expires_at": "2026-07-27T00:00:00+00:00",
+                "expires_at": "2026-07-27T00:00:00Z",
                 "expired": false,
             })
         );

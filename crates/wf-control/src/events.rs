@@ -1,7 +1,11 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
-use wf_core::{account::Platform, logs::TradeItem};
+use wf_core::{
+    account::{Platform, Username},
+    logs::TradeItem,
+    process::AccountId,
+};
 use wf_inventory::FractionSyndicates;
 
 const CHANNEL_CAPACITY: usize = 256;
@@ -84,7 +88,7 @@ pub struct GameStartEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountLoginEvent {
     pub timestamp: DateTime<Utc>,
-    pub username: String,
+    pub username: Username,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -166,7 +170,7 @@ pub struct InventoryStaleEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProfileUpdatedEvent {
     pub timestamp: DateTime<Utc>,
-    pub account_id: String,
+    pub account_id: AccountId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,7 +182,7 @@ pub struct ScreenshotTriggeredEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DmTabOpenedEvent {
     pub timestamp: DateTime<Utc>,
-    pub username: String,
+    pub username: Username,
     pub platform: Platform,
 }
 
@@ -186,7 +190,7 @@ pub struct DmTabOpenedEvent {
 pub struct TradeConfirmPopupEvent {
     pub sent: Vec<TradeItem>,
     pub received: Vec<TradeItem>,
-    pub name: String,
+    pub name: Username,
     pub platform: Platform,
 }
 
