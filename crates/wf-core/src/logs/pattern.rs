@@ -5,7 +5,7 @@ use crate::{
     logs::{DirectMessageInfo, LogEvent, TradeInfo, TradeItem},
 };
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
 type Transform = fn(&Captures) -> Option<LogEvent>;
 
@@ -14,150 +14,110 @@ struct Transformer {
     transform: Transform,
 }
 
-pub struct LogProcessingEngine {
-    transformers: Vec<Transformer>,
-    reset: RegexSet,
+impl Transformer {
+    fn new(pattern: &str, transform: Transform) -> Result<Self, regex::Error> {
+        Ok(Self {
+            pattern: Regex::new(pattern)?,
+            transform,
+        })
+    }
 }
 
-/// temp struct used for sorting events
-struct LogRecords {
-    pos: usize,
-    event: LogEvent,
+pub struct LogProcessingEngine {
+    transformers: Vec<Transformer>,
+    prefilter: RegexSet,
 }
 
 impl LogProcessingEngine {
     pub fn new() -> Result<Self, regex::Error> {
-        let transformers = transformers()?;
-        let reset = RegexSet::new(transformers.iter().map(|t| t.pattern.as_str()))?;
+        let transformers = vec![
+            Transformer::new(
+                r"(?Rmu)^\d+\.\d+ Net \[Info\]: IRC out: WHO (?<name>[\w\.\-]+)\?\?\? n%nu$",
+                |c| Some(LogEvent::WhoQuery(c.name("name")?.as_str().to_owned())),
+            )?,
+            Transformer::new(
+                r"(?Rums)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOkCancel\(description=Are you sure you want to accept this trade\? You are offering:(?<sent>.*?)and will receive from (?<name>.*?)(?<platform>.) the following:(?<received>.*?), title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel\)$",
+                |c| {
+                    Some(LogEvent::TradeConfirmPopup(TradeInfo {
+                        sent: extract_trade_items(c.name("sent")?.as_str()),
+                        received: extract_trade_items(c.name("received")?.as_str()),
+                        name: c.name("name")?.as_str().to_owned(),
+                        platform: Platform::from(c.name("platform")?.as_str()),
+                    }))
+                },
+            )?,
+            Transformer::new(
+                r"(?Rm)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade was successful!, title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok\)$",
+                |_| Some(LogEvent::TradeSuccess),
+            )?,
+            Transformer::new(
+                r"(?Rmu)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade failed: (?<reason>.+?), title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok\)$",
+                |c| Some(LogEvent::TradeFail(c.name("reason")?.as_str().to_owned())),
+            )?,
+            // A legacy `AccountId:` suffix may be present, but is deliberately ignored.
+            Transformer::new(
+                r"(?Rum)^\d+\.\d+ Sys \[Info\]: Player name changed to (?<name>[\w\.\-]+)(?<platform>.) Clan: (?<clan>[\w -]+)#(?<clan_id>\d+)(?: AccountId: \w+)?$",
+                |c| {
+                    let clan_name = c.name("clan")?.as_str();
+                    let clan_id = c.name("clan_id")?.as_str();
+                    Some(LogEvent::Login(AccountInfo {
+                        username: c.name("name")?.as_str().to_owned(),
+                        platform: Platform::from(c.name("platform")?.as_str()),
+                        clan: format!("{clan_name}#{clan_id}"),
+                    }))
+                },
+            )?,
+            Transformer::new(r"(?Rm)^\d+\.\d+ Sys \[Info\]: Logout confirmed$", |_| {
+                Some(LogEvent::Logout)
+            })?,
+            Transformer::new(
+                r"(?Rm)^\d+\.\d+ Sys \[Info\]: Executing command: /EE/Editor/ToolMenus/Commands/CmdQuit$",
+                |_| Some(LogEvent::QuitRequested),
+            )?,
+            Transformer::new(
+                r"(?Rmu)^\d+\.\d+ Script \[Info\]: ChatRedux\.lua: ChatRedux::AddTab: Adding tab with channel name: F(?<name>[\w\.\-]+)(?<platform>.) to index \d+$",
+                |c| {
+                    Some(LogEvent::DmTabOpened(DirectMessageInfo {
+                        username: c.name("name")?.as_str().to_owned(),
+                        platform: Platform::from(c.name("platform")?.as_str()),
+                    }))
+                },
+            )?,
+            Transformer::new(
+                r"(?Rm)\d+\.\d+ Script \[Info\]: ProjectionRewardChoice\.lua: Got rewards$",
+                |_| Some(LogEvent::RelicOpen),
+            )?,
+            Transformer::new(
+                r"(?Rm)\d+\.\d+ Script \[Info\]: ProjectionRewardChoice\.lua: Relic reward screen shut down$",
+                |_| Some(LogEvent::RelicClose),
+            )?,
+        ];
+        let prefilter = RegexSet::new(transformers.iter().map(|t| t.pattern.as_str()))?;
         Ok(Self {
             transformers,
-            reset,
+            prefilter,
         })
     }
 
     #[must_use]
     pub fn extract_events(&self, s: &str) -> Vec<LogEvent> {
-        let mut v: VecDeque<_> = self
-            .reset
+        let mut v: Vec<(usize, LogEvent)> = self
+            .prefilter
             .matches(s)
             .into_iter()
-            .filter_map(|cap_idx| self.transformers.get(cap_idx))
+            .filter_map(|idx| self.transformers.get(idx))
             .flat_map(move |t| {
                 t.pattern.captures_iter(s).filter_map(move |c| {
                     let pos = c.get(0)?.start();
                     let event = (t.transform)(&c)?;
-                    Some(LogRecords { pos, event })
+                    Some((pos, event))
                 })
             })
             .collect();
 
-        v.make_contiguous().sort_by_key(|a| a.pos);
-        v.into_iter().map(|rec| rec.event).collect()
+        v.sort_unstable_by_key(|&(pos, _)| pos);
+        v.into_iter().map(|(_, event)| event).collect()
     }
-}
-
-/// Pattern table: (regex, capture-group transform). Group meanings are noted
-/// per entry.
-fn transformers() -> Result<Vec<Transformer>, regex::Error> {
-    let table: [(&str, Transform); 10] = [
-        // G1: name
-        (
-            r"(?Rmu)^\d+\.\d+ Net \[Info\]: IRC out: WHO ([\w\.\-]+)\?\?\? n%nu$",
-            transform_who_query,
-        ),
-        // G1: sent, G2: other player name, G3: platform glyph, G4: received
-        (
-            r"(?Rums)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOkCancel\(description=Are you sure you want to accept this trade\? You are offering:(.*?)and will receive from (.*?)(.) the following:(.*?), title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok, rightItem=/Menu/Confirm_Item_Cancel\)$",
-            transform_trade_confirm,
-        ),
-        (
-            r"(?Rm)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade was successful!, title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok\)$",
-            |_| Some(LogEvent::TradeSuccess),
-        ),
-        // G1: reason
-        (
-            r"(?Rmu)^\d+\.\d+ Script \[Info\]: Dialog\.lua: Dialog::CreateOk\(description=The trade failed: (.+?), title=[[:ascii:]]*? leftItem=/Menu/Confirm_Item_Ok\)$",
-            |c| Some(LogEvent::TradeFail(c.get(1)?.as_str().to_owned())),
-        ),
-        // G1: name, G2: platform glyph, G3: clan, G4: clan hash.
-        // A legacy `AccountId:` suffix may be present, but is deliberately ignored.
-        (
-            r"(?Rum)^\d+\.\d+ Sys \[Info\]: Player name changed to ([\w\.\-]+)(.) Clan: ([\w -]+)#(\d+)(?: AccountId: \w+)?$",
-            transform_login,
-        ),
-        (r"(?Rm)^\d+\.\d+ Sys \[Info\]: Logout confirmed$", |_| {
-            Some(LogEvent::Logout)
-        }),
-        (
-            r"(?Rm)^\d+\.\d+ Sys \[Info\]: Executing command: /EE/Editor/ToolMenus/Commands/CmdQuit$",
-            |_| Some(LogEvent::QuitRequested),
-        ),
-        // G1: name, G2: platform glyph
-        (
-            r"(?Rmu)^\d+\.\d+ Script \[Info\]: ChatRedux\.lua: ChatRedux::AddTab: Adding tab with channel name: F([\w\.\-]+)(.) to index \d+$",
-            transform_dm_tab,
-        ),
-        (
-            r"(?Rm)\d+\.\d+ Script \[Info\]: ProjectionRewardChoice\.lua: Got rewards$",
-            |_| Some(LogEvent::RelicOpen),
-        ),
-        (
-            r"(?Rm)\d+\.\d+ Script \[Info\]: ProjectionRewardChoice\.lua: Relic reward screen shut down$",
-            |_| Some(LogEvent::RelicClose),
-        ),
-    ];
-
-    table
-        .into_iter()
-        .map(|(pat, transform)| {
-            Ok(Transformer {
-                pattern: Regex::new(pat)?,
-                transform,
-            })
-        })
-        .collect()
-}
-
-fn transform_who_query(c: &Captures) -> Option<LogEvent> {
-    Some(LogEvent::WhoQuery(c.get(1)?.as_str().to_owned()))
-}
-
-fn transform_trade_confirm(c: &Captures) -> Option<LogEvent> {
-    let sent = extract_trade_items(c.get(1)?.as_str());
-    let name = c.get(2)?.as_str().to_owned();
-    let received = extract_trade_items(c.get(4)?.as_str());
-    let platform = Platform::from(c.get(3)?.as_str());
-
-    let info = TradeInfo {
-        sent,
-        received,
-        name,
-        platform,
-    };
-    Some(LogEvent::TradeConfirmPopup(info))
-}
-
-fn transform_login(c: &Captures) -> Option<LogEvent> {
-    let name = c.get(1)?.as_str().to_owned();
-    let platform = Platform::from(c.get(2)?.as_str());
-    let clan_name = c.get(3)?.as_str().to_owned();
-    let clan_id = c.get(4)?.as_str().to_owned();
-    let clan = [clan_name, "#".to_owned(), clan_id].concat();
-    let account_info = AccountInfo {
-        username: name,
-        platform,
-        clan,
-    };
-    Some(LogEvent::Login(account_info))
-}
-
-fn transform_dm_tab(c: &Captures) -> Option<LogEvent> {
-    let username = c.get(1)?.as_str().to_owned();
-    let platform = Platform::from(c.get(2)?.as_str());
-    Some(LogEvent::DmTabOpened(DirectMessageInfo {
-        username,
-        platform,
-    }))
 }
 
 fn trade_confirm_item_filter(a: &str) -> Option<(String, u32)> {
