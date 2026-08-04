@@ -1,38 +1,11 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-use crate::{ItemType, ObjectId, Polarity};
+use crate::common::PolarizedEntry;
 
 /// Represents a Necramech in the inventory.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MechSuit {
-    #[serde(rename = "ItemType")]
-    pub item_type: ItemType,
-
-    #[serde(rename = "ItemId")]
-    pub item_id: ObjectId,
-
-    #[serde(rename = "XP")]
-    pub xp: Option<i64>,
-
-    #[serde(rename = "Features")]
-    pub features: Option<i64>,
-
-    #[serde(rename = "Polarity")]
-    pub polarity: Option<Vec<Polarity>>,
-
-    #[serde(rename = "Polarized")]
-    pub polarized: Option<i64>,
-
-    #[serde(rename = "UpgradeVer")]
-    pub upgrade_ver: Option<i64>,
-
-    #[serde(rename = "Configs")]
-    pub configs: Option<Vec<Value>>,
-
-    #[serde(flatten)]
-    pub other: Option<serde_json::Map<String, Value>>,
-}
+#[serde(transparent)]
+pub struct MechSuit(pub PolarizedEntry);
 
 #[cfg(test)]
 mod tests {
@@ -48,7 +21,7 @@ mod tests {
 
         let item: MechSuit = from_str(json_data).unwrap();
 
-        assert_eq!(item.item_type, "/Lotus/Powersuits/EntratiMech/NechroTech");
-        assert_eq!(item.xp.unwrap(), 503_210);
+        assert_eq!(item.0.item_type, "/Lotus/Powersuits/EntratiMech/NechroTech");
+        assert_eq!(item.0.xp.unwrap(), 503_210);
     }
 }

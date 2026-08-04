@@ -506,39 +506,49 @@ fn price_stats(prices: &[f64]) -> PriceStats {
 // ── Inventory count lookup ──
 
 pub(super) fn count_in_inventory(inventory: &Inventory, item_type: &str) -> i64 {
-    // Equipment categories: each entry is 1 owned
+    // Equipment categories: each entry is 1 owned. The optional `0` token
+    // projects through the transparent newtype wrappers.
     macro_rules! count_vec {
-        ($field:expr) => {
-            i64::try_from($field.iter().filter(|i| i.item_type == item_type).count())
-                .unwrap_or(i64::MAX)
+        ($field:expr $(, $proj:tt)?) => {
+            i64::try_from(
+                $field
+                    .iter()
+                    .filter(|i| i $(.$proj)? .item_type == item_type)
+                    .count(),
+            )
+            .unwrap_or(i64::MAX)
         };
     }
     macro_rules! count_opt_vec {
-        ($field:expr) => {
+        ($field:expr $(, $proj:tt)?) => {
             $field.as_ref().map_or(0, |v| {
-                i64::try_from(v.iter().filter(|i| i.item_type == item_type).count())
-                    .unwrap_or(i64::MAX)
+                i64::try_from(
+                    v.iter()
+                        .filter(|i| i $(.$proj)? .item_type == item_type)
+                        .count(),
+                )
+                .unwrap_or(i64::MAX)
             })
         };
     }
 
     let equip_count = count_vec!(inventory.suits)
-        + count_vec!(inventory.long_guns)
-        + count_vec!(inventory.pistols)
-        + count_vec!(inventory.melee)
-        + count_vec!(inventory.space_suits)
-        + count_vec!(inventory.space_guns)
-        + count_vec!(inventory.space_melee)
-        + count_opt_vec!(inventory.mech_suits)
-        + count_opt_vec!(inventory.sentinels)
-        + count_opt_vec!(inventory.sentinel_weapons)
+        + count_vec!(inventory.long_guns, 0)
+        + count_vec!(inventory.pistols, 0)
+        + count_vec!(inventory.melee, 0)
+        + count_vec!(inventory.space_suits, 0)
+        + count_vec!(inventory.space_guns, 0)
+        + count_vec!(inventory.space_melee, 0)
+        + count_opt_vec!(inventory.mech_suits, 0)
+        + count_opt_vec!(inventory.sentinels, 0)
+        + count_opt_vec!(inventory.sentinel_weapons, 0)
         + count_opt_vec!(inventory.operator_amps)
-        + count_opt_vec!(inventory.hoverboards)
-        + count_opt_vec!(inventory.horses)
-        + count_opt_vec!(inventory.motorcycles)
+        + count_opt_vec!(inventory.hoverboards, 0)
+        + count_opt_vec!(inventory.horses, 0)
+        + count_opt_vec!(inventory.motorcycles, 0)
         + count_opt_vec!(inventory.crew_ships)
         + count_opt_vec!(inventory.crew_ship_weapons)
-        + count_opt_vec!(inventory.drifter_melee);
+        + count_opt_vec!(inventory.drifter_melee, 0);
 
     if equip_count > 0 {
         return equip_count;

@@ -33,7 +33,7 @@ pub enum LogEvent {
     RelicClose,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TradeInfo {
     pub sent: Vec<TradeItem>,
     pub received: Vec<TradeItem>,

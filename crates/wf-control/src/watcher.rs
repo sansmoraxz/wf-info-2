@@ -12,9 +12,7 @@ use wf_core::logs::pattern::LogProcessingEngine;
 use wf_core::logs::{self, LineAssembler, LogEvent, LogSource};
 use wf_ocr::{RelicRecognizer, load_image};
 
-use crate::events::{
-    EventBus, RelicSelectionPopup, TradeConfirmPopupEvent, TradeFailedEvent, TradeSuccessEvent,
-};
+use crate::events::{EventBus, RelicSelectionPopup, TradeFailedEvent, TradeSuccessEvent};
 use crate::screenshot::{ScreenshotState, capture_screen};
 use crate::{
     AccountLoginEvent, AccountLogoutEvent, DaemonEvent, DmTabOpenedEvent, SystemQuitReason,
@@ -208,19 +206,13 @@ impl WatchState {
             Some(reason) => log::info!("Trade failed: {trades:?}, reason: {reason}"),
             None => log::info!("Trade confirmed: {trades:?}"),
         }
-        let popup = TradeConfirmPopupEvent {
-            sent: trades.sent,
-            received: trades.received,
-            name: trades.name,
-            platform: trades.platform,
-        };
         match fail_reason {
             Some(reason) => self
                 .events
-                .emit(DaemonEvent::TradeFailed(TradeFailedEvent(popup, reason))),
+                .emit(DaemonEvent::TradeFailed(TradeFailedEvent(trades, reason))),
             None => self
                 .events
-                .emit(DaemonEvent::TradeSuccess(TradeSuccessEvent(popup))),
+                .emit(DaemonEvent::TradeSuccess(TradeSuccessEvent(trades))),
         }
     }
 }

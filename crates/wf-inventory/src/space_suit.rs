@@ -1,40 +1,10 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-use crate::{ItemType, ObjectId, Polarity};
+use crate::common::WeaponEntry;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SpaceSuit {
-    #[serde(rename = "ItemType")]
-    pub item_type: ItemType,
-
-    #[serde(rename = "ItemId")]
-    pub item_id: ObjectId,
-
-    #[serde(rename = "ItemCount", skip_serializing_if = "Option::is_none")]
-    pub item_count: Option<i64>,
-
-    #[serde(rename = "XP")]
-    pub xp: Option<i64>,
-
-    #[serde(rename = "FocusLens")]
-    pub focus_lens: Option<String>,
-
-    #[serde(rename = "Polarity")]
-    pub polarity: Option<Vec<Polarity>>,
-
-    #[serde(rename = "Polarized")]
-    pub polarized: Option<i64>,
-
-    #[serde(rename = "ModSlotPurchases")]
-    pub mod_slot_purchases: Option<i64>,
-
-    #[serde(rename = "IsNew")]
-    pub is_new: Option<bool>,
-
-    #[serde(flatten)]
-    pub other: Option<serde_json::Map<String, Value>>,
-}
+#[serde(transparent)]
+pub struct SpaceSuit(pub WeaponEntry);
 
 #[cfg(test)]
 mod test {
@@ -51,9 +21,9 @@ mod test {
         let space_suit: SpaceSuit = from_str(json_data).unwrap();
 
         assert_eq!(
-            space_suit.item_type,
+            space_suit.0.item_type,
             "/Lotus/Powersuits/Archwing/SupportJetPack/SupportJetPack"
         );
-        assert_eq!(space_suit.xp.unwrap(), 4_376_023);
+        assert_eq!(space_suit.0.xp.unwrap(), 4_376_023);
     }
 }

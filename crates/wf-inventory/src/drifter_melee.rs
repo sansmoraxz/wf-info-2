@@ -1,26 +1,11 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-use crate::{ItemType, ObjectId};
+use crate::common::ConfigurableEntry;
 
 /// Represents a Drifter melee weapon in the inventory.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DrifterMelee {
-    #[serde(rename = "ItemType")]
-    pub item_type: ItemType,
-
-    #[serde(rename = "ItemId")]
-    pub item_id: ObjectId,
-
-    #[serde(rename = "UpgradeVer")]
-    pub upgrade_ver: Option<i64>,
-
-    #[serde(rename = "Configs")]
-    pub configs: Option<Vec<Value>>,
-
-    #[serde(flatten)]
-    pub other: Option<serde_json::Map<String, Value>>,
-}
+#[serde(transparent)]
+pub struct DrifterMelee(pub ConfigurableEntry);
 
 #[cfg(test)]
 mod tests {
@@ -37,7 +22,7 @@ mod tests {
         let item: DrifterMelee = from_str(json_data).unwrap();
 
         assert_eq!(
-            item.item_type,
+            item.0.item_type,
             "/Lotus/Types/Friendly/PlayerControllable/Weapons/DuviriDualSwords"
         );
     }

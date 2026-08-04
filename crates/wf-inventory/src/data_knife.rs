@@ -1,29 +1,11 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-use crate::{ItemType, ObjectId};
+use crate::common::XpEntry;
 
 /// Represents a data knife (hacking device / parazon) in the inventory.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DataKnife {
-    #[serde(rename = "ItemType")]
-    pub item_type: ItemType,
-
-    #[serde(rename = "ItemId")]
-    pub item_id: ObjectId,
-
-    #[serde(rename = "XP")]
-    pub xp: Option<i64>,
-
-    #[serde(rename = "UpgradeVer")]
-    pub upgrade_ver: Option<i64>,
-
-    #[serde(rename = "Configs")]
-    pub configs: Option<Vec<Value>>,
-
-    #[serde(flatten)]
-    pub other: Option<serde_json::Map<String, Value>>,
-}
+#[serde(transparent)]
+pub struct DataKnife(pub XpEntry);
 
 #[cfg(test)]
 mod tests {
@@ -40,9 +22,9 @@ mod tests {
         let item: DataKnife = from_str(json_data).unwrap();
 
         assert_eq!(
-            item.item_type,
+            item.0.item_type,
             "/Lotus/Weapons/Tenno/HackingDevices/TnHackingDevice/TnHackingDeviceWeapon"
         );
-        assert_eq!(item.xp.unwrap(), 450_000);
+        assert_eq!(item.0.xp.unwrap(), 450_000);
     }
 }

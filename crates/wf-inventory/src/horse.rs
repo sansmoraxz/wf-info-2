@@ -1,26 +1,11 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-use crate::{ItemType, ObjectId};
+use crate::common::ConfigurableEntry;
 
 /// Represents a Kaithe (horse mount) in the inventory.
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Horse {
-    #[serde(rename = "ItemType")]
-    pub item_type: ItemType,
-
-    #[serde(rename = "ItemId")]
-    pub item_id: ObjectId,
-
-    #[serde(rename = "UpgradeVer")]
-    pub upgrade_ver: Option<i64>,
-
-    #[serde(rename = "Configs")]
-    pub configs: Option<Vec<Value>>,
-
-    #[serde(flatten)]
-    pub other: Option<serde_json::Map<String, Value>>,
-}
+#[serde(transparent)]
+pub struct Horse(pub ConfigurableEntry);
 
 #[cfg(test)]
 mod tests {
@@ -37,7 +22,7 @@ mod tests {
         let item: Horse = from_str(json_data).unwrap();
 
         assert_eq!(
-            item.item_type,
+            item.0.item_type,
             "/Lotus/Types/NeutralCreatures/ErsatzHorse/ErsatzHorsePowerSuit"
         );
     }

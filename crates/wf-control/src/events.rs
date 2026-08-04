@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use wf_core::{
     account::{Platform, Username},
-    logs::TradeItem,
+    logs::TradeInfo,
     process::AccountId,
 };
 use wf_inventory::FractionSyndicates;
@@ -187,15 +187,7 @@ pub struct DmTabOpenedEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TradeConfirmPopupEvent {
-    pub sent: Vec<TradeItem>,
-    pub received: Vec<TradeItem>,
-    pub name: Username,
-    pub platform: Platform,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TradeSuccessEvent(pub TradeConfirmPopupEvent);
+pub struct TradeSuccessEvent(pub TradeInfo);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelicSelectionPopup {
@@ -203,7 +195,7 @@ pub struct RelicSelectionPopup {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TradeFailedEvent(pub TradeConfirmPopupEvent, pub String);
+pub struct TradeFailedEvent(pub TradeInfo, pub String);
 
 /// Wire format for pushing events to subscribed clients.
 #[derive(Debug, Clone, Serialize, Deserialize)]

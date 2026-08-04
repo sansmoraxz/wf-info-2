@@ -33,11 +33,12 @@ use crate::market::MarketSummary;
 // blanket impl is impossible and the alternatives (a trait+impls in
 // wf-inventory, or a derive crate) are strictly more code for the same 11
 // impls. A field-accessor macro is the cheapest correct form here.
+// The optional `0` token projects through transparent newtype wrappers.
 macro_rules! impl_has_other {
-    ($($ty:ty),+ $(,)?) => {
+    ($($ty:ty $(=> $proj:tt)?),+ $(,)?) => {
         $(impl HasOther for $ty {
             fn other_mut(&mut self) -> Option<&mut serde_json::Map<String, serde_json::Value>> {
-                self.other.as_mut()
+                self $(.$proj)? .other.as_mut()
             }
         })+
     };
@@ -273,12 +274,12 @@ impl InventoryItemEnvelope {
             Self::Recipes(env) => Some(env.item.item_count),
             Self::RawUpgrades(env) => Some(env.item.item_count),
             Self::Suits(env) => env.item.item_count,
-            Self::LongGuns(env) => env.item.item_count,
-            Self::Pistols(env) => env.item.item_count,
-            Self::Melee(env) => env.item.item_count,
-            Self::SpaceSuits(env) => env.item.item_count,
-            Self::SpaceGuns(env) => env.item.item_count,
-            Self::SpaceMelee(env) => env.item.item_count,
+            Self::LongGuns(env) => env.item.0.item_count,
+            Self::Pistols(env) => env.item.0.item_count,
+            Self::Melee(env) => env.item.0.item_count,
+            Self::SpaceSuits(env) => env.item.0.item_count,
+            Self::SpaceGuns(env) => env.item.0.item_count,
+            Self::SpaceMelee(env) => env.item.0.item_count,
             Self::Upgrades(env) => env.item.item_count,
             Self::PendingRecipes(env) => env.item.item_count,
         }
@@ -291,12 +292,12 @@ trait HasOther {
 
 impl_has_other!(
     Suit,
-    LongGun,
-    Pistol,
-    Melee,
-    SpaceSuit,
-    SpaceGun,
-    SpaceMelee,
+    LongGun => 0,
+    Pistol => 0,
+    Melee => 0,
+    SpaceSuit => 0,
+    SpaceGun => 0,
+    SpaceMelee => 0,
     RawUpgrade,
     Upgrade,
     Recipe,
@@ -370,14 +371,15 @@ pub(super) fn collect_inventory_items<'a>(
     };
 
     // One arm per category: inventory field, envelope variant, and how the
-    // item id is derived (`item_id`, `last_added_id`, or absent).
+    // item id is derived (`item_id`, `last_added_id`, or absent). The
+    // optional `0` token projects through transparent newtype wrappers.
     macro_rules! collect {
-        ($cat:ident, $field:ident, |$item:ident| $id:expr) => {
+        ($cat:ident $(=> $proj:tt)?, $field:ident, |$item:ident| $id:expr) => {
             if category.is_none_or(|sel| sel == Category::$cat) {
                 for $item in &inventory.$field {
                     push_item(InventoryItemEnvelope::$cat(envelope(
                         $item,
-                        &$item.item_type,
+                        &$item $(.$proj)? .item_type,
                         $id,
                     )));
                 }
@@ -386,15 +388,19 @@ pub(super) fn collect_inventory_items<'a>(
     }
 
     collect!(Suits, suits, |item| Some(item.item_id.to_string()));
-    collect!(LongGuns, long_guns, |item| Some(item.item_id.to_string()));
-    collect!(Pistols, pistols, |item| Some(item.item_id.to_string()));
-    collect!(Melee, melee, |item| Some(item.item_id.to_string()));
-    collect!(SpaceSuits, space_suits, |item| Some(
-        item.item_id.to_string()
+    collect!(LongGuns => 0, long_guns, |item| Some(
+        item.0.item_id.to_string()
     ));
-    collect!(SpaceGuns, space_guns, |item| Some(item.item_id.to_string()));
-    collect!(SpaceMelee, space_melee, |item| Some(
-        item.item_id.to_string()
+    collect!(Pistols => 0, pistols, |item| Some(item.0.item_id.to_string()));
+    collect!(Melee => 0, melee, |item| Some(item.0.item_id.to_string()));
+    collect!(SpaceSuits => 0, space_suits, |item| Some(
+        item.0.item_id.to_string()
+    ));
+    collect!(SpaceGuns => 0, space_guns, |item| Some(
+        item.0.item_id.to_string()
+    ));
+    collect!(SpaceMelee => 0, space_melee, |item| Some(
+        item.0.item_id.to_string()
     ));
     collect!(RawUpgrades, raw_upgrades, |item| Some(
         item.last_added_id.to_string()
@@ -604,13 +610,13 @@ mod tests {
         let item_index = ItemIndex::default();
 
         macro_rules! check_category {
-            ($field:ident, $cat:literal, $id:expr) => {
+            ($field:ident $(=> $proj:tt)?, $cat:literal, $id:expr) => {
                 let views =
                     collect_inventory_items(&inventory, Some($cat.parse().unwrap()), &item_index);
                 assert_eq!(views.len(), inventory.$field.len(), $cat);
                 for (view, item) in views.iter().zip(&inventory.$field) {
                     let id: Option<&str> = $id(item);
-                    let expected = legacy(item, $cat, item.item_type.as_ref(), id);
+                    let expected = legacy(item, $cat, item $(.$proj)? .item_type.as_ref(), id);
                     assert_eq!(
                         serde_json::to_value(&view.envelope).unwrap(),
                         expected,
@@ -623,34 +629,34 @@ mod tests {
 
         check_category!(suits, "suits", (|i| Some(i.item_id.as_ref())) as IdOf<Suit>);
         check_category!(
-            long_guns,
+            long_guns => 0,
             "long_guns",
-            (|i| Some(i.item_id.as_ref())) as IdOf<LongGun>
+            (|i| Some(i.0.item_id.as_ref())) as IdOf<LongGun>
         );
         check_category!(
-            pistols,
+            pistols => 0,
             "pistols",
-            (|i| Some(i.item_id.as_ref())) as IdOf<Pistol>
+            (|i| Some(i.0.item_id.as_ref())) as IdOf<Pistol>
         );
         check_category!(
-            melee,
+            melee => 0,
             "melee",
-            (|i| Some(i.item_id.as_ref())) as IdOf<Melee>
+            (|i| Some(i.0.item_id.as_ref())) as IdOf<Melee>
         );
         check_category!(
-            space_suits,
+            space_suits => 0,
             "space_suits",
-            (|i| Some(i.item_id.as_ref())) as IdOf<SpaceSuit>
+            (|i| Some(i.0.item_id.as_ref())) as IdOf<SpaceSuit>
         );
         check_category!(
-            space_guns,
+            space_guns => 0,
             "space_guns",
-            (|i| Some(i.item_id.as_ref())) as IdOf<SpaceGun>
+            (|i| Some(i.0.item_id.as_ref())) as IdOf<SpaceGun>
         );
         check_category!(
-            space_melee,
+            space_melee => 0,
             "space_melee",
-            (|i| Some(i.item_id.as_ref())) as IdOf<SpaceMelee>
+            (|i| Some(i.0.item_id.as_ref())) as IdOf<SpaceMelee>
         );
         check_category!(
             raw_upgrades,
