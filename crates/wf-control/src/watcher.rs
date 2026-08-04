@@ -244,14 +244,7 @@ fn event_emitter_fn(
                         timestamp: Utc::now(),
                         username: username.clone(),
                     }));
-                #[cfg(feature = "memory")]
-                tokio::spawn(handle_login_event(
-                    state.events.clone(),
-                    state.http.clone(),
-                    username,
-                    state.warframe_pid,
-                    state.auto_callbacks,
-                ));
+                spawn_login_callbacks(&state, username);
             }
             LogEvent::Logout => {
                 state.session.logout();
@@ -322,6 +315,20 @@ fn event_emitter_fn(
     }
     state
 }
+
+#[cfg(feature = "memory")]
+fn spawn_login_callbacks(state: &WatchState, username: Username) {
+    tokio::spawn(handle_login_event(
+        state.events.clone(),
+        state.http.clone(),
+        username,
+        state.warframe_pid,
+        state.auto_callbacks,
+    ));
+}
+
+#[cfg(not(feature = "memory"))]
+fn spawn_login_callbacks(_state: &WatchState, _username: Username) {}
 
 #[cfg(feature = "memory")]
 async fn handle_login_event(

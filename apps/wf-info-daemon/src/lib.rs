@@ -173,6 +173,20 @@ fn exit_from_child_result(result: Result<Result<ExitStatus, io::Error>, JoinErro
 }
 
 #[cfg(unix)]
+async fn wait_for_game_start_or_launcher_exit(
+    launcher: process::Launcher,
+    child_handle: &mut JoinHandle<Result<ExitStatus, io::Error>>,
+) -> process::RunningGame {
+    let game_started = launcher.game_started();
+    tokio::pin!(game_started);
+
+    tokio::select! {
+        game = &mut game_started => game,
+        result = &mut *child_handle => exit_from_child_result(result),
+    }
+}
+
+#[cfg(unix)]
 fn merged_winedebug_value(existing: Option<OsString>) -> OsString {
     match existing {
         Some(current) if !current.is_empty() => {
@@ -250,19 +264,24 @@ fn launch_warframe(warframe_cmd: &[String]) -> Child {
     };
     let mut command = Command::new(program);
     command.args(program_args);
-    #[cfg(unix)]
-    {
-        command.stderr(Stdio::piped());
-        command.env(
-            "WINEDEBUG",
-            merged_winedebug_value(env::var_os("WINEDEBUG")),
-        );
-    }
+    configure_wine_logging(&mut command);
     command.spawn().unwrap_or_else(|e| {
         eprintln!("Error: Failed to launch Warframe: {e}");
         exit(1);
     })
 }
+
+#[cfg(unix)]
+fn configure_wine_logging(command: &mut Command) {
+    command.stderr(Stdio::piped());
+    command.env(
+        "WINEDEBUG",
+        merged_winedebug_value(env::var_os("WINEDEBUG")),
+    );
+}
+
+#[cfg(not(unix))]
+fn configure_wine_logging(_command: &mut Command) {}
 
 fn spawn_wfm_auto_status(cx: &Handles) {
     let mut rx = cx.events.subscribe();
@@ -369,17 +388,6 @@ pub async fn run() {
     let mut child_handle = tokio::spawn(async move { child.wait().await });
 
     let launcher = process::Launcher::new(launcher_pid, existing_warframe_pids);
-    #[cfg(unix)]
-    let game = {
-        let game_started = launcher.game_started();
-        tokio::pin!(game_started);
-
-        tokio::select! {
-            game = &mut game_started => game,
-            result = &mut child_handle => exit_from_child_result(result),
-        }
-    };
-    #[cfg(windows)]
     let game = wait_for_game_start_or_launcher_exit(launcher, &mut child_handle).await;
 
     #[cfg(windows)]

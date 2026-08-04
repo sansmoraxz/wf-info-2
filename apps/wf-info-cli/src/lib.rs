@@ -156,6 +156,38 @@ struct CliConfig {
     id: Option<String>,
 }
 
+impl CliConfig {
+    fn has_connection_target(&self) -> bool {
+        #[cfg(windows)]
+        {
+            self.tcp_addr.is_some() || self.npipe.is_some()
+        }
+        #[cfg(unix)]
+        {
+            self.tcp_addr.is_some() || self.unix_path.is_some()
+        }
+        #[cfg(all(not(unix), not(windows)))]
+        {
+            self.tcp_addr.is_some()
+        }
+    }
+
+    fn all_connection_targets_set(&self) -> bool {
+        #[cfg(windows)]
+        {
+            self.tcp_addr.is_some() && self.npipe.is_some()
+        }
+        #[cfg(unix)]
+        {
+            self.tcp_addr.is_some() && self.unix_path.is_some()
+        }
+        #[cfg(all(not(unix), not(windows)))]
+        {
+            self.tcp_addr.is_some()
+        }
+    }
+}
+
 #[derive(Debug)]
 enum CliMode {
     Request {
@@ -183,22 +215,9 @@ impl ConnectionArgs {
             id,
         };
 
-        let should_load_defaults = {
-            #[cfg(windows)]
-            {
-                cfg.tcp_addr.is_none() && cfg.npipe.is_none()
-            }
-            #[cfg(unix)]
-            {
-                cfg.tcp_addr.is_none() && cfg.unix_path.is_none()
-            }
-            #[cfg(all(not(unix), not(windows)))]
-            {
-                cfg.tcp_addr.is_none()
-            }
-        };
-
-        if should_load_defaults && let Some(default_cfg) = ControlConfig::from_env() {
+        if !cfg.has_connection_target()
+            && let Some(default_cfg) = ControlConfig::from_env()
+        {
             for endpoint in default_cfg.endpoints {
                 match endpoint {
                     ControlEndpoint::Tcp(addr) if cfg.tcp_addr.is_none() => {
@@ -214,43 +233,13 @@ impl ConnectionArgs {
                     }
                     _ => {}
                 }
-                #[cfg(windows)]
-                {
-                    if cfg.tcp_addr.is_some() && cfg.npipe.is_some() {
-                        break;
-                    }
-                }
-                #[cfg(unix)]
-                {
-                    if cfg.tcp_addr.is_some() && cfg.unix_path.is_some() {
-                        break;
-                    }
-                }
-                #[cfg(all(not(unix), not(windows)))]
-                {
-                    if cfg.tcp_addr.is_some() {
-                        break;
-                    }
+                if cfg.all_connection_targets_set() {
+                    break;
                 }
             }
         }
 
-        let missing_target = {
-            #[cfg(windows)]
-            {
-                cfg.tcp_addr.is_none() && cfg.npipe.is_none()
-            }
-            #[cfg(unix)]
-            {
-                cfg.tcp_addr.is_none() && cfg.unix_path.is_none()
-            }
-            #[cfg(all(not(unix), not(windows)))]
-            {
-                cfg.tcp_addr.is_none()
-            }
-        };
-
-        if missing_target {
+        if !cfg.has_connection_target() {
             let missing_msg = if cfg!(windows) {
                 "Missing connection target: set WF_INFO_API_TCP/WF_INFO_API_NPIPE or rely on defaults"
             } else if cfg!(unix) {
@@ -378,43 +367,33 @@ async fn send_request(
     let payload = serde_json::to_string(&request)?;
 
     if let Some(addr) = cfg.tcp_addr.as_ref() {
-        let mut stream = TcpStream::connect(&addr).await?;
-        stream.write_all(payload.as_bytes()).await?;
-        stream.write_all(b"\n").await?;
-        let mut reader = BufReader::new(stream);
-        let mut line = String::new();
-        reader.read_line(&mut line).await?;
-        return Ok(line);
+        return request_over_stream(TcpStream::connect(&addr).await?, &payload).await;
     }
 
     #[cfg(windows)]
-    {
-        if let Some(pipe) = cfg.npipe.as_ref() {
-            let pipe = normalize_npipe_path(pipe);
-            let mut stream = ClientOptions::new().open(&pipe)?;
-            stream.write_all(payload.as_bytes()).await?;
-            stream.write_all(b"\n").await?;
-            let mut reader = BufReader::new(stream);
-            let mut line = String::new();
-            reader.read_line(&mut line).await?;
-            return Ok(line);
-        }
+    if let Some(pipe) = cfg.npipe.as_ref() {
+        let pipe = normalize_npipe_path(pipe);
+        return request_over_stream(ClientOptions::new().open(&pipe)?, &payload).await;
     }
 
     #[cfg(unix)]
-    {
-        if let Some(path) = cfg.unix_path.as_ref() {
-            let mut stream = UnixStream::connect(&path).await?;
-            stream.write_all(payload.as_bytes()).await?;
-            stream.write_all(b"\n").await?;
-            let mut reader = BufReader::new(stream);
-            let mut line = String::new();
-            reader.read_line(&mut line).await?;
-            return Ok(line);
-        }
+    if let Some(path) = cfg.unix_path.as_ref() {
+        return request_over_stream(UnixStream::connect(&path).await?, &payload).await;
     }
 
     anyhow::bail!("No valid connection target")
+}
+
+async fn request_over_stream<S>(mut stream: S, payload: &str) -> anyhow::Result<String>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    stream.write_all(payload.as_bytes()).await?;
+    stream.write_all(b"\n").await?;
+    let mut reader = BufReader::new(stream);
+    let mut line = String::new();
+    reader.read_line(&mut line).await?;
+    Ok(line)
 }
 
 async fn run_watch(cfg: &CliConfig, params: SubscribeParams) -> anyhow::Result<()> {
@@ -431,20 +410,16 @@ async fn run_watch(cfg: &CliConfig, params: SubscribeParams) -> anyhow::Result<(
     }
 
     #[cfg(windows)]
-    {
-        if let Some(pipe) = cfg.npipe.as_ref() {
-            let pipe = normalize_npipe_path(pipe);
-            let stream = ClientOptions::new().open(&pipe)?;
-            return watch_stream(stream, &payload, cfg.output).await;
-        }
+    if let Some(pipe) = cfg.npipe.as_ref() {
+        let pipe = normalize_npipe_path(pipe);
+        let stream = ClientOptions::new().open(&pipe)?;
+        return watch_stream(stream, &payload, cfg.output).await;
     }
 
     #[cfg(unix)]
-    {
-        if let Some(path) = cfg.unix_path.as_ref() {
-            let stream = UnixStream::connect(&path).await?;
-            return watch_stream(stream, &payload, cfg.output).await;
-        }
+    if let Some(path) = cfg.unix_path.as_ref() {
+        let stream = UnixStream::connect(&path).await?;
+        return watch_stream(stream, &payload, cfg.output).await;
     }
 
     anyhow::bail!("No valid connection target")

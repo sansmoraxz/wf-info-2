@@ -81,19 +81,7 @@ impl ControlConfig {
             endpoints.push(ControlEndpoint::Tcp(addr));
         }
 
-        #[cfg(unix)]
-        {
-            if let Ok(path) = env::var("WF_INFO_API_UNIX") {
-                endpoints.push(ControlEndpoint::Unix(PathBuf::from(path)));
-            }
-        }
-
-        #[cfg(windows)]
-        {
-            if let Ok(pipe) = env::var("WF_INFO_API_NPIPE") {
-                endpoints.push(ControlEndpoint::Npipe(pipe));
-            }
-        }
+        endpoints.extend(platform_endpoint_from_env());
 
         if endpoints.is_empty() {
             endpoints.extend(default_control_endpoints());
@@ -408,6 +396,25 @@ where
     }
 
     Ok(())
+}
+
+#[cfg(unix)]
+fn platform_endpoint_from_env() -> Option<ControlEndpoint> {
+    env::var("WF_INFO_API_UNIX")
+        .ok()
+        .map(|path| ControlEndpoint::Unix(PathBuf::from(path)))
+}
+
+#[cfg(windows)]
+fn platform_endpoint_from_env() -> Option<ControlEndpoint> {
+    env::var("WF_INFO_API_NPIPE")
+        .ok()
+        .map(ControlEndpoint::Npipe)
+}
+
+#[cfg(all(not(unix), not(windows)))]
+fn platform_endpoint_from_env() -> Option<ControlEndpoint> {
+    None
 }
 
 #[cfg(unix)]
