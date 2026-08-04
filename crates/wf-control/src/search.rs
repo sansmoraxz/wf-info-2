@@ -472,7 +472,7 @@ pub(super) fn build_tantivy_index(
 pub(super) fn search_inventory(
     search_index: &InventorySearchIndex,
     clauses: Vec<(Occur, Box<dyn Query>)>,
-) -> Result<(usize, Vec<InventoryItemEnvelope>), tantivy::TantivyError> {
+) -> Result<(usize, Vec<&InventoryItemEnvelope>), tantivy::TantivyError> {
     let reader = search_index.index.reader()?;
     let searcher = reader.searcher();
 
@@ -502,7 +502,7 @@ pub(super) fn search_inventory(
             .and_then(|pos| usize::try_from(pos).ok())
             .and_then(|pos| search_index.items.get(pos))
         {
-            Some(envelope) => results.push(envelope.clone()),
+            Some(envelope) => results.push(envelope),
             None => log::warn!("Indexed document without a resolvable position"),
         }
     }

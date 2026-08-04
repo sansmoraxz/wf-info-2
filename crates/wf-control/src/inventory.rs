@@ -511,9 +511,10 @@ pub(super) async fn handle_inventory_filter(
     let offset = params.offset.unwrap_or(0);
     let limit = params.limit.unwrap_or(usize::MAX);
 
-    // Apply non-indexable filters and optional detail expansion
+    // Apply non-indexable filters over borrowed envelopes; only the
+    // paginated page is cloned out of the shared index and enriched.
     let mut filtered_items = Vec::new();
-    for mut envelope in envelopes {
+    for envelope in envelopes {
         if let Some(tradable) = params.tradable {
             let details =
                 item_index.lookup(envelope.item_type(), Some(envelope.category().as_ref()));
@@ -540,32 +541,34 @@ pub(super) async fn handle_inventory_filter(
             }
         }
 
+        filtered_items.push(envelope);
+    }
+
+    let filtered = filtered_items.len();
+    let mut items: Vec<_> = filtered_items
+        .into_iter()
+        .skip(offset)
+        .take(limit)
+        .cloned()
+        .collect();
+
+    for envelope in &mut items {
         if include_details
             && let Some(info) =
                 item_index.lookup(envelope.item_type(), Some(envelope.category().as_ref()))
         {
             envelope.set_details(Arc::clone(&info.details));
         }
-
-        filtered_items.push(envelope);
     }
 
-    let include_market = params.include_market.unwrap_or(false);
-    if include_market {
-        for envelope in &mut filtered_items {
+    if params.include_market.unwrap_or(false) {
+        for envelope in &mut items {
             if let Some(summary) = fetch_market_summary(market, &envelope.item_type().into()).await
             {
                 envelope.set_market(summary);
             }
         }
     }
-
-    let filtered = filtered_items.len();
-    let items: Vec<_> = filtered_items
-        .into_iter()
-        .skip(offset)
-        .take(limit)
-        .collect();
 
     Ok(InventoryFilterResponse {
         total,

@@ -628,7 +628,7 @@ pub(super) async fn handle_market_price(
 
     // Set parts: detect set items by "set" tag, then fetch detail for setParts
     let include_parts = params.include_parts.unwrap_or(true);
-    let is_set = wfm_item.tags.contains(&"set".to_owned());
+    let is_set = wfm_item.tags.iter().any(|t| t == "set");
     let set_parts = if include_parts && is_set {
         match fetch_item_detail(&market.http, &wfm_item.slug).await {
             Ok(detail) => {
