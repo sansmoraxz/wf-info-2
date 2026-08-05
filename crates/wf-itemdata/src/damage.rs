@@ -5,8 +5,6 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::common::{deserialize_number_to_f64, deserialize_option_number_to_f64};
-
 /// Full damage breakdown with all damage types.
 ///
 /// Uses Option<f64> for all fields to handle:
@@ -16,63 +14,55 @@ use crate::common::{deserialize_number_to_f64, deserialize_option_number_to_f64}
 #[serde(rename_all = "camelCase")]
 pub struct DamageBreakdown {
     /// Total damage (sum of all types)
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub total: Option<f64>,
 
     // Physical damage types
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub impact: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub puncture: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub slash: Option<f64>,
 
     // Elemental damage types
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub heat: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub cold: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub electricity: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub toxin: Option<f64>,
 
     // Combined elemental damage types
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub blast: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub radiation: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub gas: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub magnetic: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub viral: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub corrosive: Option<f64>,
 
     // Special damage types
-    #[serde(
-        default,
-        rename = "void",
-        deserialize_with = "deserialize_option_number_to_f64"
-    )]
+    #[serde(default, rename = "void")]
     pub void_damage: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub tau: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub cinematic: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub shield_drain: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub health_drain: Option<f64>,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub energy_drain: Option<f64>,
-    #[serde(
-        default,
-        rename = "true",
-        deserialize_with = "deserialize_option_number_to_f64"
-    )]
+    #[serde(default, rename = "true")]
     pub true_damage: Option<f64>,
 }
 
@@ -82,28 +72,16 @@ pub struct DamageBreakdown {
 pub struct Attack {
     pub name: String,
 
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub speed: Option<f64>,
 
-    #[serde(
-        default,
-        rename = "crit_chance",
-        deserialize_with = "deserialize_option_number_to_f64"
-    )]
+    #[serde(default, rename = "crit_chance")]
     pub crit_chance: Option<f64>,
 
-    #[serde(
-        default,
-        rename = "crit_mult",
-        deserialize_with = "deserialize_option_number_to_f64"
-    )]
+    #[serde(default, rename = "crit_mult")]
     pub crit_mult: Option<f64>,
 
-    #[serde(
-        default,
-        rename = "status_chance",
-        deserialize_with = "deserialize_option_number_to_f64"
-    )]
+    #[serde(default, rename = "status_chance")]
     pub status_chance: Option<f64>,
 
     #[serde(default, rename = "shot_type")]
@@ -119,11 +97,7 @@ pub struct Attack {
 
     pub falloff: Option<Falloff>,
 
-    #[serde(
-        default,
-        rename = "charge_time",
-        deserialize_with = "deserialize_option_number_to_f64"
-    )]
+    #[serde(default, rename = "charge_time")]
     pub charge_time: Option<f64>,
 
     pub slam: Option<Slam>,
@@ -154,16 +128,14 @@ pub enum SlideValue {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Falloff {
-    #[serde(deserialize_with = "deserialize_number_to_f64")]
     pub start: f64,
-    #[serde(deserialize_with = "deserialize_number_to_f64")]
     pub end: f64,
-    #[serde(default, deserialize_with = "deserialize_option_number_to_f64")]
+    #[serde(default)]
     pub reduction: Option<f64>,
 }
 
 /// Slam attack information for melee weapons.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Slam {
     /// Damage value (can be number as string in source)
@@ -172,7 +144,7 @@ pub struct Slam {
 }
 
 /// Radial damage from slam attacks.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Radial {
     pub damage: String,
@@ -182,7 +154,7 @@ pub struct Radial {
 }
 
 /// Pellet information for multi-projectile weapons.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Pellet {
     pub name: String,
@@ -212,7 +184,7 @@ mod tests {
         ));
         assert!(matches!(
             serde_json::from_str::<SlideValue>("10000000000000000000").unwrap(),
-            SlideValue::UInt(10000000000000000000)
+            SlideValue::UInt(10_000_000_000_000_000_000)
         ));
     }
 

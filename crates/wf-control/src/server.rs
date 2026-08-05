@@ -1,11 +1,15 @@
+use std::env;
 #[cfg(unix)]
 use std::fs;
+use std::io;
 #[cfg(unix)]
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::io::{
+    AsyncBufReadExt as _, AsyncRead, AsyncWrite, AsyncWriteExt as _, BufReader, Lines, split,
+};
 use tokio::net::TcpListener;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::task::JoinHandle;
 
 #[cfg(unix)]
@@ -13,10 +17,46 @@ use tokio::net::UnixListener;
 #[cfg(windows)]
 use tokio::net::windows::named_pipe::ServerOptions;
 
-use super::broadcaster;
-use super::events::EventMessage;
-use super::requests;
+use super::events::{DaemonEvent, EventMessage};
+use super::requests::{self, Handles};
 use super::subscription::EventFilter;
+
+#[derive(Debug, thiserror::Error)]
+pub enum ServerError {
+    #[error("Failed to bind TCP control socket at {addr}")]
+    BindTcp {
+        addr: String,
+        #[source]
+        source: io::Error,
+    },
+    #[cfg(unix)]
+    #[error("Failed to create unix socket dir {path}")]
+    CreateSocketDir {
+        path: String,
+        #[source]
+        source: io::Error,
+    },
+    #[cfg(unix)]
+    #[error("Failed to remove existing unix socket {path}")]
+    RemoveStaleSocket {
+        path: String,
+        #[source]
+        source: io::Error,
+    },
+    #[cfg(unix)]
+    #[error("Failed to bind unix control socket {path}")]
+    BindUnix {
+        path: String,
+        #[source]
+        source: io::Error,
+    },
+    #[error("Failed to serialize response")]
+    SerializeResponse(#[source] serde_json::Error),
+    #[error("Failed to serialize event")]
+    SerializeEvent(#[source] serde_json::Error),
+    #[error(transparent)]
+    Io(#[from] io::Error),
+}
 
 #[derive(Debug, Clone)]
 pub enum ControlEndpoint {
@@ -33,26 +73,15 @@ pub struct ControlConfig {
 }
 
 impl ControlConfig {
+    #[must_use]
     pub fn from_env() -> Option<Self> {
         let mut endpoints = Vec::new();
 
-        if let Ok(addr) = std::env::var("WF_INFO_API_TCP") {
+        if let Ok(addr) = env::var("WF_INFO_API_TCP") {
             endpoints.push(ControlEndpoint::Tcp(addr));
         }
 
-        #[cfg(unix)]
-        {
-            if let Ok(path) = std::env::var("WF_INFO_API_UNIX") {
-                endpoints.push(ControlEndpoint::Unix(PathBuf::from(path)));
-            }
-        }
-
-        #[cfg(windows)]
-        {
-            if let Ok(pipe) = std::env::var("WF_INFO_API_NPIPE") {
-                endpoints.push(ControlEndpoint::Npipe(normalize_npipe_path(pipe)));
-            }
-        }
+        endpoints.extend(platform_endpoint_from_env());
 
         if endpoints.is_empty() {
             endpoints.extend(default_control_endpoints());
@@ -68,30 +97,55 @@ impl ControlConfig {
 
 #[derive(Default)]
 pub struct ControlServer {
-    pub handles: Vec<JoinHandle<()>>,
+    pub(crate) _handles: Vec<JoinHandle<()>>,
     // Keep guards alive for cleanup on drop
     #[cfg(unix)]
     _unix_guards: Vec<UnixSocketGuard>,
 }
 
 impl ControlServer {
+    #[must_use]
     pub fn empty() -> Self {
         Self {
-            handles: Vec::new(),
+            _handles: Vec::new(),
             #[cfg(unix)]
             _unix_guards: Vec::new(),
         }
     }
 }
 
-pub async fn start_control_server_from_env() -> Result<ControlServer> {
+#[cfg(unix)]
+#[derive(Debug)]
+struct UnixSocketGuard {
+    path: PathBuf,
+}
+
+#[cfg(unix)]
+impl Drop for UnixSocketGuard {
+    fn drop(&mut self) {
+        if let Err(e) = fs::remove_file(&self.path)
+            && e.kind() != io::ErrorKind::NotFound
+        {
+            log::error!(
+                "Failed to cleanup unix socket {}: {}",
+                self.path.display(),
+                e
+            );
+        }
+    }
+}
+
+pub async fn start_control_server_from_env(cx: Handles) -> Result<ControlServer, ServerError> {
     let Some(cfg) = ControlConfig::from_env() else {
         return Ok(ControlServer::empty());
     };
-    start_control_server(cfg).await
+    start_control_server(cfg, cx).await
 }
 
-pub async fn start_control_server(cfg: ControlConfig) -> Result<ControlServer> {
+pub async fn start_control_server(
+    cfg: ControlConfig,
+    cx: Handles,
+) -> Result<ControlServer, ServerError> {
     let mut handles = Vec::new();
     #[cfg(unix)]
     let mut unix_guards = Vec::new();
@@ -99,46 +153,50 @@ pub async fn start_control_server(cfg: ControlConfig) -> Result<ControlServer> {
     for endpoint in cfg.endpoints {
         match endpoint {
             ControlEndpoint::Tcp(addr) => {
-                handles.push(spawn_tcp_server(addr).await?);
+                handles.push(spawn_tcp_server(&addr, cx.clone()).await?);
             }
             #[cfg(unix)]
             ControlEndpoint::Unix(path) => {
-                let (handle, guard) = spawn_unix_server(path).await?;
+                let (handle, guard) = spawn_unix_server(path, cx.clone())?;
                 handles.push(handle);
                 unix_guards.push(guard);
             }
             #[cfg(windows)]
             ControlEndpoint::Npipe(path) => {
-                handles.push(spawn_npipe_server(path).await?);
+                handles.push(spawn_npipe_server(&path, cx.clone()));
             }
         }
     }
 
     Ok(ControlServer {
-        handles,
+        _handles: handles,
         #[cfg(unix)]
         _unix_guards: unix_guards,
     })
 }
 
-async fn spawn_tcp_server(addr: String) -> Result<JoinHandle<()>> {
-    let listener = TcpListener::bind(&addr)
+async fn spawn_tcp_server(addr: &str, cx: Handles) -> Result<JoinHandle<()>, ServerError> {
+    let listener = TcpListener::bind(addr)
         .await
-        .with_context(|| format!("Failed to bind TCP control socket at {}", addr))?;
-    log::info!("Control API listening on tcp {}", addr);
+        .map_err(|source| ServerError::BindTcp {
+            addr: addr.to_owned(),
+            source,
+        })?;
+    log::info!("Control API listening on tcp {addr}");
 
     Ok(tokio::spawn(async move {
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
+                    let cx = cx.clone();
                     tokio::spawn(async move {
-                        if let Err(e) = handle_stream(stream).await {
-                            log::warn!("Control connection error: {}", e);
+                        if let Err(e) = handle_stream(stream, cx).await {
+                            log::warn!("Control connection error: {e}");
                         }
                     });
                 }
                 Err(e) => {
-                    log::error!("Control TCP accept error: {}", e);
+                    log::error!("Control TCP accept error: {e}");
                     break;
                 }
             }
@@ -147,11 +205,11 @@ async fn spawn_tcp_server(addr: String) -> Result<JoinHandle<()>> {
 }
 
 #[cfg(windows)]
-async fn spawn_npipe_server(path: String) -> Result<JoinHandle<()>> {
+fn spawn_npipe_server(path: &str, cx: Handles) -> JoinHandle<()> {
     let pipe_path = normalize_npipe_path(path);
-    log::info!("Control API listening on npipe {}", pipe_path);
+    log::info!("Control API listening on npipe {pipe_path}");
 
-    Ok(tokio::spawn(async move {
+    tokio::spawn(async move {
         let mut first_instance = true;
 
         loop {
@@ -162,7 +220,7 @@ async fn spawn_npipe_server(path: String) -> Result<JoinHandle<()>> {
             let server = match server {
                 Ok(server) => server,
                 Err(e) => {
-                    log::error!("Failed to create npipe {}: {}", pipe_path, e);
+                    log::error!("Failed to create npipe {pipe_path}: {e}");
                     break;
                 }
             };
@@ -171,49 +229,60 @@ async fn spawn_npipe_server(path: String) -> Result<JoinHandle<()>> {
 
             match server.connect().await {
                 Ok(()) => {
+                    let cx = cx.clone();
                     tokio::spawn(async move {
-                        if let Err(e) = handle_stream(server).await {
-                            log::warn!("Control connection error: {}", e);
+                        if let Err(e) = handle_stream(server, cx).await {
+                            log::warn!("Control connection error: {e}");
                         }
                     });
                 }
                 Err(e) => {
-                    log::error!("Control npipe accept error: {}", e);
+                    log::error!("Control npipe accept error: {e}");
                     break;
                 }
             }
         }
-    }))
+    })
 }
 
 #[cfg(unix)]
-async fn spawn_unix_server(path: PathBuf) -> Result<(JoinHandle<()>, UnixSocketGuard)> {
+fn spawn_unix_server(
+    path: PathBuf,
+    cx: Handles,
+) -> Result<(JoinHandle<()>, UnixSocketGuard), ServerError> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create unix socket dir {}", parent.display()))?;
+        fs::create_dir_all(parent).map_err(|source| ServerError::CreateSocketDir {
+            path: parent.display().to_string(),
+            source,
+        })?;
     }
     if path.exists() {
-        fs::remove_file(&path)
-            .with_context(|| format!("Failed to remove existing unix socket {}", path.display()))?;
+        fs::remove_file(&path).map_err(|source| ServerError::RemoveStaleSocket {
+            path: path.display().to_string(),
+            source,
+        })?;
     }
 
-    let listener = UnixListener::bind(&path)
-        .with_context(|| format!("Failed to bind unix control socket {}", path.display()))?;
+    let listener = UnixListener::bind(&path).map_err(|source| ServerError::BindUnix {
+        path: path.display().to_string(),
+        source,
+    })?;
     log::info!("Control API listening on unix {}", path.display());
-    let guard = UnixSocketGuard { path: path.clone() };
+    let guard = UnixSocketGuard { path };
 
     let handle = tokio::spawn(async move {
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
+                    let cx = cx.clone();
                     tokio::spawn(async move {
-                        if let Err(e) = handle_stream(stream).await {
-                            log::warn!("Control connection error: {}", e);
+                        if let Err(e) = handle_stream(stream, cx).await {
+                            log::warn!("Control connection error: {e}");
                         }
                     });
                 }
                 Err(e) => {
-                    log::error!("Control unix accept error: {}", e);
+                    log::error!("Control unix accept error: {e}");
                     break;
                 }
             }
@@ -223,11 +292,11 @@ async fn spawn_unix_server(path: PathBuf) -> Result<(JoinHandle<()>, UnixSocketG
     Ok((handle, guard))
 }
 
-async fn handle_stream<T>(stream: T) -> Result<()>
+async fn handle_stream<T>(stream: T, cx: Handles) -> Result<(), ServerError>
 where
     T: AsyncRead + AsyncWrite + Unpin,
 {
-    let (reader, mut writer) = tokio::io::split(stream);
+    let (reader, mut writer) = split(stream);
     let mut lines = BufReader::new(reader).lines();
 
     while let Some(line) = lines.next_line().await? {
@@ -236,37 +305,28 @@ where
             continue;
         }
 
-        let response = requests::handle_line(line).await;
-
-        // Check if this is a subscribe response that transitions to subscription mode
-        if let Some(filter) = response.subscription_filter.clone() {
-            // Send the success response first
-            let payload = serde_json::to_string(&response.response)
-                .context("Failed to serialize response")?;
-            writer.write_all(payload.as_bytes()).await?;
-            writer.write_all(b"\n").await?;
-
-            // Enter subscription mode
-            handle_subscription_mode(&mut lines, &mut writer, filter).await?;
-            return Ok(());
-        }
+        let outcome = requests::handle_line(&cx, line).await;
 
         let payload =
-            serde_json::to_string(&response.response).context("Failed to serialize response")?;
+            serde_json::to_string(outcome.response()).map_err(ServerError::SerializeResponse)?;
         writer.write_all(payload.as_bytes()).await?;
         writer.write_all(b"\n").await?;
+
+        if let requests::HandleOutcome::EnterSubscription { filter, .. } = outcome {
+            handle_subscription_mode(&cx, &mut lines, &mut writer, filter).await?;
+            return Ok(());
+        }
     }
 
     Ok(())
 }
 
-async fn event_writer<W>(event: crate::DaemonEvent, writer: &mut W) -> Result<()>
+async fn event_writer<W>(event: DaemonEvent, writer: &mut W) -> Result<(), ServerError>
 where
     W: AsyncWrite + Unpin,
 {
-    let msg = EventMessage::from_event(event);
-    let payload =
-        serde_json::to_string(&msg).context(format!("Failed to serialize event {:?}", &msg))?;
+    let msg = EventMessage::from(event);
+    let payload = serde_json::to_string(&msg).map_err(ServerError::SerializeEvent)?;
     writer.write_all(payload.as_bytes()).await?;
     writer.write_all(b"\n").await?;
 
@@ -274,15 +334,16 @@ where
 }
 
 async fn handle_subscription_mode<R, W>(
-    lines: &mut tokio::io::Lines<BufReader<R>>,
+    cx: &Handles,
+    lines: &mut Lines<BufReader<R>>,
     writer: &mut W,
     filter: EventFilter,
-) -> Result<()>
+) -> Result<(), ServerError>
 where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    let mut receiver = broadcaster::subscribe();
+    let mut receiver = cx.events.subscribe();
 
     loop {
         tokio::select! {
@@ -290,16 +351,15 @@ where
             event_result = receiver.recv() => {
                 match event_result {
                     Ok(event) => {
-                        if filter.matches(&event) {
-                            if let Err(e) = event_writer(event, writer).await  {
-                                log::error!("Error publishing event {:?}", e);
+                        if filter.matches(&event)
+                            && let Err(e) = event_writer(event, writer).await  {
+                                log::error!("Error publishing event {e:?}");
                             }
-                        }
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {
-                        log::warn!("Subscription client lagged, missed {} events", count);
+                    Err(RecvError::Lagged(count)) => {
+                        log::warn!("Subscription client lagged, missed {count} events");
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    Err(RecvError::Closed) => {
                         log::debug!("Broadcast channel closed");
                         break;
                     }
@@ -316,9 +376,9 @@ where
                         }
 
                         // Handle regular requests while subscribed (e.g., ping)
-                        let response = requests::handle_line(line).await;
-                        let payload = serde_json::to_string(&response.response)
-                            .context("Failed to serialize response")?;
+                        let outcome = requests::handle_line(cx, line).await;
+                        let payload = serde_json::to_string(outcome.response())
+                            .map_err(ServerError::SerializeResponse)?;
                         writer.write_all(payload.as_bytes()).await?;
                         writer.write_all(b"\n").await?;
                     }
@@ -339,31 +399,29 @@ where
 }
 
 #[cfg(unix)]
-#[derive(Debug)]
-struct UnixSocketGuard {
-    path: PathBuf,
+fn platform_endpoint_from_env() -> Option<ControlEndpoint> {
+    env::var("WF_INFO_API_UNIX")
+        .ok()
+        .map(|path| ControlEndpoint::Unix(PathBuf::from(path)))
 }
 
-#[cfg(unix)]
-impl Drop for UnixSocketGuard {
-    fn drop(&mut self) {
-        if let Err(e) = fs::remove_file(&self.path) {
-            if e.kind() != std::io::ErrorKind::NotFound {
-                log::debug!(
-                    "Failed to cleanup unix socket {}: {}",
-                    self.path.display(),
-                    e
-                );
-            }
-        }
-    }
+#[cfg(windows)]
+fn platform_endpoint_from_env() -> Option<ControlEndpoint> {
+    env::var("WF_INFO_API_NPIPE")
+        .ok()
+        .map(ControlEndpoint::Npipe)
+}
+
+#[cfg(all(not(unix), not(windows)))]
+fn platform_endpoint_from_env() -> Option<ControlEndpoint> {
+    None
 }
 
 #[cfg(unix)]
 fn default_unix_socket_path() -> Option<PathBuf> {
     let base = dirs::runtime_dir()
         .or_else(dirs::cache_dir)
-        .or_else(|| dirs::data_dir())?;
+        .or_else(dirs::data_dir)?;
     Some(base.join("wf-info-2").join("control.sock"))
 }
 
@@ -392,7 +450,7 @@ fn default_tcp_addr() -> String {
 
 #[cfg(windows)]
 fn default_npipe_path() -> String {
-    normalize_npipe_path("wf-info-2-control")
+    "wf-info-2-control".to_owned()
 }
 
 #[cfg(windows)]
@@ -400,7 +458,7 @@ fn normalize_npipe_path(pipe: impl AsRef<str>) -> String {
     let raw = pipe.as_ref();
     let lower = raw.to_ascii_lowercase();
     if lower.starts_with(r"\\.\pipe\") {
-        raw.to_string()
+        raw.to_owned()
     } else {
         format!(r"\\.\pipe\{}", raw.trim_start_matches(['\\', '/']))
     }

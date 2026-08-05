@@ -1,0 +1,12 @@
+ avoid-breaking-exported-api = false
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
+absolute-paths-max-segments = 2
+cognitive-complexity-threshold = 25
+too-many-lines-threshold = 250
+
+# Only enforce ordering of module-level items and impl blocks; struct fields
+# and enum variants keep their layout-/wire-sensitive order.
+source-item-ordering = ["module", "trait"]

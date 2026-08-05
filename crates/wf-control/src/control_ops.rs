@@ -1,57 +1,109 @@
-use anyhow::{Result, anyhow};
+use std::str::FromStr;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// Wire operation names, decomposed by domain along the dotted format
+/// (`inventory.load`, `wfm.price`, ...).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, derive_more::Display, derive_more::From)]
 pub enum ControlOp {
+    #[display("ping")]
     Ping,
-    InventoryLoad,
-    InventoryFilter,
-    InventoryMetaGet,
-    InventoryStaleUpdate,
-    ScreenshotTrigger,
-    InventoryRefresh,
+    #[display("subscribe")]
     Subscribe,
-    WFMarketPrice,
-    WFMarketRefresh,
-    WfmSignstatus,
-    WfmSignin,
-    WfmSignout,
+    #[display("inventory.{_0}")]
+    Inventory(InventoryOp),
+    #[display("screenshot.{_0}")]
+    Screenshot(ScreenshotOp),
+    #[display("wfm.{_0}")]
+    Wfm(WfmOp),
 }
 
-impl ControlOp {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Ping => "ping",
-            Self::InventoryLoad => "inventory.load",
-            Self::InventoryFilter => "inventory.filter",
-            Self::InventoryMetaGet => "inventory.meta.get",
-            Self::InventoryStaleUpdate => "inventory.stale.update",
-            Self::ScreenshotTrigger => "screenshot.trigger",
-            Self::InventoryRefresh => "inventory.refresh",
-            Self::Subscribe => "subscribe",
-            Self::WFMarketPrice => "wfm.price",
-            Self::WFMarketRefresh => "wfm.refresh",
-            Self::WfmSignstatus => "wfm.signstatus",
-            Self::WfmSignin => "wfm.signin",
-            Self::WfmSignout => "wfm.signout",
-        }
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString)]
+#[strum(serialize_all = "lowercase")]
+pub enum InventoryOp {
+    Load,
+    Filter,
+    #[strum(serialize = "meta.get")]
+    MetaGet,
+    #[strum(serialize = "stale.update")]
+    StaleUpdate,
+    Refresh,
+}
 
-    pub fn parse(op: &str) -> Result<Self> {
-        match op {
-            "ping" => Ok(Self::Ping),
-            "inventory.load" => Ok(Self::InventoryLoad),
-            "inventory.filter" => Ok(Self::InventoryFilter),
-            "inventory.meta.get" => Ok(Self::InventoryMetaGet),
-            "inventory.stale.update" => Ok(Self::InventoryStaleUpdate),
-            "screenshot.trigger" => Ok(Self::ScreenshotTrigger),
-            "inventory.refresh" => Ok(Self::InventoryRefresh),
-            "subscribe" => Ok(Self::Subscribe),
-            "wfm.price" => Ok(Self::WFMarketPrice),
-            "wfm.refresh" => Ok(Self::WFMarketRefresh),
-            "wfm.signstatus" => Ok(Self::WfmSignstatus),
-            "wfm.signin" => Ok(Self::WfmSignin),
-            "wfm.signout" => Ok(Self::WfmSignout),
-            _ => Err(anyhow!("Unknown operation '{}'", op)),
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString)]
+#[strum(serialize_all = "lowercase")]
+pub enum ScreenshotOp {
+    Trigger,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString)]
+#[strum(serialize_all = "lowercase")]
+pub enum WfmOp {
+    Price,
+    Refresh,
+    Signstatus,
+    Signin,
+    Signout,
+}
+
+impl FromStr for ControlOp {
+    type Err = strum::ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "ping" => Self::Ping,
+            "subscribe" => Self::Subscribe,
+            _ => match s.split_once('.') {
+                Some(("inventory", leaf)) => Self::Inventory(leaf.parse()?),
+                Some(("screenshot", leaf)) => Self::Screenshot(leaf.parse()?),
+                Some(("wfm", leaf)) => Self::Wfm(leaf.parse()?),
+                _ => return Err(strum::ParseError::VariantNotFound),
+            },
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ALL_OPS: [(ControlOp, &str); 13] = [
+        (ControlOp::Ping, "ping"),
+        (ControlOp::Subscribe, "subscribe"),
+        (ControlOp::Inventory(InventoryOp::Load), "inventory.load"),
+        (
+            ControlOp::Inventory(InventoryOp::Filter),
+            "inventory.filter",
+        ),
+        (
+            ControlOp::Inventory(InventoryOp::MetaGet),
+            "inventory.meta.get",
+        ),
+        (
+            ControlOp::Inventory(InventoryOp::StaleUpdate),
+            "inventory.stale.update",
+        ),
+        (
+            ControlOp::Inventory(InventoryOp::Refresh),
+            "inventory.refresh",
+        ),
+        (
+            ControlOp::Screenshot(ScreenshotOp::Trigger),
+            "screenshot.trigger",
+        ),
+        (ControlOp::Wfm(WfmOp::Price), "wfm.price"),
+        (ControlOp::Wfm(WfmOp::Refresh), "wfm.refresh"),
+        (ControlOp::Wfm(WfmOp::Signstatus), "wfm.signstatus"),
+        (ControlOp::Wfm(WfmOp::Signin), "wfm.signin"),
+        (ControlOp::Wfm(WfmOp::Signout), "wfm.signout"),
+    ];
+
+    #[test]
+    fn wire_strings_roundtrip() {
+        for (op, wire) in ALL_OPS {
+            assert_eq!(op.to_string(), wire);
+            assert_eq!(wire.parse::<ControlOp>(), Ok(op));
         }
+        "nope".parse::<ControlOp>().unwrap_err();
+        "inventory.nope".parse::<ControlOp>().unwrap_err();
+        "other.load".parse::<ControlOp>().unwrap_err();
     }
 }

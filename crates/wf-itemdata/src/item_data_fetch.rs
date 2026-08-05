@@ -1,5 +1,5 @@
-use std::fs;
 use std::path::PathBuf;
+use std::{env, fs, io};
 
 const DEFAULT_BASE_URL: &str =
     "https://raw.githubusercontent.com/WFCD/warframe-items/refs/heads/master/data/json/";
@@ -16,13 +16,22 @@ const FILE_NAMES: &[&str] = &[
     "Mods.json",
 ];
 
-fn base_url() -> String {
-    std::env::var("WF_ITEM_DATA_BASE_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_string())
+#[derive(Debug, thiserror::Error)]
+pub enum CacheError {
+    #[error("Could not find cache directory")]
+    NoCacheDir,
+    #[error(transparent)]
+    Io(#[from] io::Error),
+    #[error(transparent)]
+    Http(#[from] reqwest::Error),
 }
 
-pub fn cache_dir() -> anyhow::Result<PathBuf> {
-    let cache_dir =
-        dirs::cache_dir().ok_or_else(|| anyhow::anyhow!("Could not find cache directory"))?;
+fn base_url() -> String {
+    env::var("WF_ITEM_DATA_BASE_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_owned())
+}
+
+pub fn cache_dir() -> Result<PathBuf, CacheError> {
+    let cache_dir = dirs::cache_dir().ok_or(CacheError::NoCacheDir)?;
     let dir = cache_dir.join("wf-info-2").join("itemdata");
     if !dir.exists() {
         fs::create_dir_all(&dir)?;
@@ -30,7 +39,7 @@ pub fn cache_dir() -> anyhow::Result<PathBuf> {
     Ok(dir)
 }
 
-pub fn cached_path(file: &str) -> anyhow::Result<PathBuf> {
+pub fn cached_path(file: &str) -> Result<PathBuf, CacheError> {
     Ok(cache_dir()?.join(file))
 }
 
@@ -39,14 +48,13 @@ pub fn cached_path(file: &str) -> anyhow::Result<PathBuf> {
 /// Uses ETag-based conditional requests: stores ETags in `<file>.etag` sidecar
 /// files and sends `If-None-Match` on subsequent requests. Files that haven't
 /// changed upstream (304) are skipped.
-pub async fn update_cache() -> anyhow::Result<()> {
+pub async fn update_cache(client: &reqwest::Client) -> Result<(), CacheError> {
     let dir = cache_dir()?;
     let base = base_url();
-    let client = reqwest::Client::new();
 
     for &file in FILE_NAMES {
-        let url = format!("{}{}", base, file);
-        let etag_path = dir.join(format!("{}.etag", file));
+        let url = format!("{base}{file}");
+        let etag_path = dir.join(format!("{file}.etag"));
 
         let mut req = client.get(&url);
 
@@ -58,7 +66,7 @@ pub async fn update_cache() -> anyhow::Result<()> {
         match req.send().await {
             Ok(resp) => {
                 if resp.status() == reqwest::StatusCode::NOT_MODIFIED {
-                    log::info!("itemdata: {} unchanged", file);
+                    log::info!("itemdata: {file} unchanged");
                     continue;
                 }
                 if !resp.status().is_success() {
@@ -69,16 +77,17 @@ pub async fn update_cache() -> anyhow::Result<()> {
                 // Save ETag if present
                 if let Some(etag) = resp.headers().get("etag")
                     && let Ok(val) = etag.to_str()
+                    && let Err(e) = fs::write(&etag_path, val)
                 {
-                    let _ = fs::write(&etag_path, val);
+                    log::warn!("itemdata: failed to save ETag for {file}: {e}");
                 }
 
                 let body = resp.text().await?;
                 fs::write(dir.join(file), &body)?;
-                log::info!("itemdata: {} updated", file);
+                log::info!("itemdata: {file} updated");
             }
             Err(e) => {
-                log::warn!("itemdata: failed to fetch {}: {}", file, e);
+                log::warn!("itemdata: failed to fetch {file}: {e}");
             }
         }
     }

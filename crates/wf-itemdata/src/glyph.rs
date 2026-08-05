@@ -31,7 +31,7 @@ pub struct Glyph {
 
 impl ProductCategory for Glyph {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["FlavourItems".to_string()]
+        vec!["FlavourItems".to_owned()]
     }
 }
 
@@ -46,7 +46,7 @@ impl Item for Glyph {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        self.type_field.as_str()
+        self.type_field.as_ref()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()

@@ -1,11 +1,60 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use wf_core::{account::Platform, logs::TradeItem};
+use tokio::sync::broadcast;
+use wf_core::{
+    account::{Platform, Username},
+    logs::TradeInfo,
+    process::AccountId,
+};
 use wf_inventory::FractionSyndicates;
 
+const CHANNEL_CAPACITY: usize = 256;
+
+/// Cheaply-cloneable handle to the daemon event broadcast channel. Every
+/// module that emits or subscribes to [`DaemonEvent`]s holds one of these
+/// instead of the whole application state.
+#[derive(Clone)]
+pub struct EventBus(broadcast::Sender<DaemonEvent>);
+
+impl Default for EventBus {
+    fn default() -> Self {
+        let (sender, _) = broadcast::channel(CHANNEL_CAPACITY);
+        Self(sender)
+    }
+}
+
+impl EventBus {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Broadcast an event to all subscribers. A send error only means there
+    /// are currently no subscribers, which is fine.
+    pub fn emit(&self, event: DaemonEvent) {
+        self.0.send(event).ok();
+    }
+
+    #[must_use]
+    pub fn subscribe(&self) -> broadcast::Receiver<DaemonEvent> {
+        self.0.subscribe()
+    }
+}
+
 /// All daemon events that can be emitted and subscribed to.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// The generated [`DaemonEventKind`] discriminant enum carries the
+/// subscription wire names; note that the relic kinds intentionally differ
+/// from the serde `type` tags ("relic_opened"/"relic_closed" vs
+/// "relic_selection_open"/"relic_selection_closed") — a pre-existing wire
+/// contract that must be preserved.
+#[derive(Debug, Clone, Serialize, Deserialize, strum::EnumDiscriminants)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[strum_discriminants(
+    name(DaemonEventKind),
+    derive(Hash, strum::Display, strum::EnumString),
+    strum(serialize_all = "snake_case")
+)]
 pub enum DaemonEvent {
     GameStart(GameStartEvent),
     AccountLogin(AccountLoginEvent),
@@ -18,27 +67,16 @@ pub enum DaemonEvent {
     DmTabOpened(DmTabOpenedEvent),
     TradeSuccess(TradeSuccessEvent),
     TradeFailed(TradeFailedEvent),
+    #[strum_discriminants(strum(serialize = "relic_opened"))]
     RelicSelectionOpen(RelicSelectionPopup),
+    #[strum_discriminants(strum(serialize = "relic_closed"))]
     RelicSelectionClosed,
 }
 
 impl DaemonEvent {
-    pub fn event_type(&self) -> &'static str {
-        match self {
-            DaemonEvent::GameStart(_) => "game_start",
-            DaemonEvent::AccountLogin(_) => "account_login",
-            DaemonEvent::AccountLogout(_) => "account_logout",
-            DaemonEvent::SystemQuit(_) => "system_quit",
-            DaemonEvent::InventoryFetched(_) => "inventory_fetched",
-            DaemonEvent::InventoryStale(_) => "inventory_stale",
-            DaemonEvent::ProfileUpdated(_) => "profile_updated",
-            DaemonEvent::ScreenshotTriggered(_) => "screenshot_triggered",
-            DaemonEvent::DmTabOpened(_) => "dm_tab_opened",
-            DaemonEvent::TradeSuccess(_) => "trade_success",
-            DaemonEvent::TradeFailed(_) => "trade_failed",
-            DaemonEvent::RelicSelectionOpen(_) => "relic_opened",
-            DaemonEvent::RelicSelectionClosed => "relic_closed",
-        }
+    #[must_use]
+    pub fn kind(&self) -> DaemonEventKind {
+        self.into()
     }
 }
 
@@ -50,7 +88,7 @@ pub struct GameStartEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountLoginEvent {
     pub timestamp: DateTime<Utc>,
-    pub username: String,
+    pub username: Username,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,10 +130,33 @@ pub struct InventorySummary {
     pub supported_syndicates: Option<FractionSyndicates>,
 }
 
+/// Where an inventory fetch originated. Free-form user-supplied sources are
+/// preserved verbatim in `Other`.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Default,
+    strum::Display,
+    strum::EnumString,
+    serde_with::SerializeDisplay,
+    serde_with::DeserializeFromStr,
+)]
+#[strum(serialize_all = "kebab-case")]
+pub enum Source {
+    #[default]
+    Manual,
+    LiveRefresh,
+    Auto,
+    #[strum(default)]
+    Other(String),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InventoryFetchedEvent {
     pub timestamp: DateTime<Utc>,
-    pub source: String,
+    pub source: Source,
     pub summary: InventorySummary,
 }
 
@@ -109,7 +170,7 @@ pub struct InventoryStaleEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProfileUpdatedEvent {
     pub timestamp: DateTime<Utc>,
-    pub account_id: String,
+    pub account_id: AccountId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,20 +182,12 @@ pub struct ScreenshotTriggeredEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DmTabOpenedEvent {
     pub timestamp: DateTime<Utc>,
-    pub username: String,
+    pub username: Username,
     pub platform: Platform,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TradeConfirmPopupEvent {
-    pub sent: Vec<TradeItem>,
-    pub received: Vec<TradeItem>,
-    pub name: String,
-    pub platform: Platform,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TradeSuccessEvent(pub TradeConfirmPopupEvent);
+pub struct TradeSuccessEvent(pub TradeInfo);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelicSelectionPopup {
@@ -142,7 +195,7 @@ pub struct RelicSelectionPopup {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TradeFailedEvent(pub TradeConfirmPopupEvent, pub String);
+pub struct TradeFailedEvent(pub TradeInfo, pub String);
 
 /// Wire format for pushing events to subscribed clients.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -151,10 +204,10 @@ pub struct EventMessage {
     pub payload: DaemonEvent,
 }
 
-impl EventMessage {
-    pub fn from_event(event: DaemonEvent) -> Self {
+impl From<DaemonEvent> for EventMessage {
+    fn from(event: DaemonEvent) -> Self {
         Self {
-            event: event.event_type().to_string(),
+            event: event.kind().to_string(),
             payload: event,
         }
     }
@@ -169,17 +222,31 @@ mod tests {
         let start = DaemonEvent::GameStart(GameStartEvent {
             timestamp: Utc::now(),
         });
-        assert_eq!(start.event_type(), "game_start");
+        assert_eq!(start.kind().to_string(), "game_start");
 
         let quit = DaemonEvent::SystemQuit(SystemQuitEvent {
             timestamp: Utc::now(),
             reason: SystemQuitReason::Requested,
         });
-        let message = EventMessage::from_event(quit);
+        let message = EventMessage::from(quit);
         let value = serde_json::to_value(message).unwrap();
 
         assert_eq!(value["event"], "system_quit");
         assert_eq!(value["payload"]["type"], "system_quit");
         assert_eq!(value["payload"]["reason"], "requested");
+    }
+
+    #[test]
+    fn dm_tab_opened_platform_serializes_as_variant_name() {
+        let event = DmTabOpenedEvent {
+            timestamp: Utc::now(),
+            username: "player".into(),
+            platform: Platform::Playstation,
+        };
+        let value = serde_json::to_value(&event).unwrap();
+        assert_eq!(value["platform"], "PLAYSTATION");
+
+        let unknown = serde_json::to_value(Platform::Unknown).unwrap();
+        assert_eq!(unknown, "UNKNOWN");
     }
 }

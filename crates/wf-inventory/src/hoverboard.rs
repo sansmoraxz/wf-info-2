@@ -1,32 +1,11 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-use crate::ObjectId;
+use crate::common::ModularEntry;
 
 /// Represents a K-Drive (hoverboard) in the inventory.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Hoverboard {
-    #[serde(rename = "ItemType")]
-    pub item_type: String,
-
-    #[serde(rename = "ItemId")]
-    pub item_id: ObjectId,
-
-    #[serde(rename = "XP")]
-    pub xp: Option<i64>,
-
-    #[serde(rename = "UpgradeVer")]
-    pub upgrade_ver: Option<i64>,
-
-    #[serde(rename = "Configs")]
-    pub configs: Option<Vec<Value>>,
-
-    #[serde(rename = "ModularParts")]
-    pub modular_parts: Option<Vec<String>>,
-
-    #[serde(flatten)]
-    pub other: Option<Value>,
-}
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Hoverboard(pub ModularEntry);
 
 #[cfg(test)]
 mod tests {
@@ -43,9 +22,9 @@ mod tests {
         let item: Hoverboard = from_str(json_data).unwrap();
 
         assert_eq!(
-            item.item_type,
+            item.0.item_type,
             "/Lotus/Types/Vehicles/Hoverboard/HoverboardSuit"
         );
-        assert_eq!(item.xp.unwrap(), 1365967);
+        assert_eq!(item.0.xp.unwrap(), 1_365_967);
     }
 }

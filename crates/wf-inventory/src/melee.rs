@@ -1,37 +1,10 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-use crate::{ObjectId, Polarity};
+use crate::common::WeaponEntry;
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Melee {
-    #[serde(rename = "ItemType")]
-    pub item_type: String,
-
-    #[serde(rename = "ItemId")]
-    pub item_id: ObjectId,
-
-    #[serde(rename = "XP")]
-    pub xp: Option<i64>,
-
-    #[serde(rename = "FocusLens")]
-    pub focus_lens: Option<String>,
-
-    #[serde(rename = "Polarity")]
-    pub polarity: Option<Vec<Polarity>>,
-
-    #[serde(rename = "Polarized")]
-    pub polarized: Option<i64>,
-
-    #[serde(rename = "ModSlotPurchases")]
-    pub mod_slot_purchases: Option<i64>,
-
-    #[serde(rename = "IsNew")]
-    pub is_new: Option<bool>,
-
-    #[serde(flatten)]
-    pub other: Option<Value>,
-}
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Melee(pub WeaponEntry);
 
 #[cfg(test)]
 mod tests {
@@ -48,10 +21,9 @@ mod tests {
         let melee: Melee = from_str(json_data).unwrap();
 
         assert_eq!(
-            melee.item_type,
+            melee.0.item_type,
             "/Lotus/Weapons/Tenno/Melee/Swords/HeatSword/HeatLongSword"
         );
-
-        assert_eq!(melee.xp.unwrap(), 4940862);
+        assert_eq!(melee.0.xp.unwrap(), 4_940_862);
     }
 }

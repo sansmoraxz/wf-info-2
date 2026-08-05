@@ -3,12 +3,15 @@ name = "wf-core"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 aes.workspace = true
 aes-gcm.workspace = true
-anyhow.workspace = true
 cbc.workspace = true
 chrono.workspace = true
+derive_more.workspace = true
 dirs.workspace = true
 log.workspace = true
 rand.workspace = true
@@ -16,8 +19,10 @@ regex = "1.12.3"
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_with.workspace = true
 sha2.workspace = true
 sysinfo.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 wf-inventory = { path = "../wf-inventory" }
 

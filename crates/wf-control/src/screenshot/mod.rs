@@ -1,10 +1,15 @@
+#[cfg(unix)]
+mod unix;
+#[cfg(windows)]
+mod windows;
+
 use std::fs::OpenOptions;
-use std::io::Write;
-use std::sync::{LazyLock, Mutex};
+use std::io;
+use std::io::Write as _;
 use std::time::Instant;
 
-use anyhow::{Context, Result};
-use base64::Engine;
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD;
 use chrono::{DateTime, Utc};
 use rand::random;
 use serde::Deserialize;
@@ -13,48 +18,80 @@ use serde_json::Value;
 
 use wf_core::storage;
 
-use super::broadcaster;
-use super::events::{DaemonEvent, ScreenshotTriggeredEvent};
+use super::events::{DaemonEvent, EventBus, ScreenshotTriggeredEvent};
+use super::requests::{ControlError, HandleOp, Handles};
 
-static SCREENSHOT_CONFIG: LazyLock<Mutex<ScreenshotConfig>> =
-    LazyLock::new(|| Mutex::new(ScreenshotConfig::default()));
+#[cfg(unix)]
+pub(crate) use unix::BackendCacheEntry;
+#[cfg(unix)]
+pub(crate) use unix::{CaptureError, capture_screen};
+#[cfg(windows)]
+pub(crate) use windows::WindowCacheEntry;
+#[cfg(windows)]
+pub(crate) use windows::{CaptureError, capture_screen};
+
+#[derive(Debug, thiserror::Error)]
+pub(super) enum ScreenshotError {
+    #[error(transparent)]
+    Capture(#[from] CaptureError),
+    #[error(transparent)]
+    Storage(#[from] storage::StorageError),
+    #[error("Failed to open screenshot events log")]
+    OpenLog(#[source] io::Error),
+    #[error("Failed to append screenshot event")]
+    AppendLog(#[source] io::Error),
+    #[error("Failed to serialize screenshot event log entry")]
+    SerializeLogEntry(#[source] serde_json::Error),
+}
+
+/// How to capture in Wayland sessions: prefer the XWayland window when one
+/// exists, or always go through the native ScreenCast portal.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum WaylandCapture {
+    #[default]
+    PreferXWayland,
+    ForceNative,
+}
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ScreenshotConfig {
-    pub native_wayland_capture: bool,
+    pub wayland_capture: WaylandCapture,
 }
 
-pub fn set_screenshot_config(config: ScreenshotConfig) {
-    if let Ok(mut current) = SCREENSHOT_CONFIG.lock() {
-        *current = config;
+#[derive(Default)]
+#[allow(
+    dead_code,
+    reason = "each platform cfg only reads its own cache field; the others are dead on that platform"
+)]
+pub struct ScreenshotState {
+    pub(crate) config: ScreenshotConfig,
+    #[cfg(unix)]
+    pub(crate) backend_cache: arc_swap::ArcSwapOption<BackendCacheEntry>,
+    #[cfg(windows)]
+    pub(crate) window_cache: arc_swap::ArcSwapOption<WindowCacheEntry>,
+    pub(crate) warframe_pid: arc_swap::ArcSwapOption<u32>,
+}
+
+impl From<ScreenshotConfig> for ScreenshotState {
+    fn from(config: ScreenshotConfig) -> Self {
+        Self {
+            config,
+            ..Self::default()
+        }
     }
 }
 
-#[allow(dead_code)]
-pub(crate) fn screenshot_config() -> ScreenshotConfig {
-    SCREENSHOT_CONFIG
-        .lock()
-        .map(|config| *config)
-        .unwrap_or_default()
-}
-
-#[cfg(unix)]
-mod unix;
-#[cfg(windows)]
-mod windows;
-
-#[cfg(unix)]
-pub(crate) use unix::capture_screen;
-#[cfg(windows)]
-pub(crate) use windows::capture_screen;
-
-#[derive(Debug, Deserialize, Default)]
-pub(crate) struct ScreenshotParams {
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[cfg_attr(feature = "cli", derive(clap::Args))]
+pub struct ScreenshotParams {
+    /// Additional metadata (JSON)
+    #[cfg_attr(feature = "cli", arg(long, value_parser = crate::utils::parse_jsonish))]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct ScreenshotEvent {
+pub(super) struct ScreenshotEvent {
     pub id: String,
     pub timestamp: DateTime<Utc>,
     pub metadata: Option<Value>,
@@ -62,6 +99,8 @@ pub(crate) struct ScreenshotEvent {
     pub content_type: String,
 }
 
+/// What gets persisted to the events log: everything except the pixel data,
+/// which only ever lives in memory.
 #[derive(Debug, Serialize)]
 struct ScreenshotEventLogEntry<'a> {
     id: &'a str,
@@ -71,11 +110,23 @@ struct ScreenshotEventLogEntry<'a> {
     content_len: usize,
 }
 
-pub(crate) async fn handle_screenshot_trigger(params: ScreenshotParams) -> Result<ScreenshotEvent> {
+impl HandleOp for ScreenshotParams {
+    type Response = ScreenshotEvent;
+
+    async fn handle(self, cx: &Handles) -> Result<Self::Response, ControlError> {
+        Ok(handle_screenshot_trigger(&cx.screenshot, &cx.events, self).await?)
+    }
+}
+
+pub(super) async fn handle_screenshot_trigger(
+    shots: &ScreenshotState,
+    events: &EventBus,
+    params: ScreenshotParams,
+) -> Result<ScreenshotEvent, ScreenshotError> {
     let total_start = Instant::now();
 
     let capture_start = Instant::now();
-    let (bytes, content_type) = capture_screen().await?;
+    let (bytes, content_type) = capture_screen(shots).await?;
     log::trace!(
         "Screenshot capture returned {} bytes ({}) in {:?}",
         bytes.len(),
@@ -84,7 +135,7 @@ pub(crate) async fn handle_screenshot_trigger(params: ScreenshotParams) -> Resul
     );
 
     let base64_start = Instant::now();
-    let base64_content = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    let base64_content = STANDARD.encode(&bytes);
     log::trace!(
         "Screenshot base64 encoding produced {} bytes in {:?}",
         base64_content.len(),
@@ -98,7 +149,7 @@ pub(crate) async fn handle_screenshot_trigger(params: ScreenshotParams) -> Resul
         record_start.elapsed()
     );
 
-    broadcaster::emit(DaemonEvent::ScreenshotTriggered(ScreenshotTriggeredEvent {
+    events.emit(DaemonEvent::ScreenshotTriggered(ScreenshotTriggeredEvent {
         timestamp: event.timestamp,
         event_id: event.id.clone(),
     }));
@@ -112,7 +163,7 @@ fn record_screenshot_event(
     metadata: Option<Value>,
     content: String,
     content_type: String,
-) -> Result<ScreenshotEvent> {
+) -> Result<ScreenshotEvent, ScreenshotError> {
     let event = ScreenshotEvent {
         id: format!("{}-{}", Utc::now().timestamp_millis(), random::<u32>()),
         timestamp: Utc::now(),
@@ -127,7 +178,7 @@ fn record_screenshot_event(
         .create(true)
         .append(true)
         .open(&log_path)
-        .context("Failed to open screenshot events log")?;
+        .map_err(ScreenshotError::OpenLog)?;
     let line = serde_json::to_string(&ScreenshotEventLogEntry {
         id: &event.id,
         timestamp: event.timestamp,
@@ -135,8 +186,8 @@ fn record_screenshot_event(
         content_type: &event.content_type,
         content_len: event.content.len(),
     })
-    .context("Failed to serialize screenshot event log entry")?;
-    writeln!(file, "{}", line).context("Failed to append screenshot event")?;
+    .map_err(ScreenshotError::SerializeLogEntry)?;
+    writeln!(file, "{line}").map_err(ScreenshotError::AppendLog)?;
 
     Ok(event)
 }

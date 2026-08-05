@@ -3,7 +3,12 @@ name = "wf-inventory"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 chrono.workspace = true
+derive_more.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_with.workspace = true

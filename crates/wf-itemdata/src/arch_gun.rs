@@ -3,7 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ProductCategory;
-use crate::common::Patchlog;
+use crate::common::{Introduced, Patchlog};
+use crate::components::Component;
 use crate::damage::{Attack, DamageBreakdown};
 use crate::enums::{ArchGunProductCategory, ArchGunType, Polarity, Slot};
 use crate::props::{
@@ -55,7 +56,7 @@ pub struct ArchGun {
 
 impl ProductCategory for ArchGun {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.as_str().to_string()]
+        vec![self.product_category.as_ref().to_owned()]
     }
 }
 
@@ -70,7 +71,7 @@ impl Item for ArchGun {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        self.type_field.as_str()
+        self.type_field.as_ref()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()
@@ -114,7 +115,7 @@ impl Buildable for ArchGun {
     fn bp_cost(&self) -> Option<i64> {
         self.build.bp_cost
     }
-    fn components(&self) -> &[crate::components::Component] {
+    fn components(&self) -> &[Component] {
         &self.build.components
     }
 }
@@ -144,7 +145,7 @@ impl WikiaLinked for ArchGun {
     fn wikia_thumbnail(&self) -> Option<&str> {
         self.wikia.wikia_thumbnail.as_deref()
     }
-    fn introduced(&self) -> Option<&crate::common::Introduced> {
+    fn introduced(&self) -> Option<&Introduced> {
         self.wikia.introduced.as_ref()
     }
     fn release_date(&self) -> Option<&str> {
@@ -193,10 +194,10 @@ impl RangedWeapon for ArchGun {
         self.gun.multishot
     }
     fn noise(&self) -> &str {
-        self.gun.noise.as_str()
+        self.gun.noise.as_ref()
     }
     fn trigger(&self) -> &str {
-        self.gun.trigger.as_str()
+        self.gun.trigger.as_ref()
     }
     fn magazine_size(&self) -> Option<i64> {
         self.gun.magazine_size
@@ -239,8 +240,8 @@ mod tests {
         assert!(rec.trade.masterable);
 
         // Weapon stats
-        assert!((rec.weapon.critical_chance - 0.1).abs() < 0.01);
-        assert!((rec.weapon.total_damage - 130.0).abs() < 0.01);
+        assert!((rec.weapon.critical_chance - 0.1).abs() < 0.01_f64);
+        assert!((rec.weapon.total_damage - 130.0).abs() < 0.01_f64);
         assert_eq!(rec.weapon.damage_per_shot.len(), 20);
 
         // Gun stats
@@ -260,8 +261,8 @@ mod tests {
         let rec: ArchGun = from_str(json_data).unwrap();
 
         assert_eq!(rec.identity.name, "Corvas");
-        assert!((rec.weapon.total_damage - 880.0).abs() < 1.0);
-        assert!((rec.weapon.critical_chance - 0.4).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 880.0).abs() < 1.0_f64);
+        assert!((rec.weapon.critical_chance - 0.4).abs() < 0.01_f64);
         assert_eq!(rec.gun.magazine_size, Some(25));
         assert!(!rec.prime.is_prime);
     }
@@ -275,8 +276,8 @@ mod tests {
         let rec: ArchGun = from_str(json_data).unwrap();
 
         assert_eq!(rec.identity.name, "Corvas Prime");
-        assert!((rec.weapon.total_damage - 960.0).abs() < 1.0);
-        assert!((rec.weapon.critical_chance - 0.44).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 960.0).abs() < 1.0_f64);
+        assert!((rec.weapon.critical_chance - 0.44).abs() < 0.01_f64);
         assert!(rec.prime.is_prime);
     }
 }

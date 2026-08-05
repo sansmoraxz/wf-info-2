@@ -41,7 +41,7 @@ pub struct Arcane {
 
 impl ProductCategory for Arcane {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["Upgrades".to_string(), "RawUpgrades".to_string()]
+        vec!["Upgrades".to_owned(), "RawUpgrades".to_owned()]
     }
 }
 
@@ -56,7 +56,7 @@ impl Item for Arcane {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        self.type_field.as_str()
+        self.type_field.as_ref()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()

@@ -1,42 +1,30 @@
-use itertools::Itertools;
-
-use image::{DynamicImage, ImageReader};
-use ocr_rs::{OcrEngine, OcrResult_};
-use std::{
-    cmp::{max, min},
-    collections::HashMap,
-    io::Cursor,
-};
-
 mod ocr;
 
-pub use ocr::{DEFAULT_OCR_ENGINE, new_default_ocr_engine};
+use image::{DynamicImage, ImageReader, imageops::FilterType};
+use ocr_rs::{OcrEngine, engine::OcrResult_};
+use std::io::Cursor;
 
-pub fn load_image(bytes: Vec<u8>) -> anyhow::Result<image::DynamicImage> {
-    Ok(ImageReader::new(Cursor::new(bytes))
-        .with_guessed_format()?
-        .decode()?)
-}
-
-pub struct RelicRecognizer<'a> {
-    ocr_engine: &'a OcrEngine,
-    pub start_x: u32,
-    pub start_y: u32,
-    pub box_w: u32,
-    pub box_h: u32,
-}
+pub use ocr::{OcrInitError, new_default_ocr_engine};
 
 #[derive(Debug)]
 pub struct RelicRecogizeText {
-    pub x: u32,
-    pub y: u32,
+    pub(crate) x: u32,
+    pub(crate) y: u32,
     pub text: String,
 }
 
-impl<'a> RelicRecognizer<'a> {
-    pub fn new(ocr_engine: &'a OcrEngine) -> RelicRecognizer<'a> {
+pub struct RelicRecognizer {
+    ocr_engine: OcrEngine,
+    pub(crate) start_x: u32,
+    pub(crate) start_y: u32,
+    pub(crate) box_w: u32,
+    pub(crate) box_h: u32,
+}
+
+impl From<OcrEngine> for RelicRecognizer {
+    fn from(ocr_engine: OcrEngine) -> Self {
         // TODO: handle non default scales + widescreen etc.
-        RelicRecognizer {
+        Self {
             ocr_engine,
             start_x: 477,
             start_y: 373,
@@ -44,44 +32,93 @@ impl<'a> RelicRecognizer<'a> {
             box_h: 91,
         }
     }
+}
 
+impl RelicRecognizer {
     pub fn recognize_and_list(
         &self,
         img: &DynamicImage,
-    ) -> anyhow::Result<Vec<RelicRecogizeText>, anyhow::Error> {
-        let scaled_and_cropped_img = img
-            .resize(1920, 1080, image::imageops::FilterType::Lanczos3)
-            .crop(self.start_x, self.start_y, self.box_w, self.box_h);
-        let res = self.ocr_engine.recognize(&scaled_and_cropped_img)?;
+    ) -> Result<Vec<RelicRecogizeText>, ocr_rs::OcrError> {
+        let reward_box = self.crop_reward_box(img);
+        let hits = self.ocr_engine.recognize(&reward_box)?;
 
-        // group overlapping horizontal texts
-        let mut rg: HashMap<(i32, i32), Vec<&OcrResult_>> = HashMap::new();
-        'outer: for a in &res {
-            let la = a.bbox.rect.left();
-            let ra = a.bbox.rect.right();
-            for (bd, v) in rg.iter_mut() {
-                let (lb, rb) = (bd.0, bd.1);
-                if max(la, lb) < min(ra, rb) {
-                    v.push(a);
-                    continue 'outer;
-                }
-            }
-            rg.insert((la, ra), vec![a]);
+        let mut merged = merge_overlapping_columns(hits);
+        for group in &mut merged {
+            trim_in_place(&mut group.text);
         }
+        merged.sort_by(|a, b| a.x.cmp(&b.x).then(a.y.cmp(&b.y)));
 
-        // merge text and sort by cordinates
-        let res = rg
-            .iter()
-            .map(|(_, v)| {
-                let text = v.iter().map(|ores| &ores.text).join(" ").trim().to_string();
-                let rec = v.get(0).unwrap();
-                let x = rec.bbox.rect.left() as u32;
-                let y = rec.bbox.rect.top() as u32;
-                RelicRecogizeText { text, x, y }
-            })
-            .sorted_by(|a, b| a.x.cmp(&b.x).then(a.y.cmp(&b.y)))
-            .collect();
-
-        Ok(res)
+        Ok(merged)
     }
+
+    /// Crop the reward-box rect (defined in 1920x1080 space) out of the source
+    /// image, then resize it to the rect's reference size. Crop first so the
+    /// expensive resample only touches the region of interest.
+    fn crop_reward_box(&self, img: &DynamicImage) -> DynamicImage {
+        let scale = f64::min(
+            1920.0 / f64::from(img.width()),
+            1080.0 / f64::from(img.height()),
+        );
+        let src_x = to_px((f64::from(self.start_x) / scale).floor());
+        let src_y = to_px((f64::from(self.start_y) / scale).floor());
+        let src_w = to_px((f64::from(self.box_w) / scale).ceil());
+        let src_h = to_px((f64::from(self.box_h) / scale).ceil());
+        img.crop_imm(
+            src_x,
+            src_y,
+            src_w.min(img.width().saturating_sub(src_x)),
+            src_h.min(img.height().saturating_sub(src_y)),
+        )
+        .resize_exact(self.box_w, self.box_h, FilterType::Lanczos3)
+    }
+}
+
+pub fn load_image(bytes: &[u8]) -> Result<image::DynamicImage, image::ImageError> {
+    ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()?
+        .decode()
+}
+
+/// Group horizontally overlapping OCR hits into one entry per column,
+/// concatenating text into the first overlapping group as we go. n is a
+/// handful of OCR hits, so the linear group scan is fine.
+fn merge_overlapping_columns(hits: Vec<OcrResult_>) -> Vec<RelicRecogizeText> {
+    let mut bounds: Vec<(i32, i32)> = Vec::new();
+    let mut merged: Vec<RelicRecogizeText> = Vec::new();
+    for hit in hits {
+        let (left, right) = (hit.bbox.rect.left(), hit.bbox.rect.right());
+        let overlapping = bounds
+            .iter()
+            .position(|(l, r)| left.max(*l) < right.min(*r));
+        // `bounds` and `merged` are pushed in lockstep, so an index found in
+        // `bounds` is always present in `merged`.
+        if let Some(group) = overlapping.and_then(|i| merged.get_mut(i)) {
+            group.text.push(' ');
+            group.text.push_str(&hit.text);
+        } else {
+            bounds.push((left, right));
+            merged.push(RelicRecogizeText {
+                text: hit.text,
+                x: u32::try_from(left).unwrap_or(0),
+                y: u32::try_from(hit.bbox.rect.top()).unwrap_or(0),
+            });
+        }
+    }
+    merged
+}
+
+/// Saturating f64 -> u32: inputs are u32/positive-scale quotients, so the
+/// clamp only guards degenerate (tiny-image) scales.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "value is clamped to [0, u32::MAX] before the cast"
+)]
+fn to_px(v: f64) -> u32 {
+    v.clamp(0.0, f64::from(u32::MAX)) as u32
+}
+
+fn trim_in_place(s: &mut String) {
+    s.truncate(s.trim_end().len());
+    s.drain(..s.len() - s.trim_start().len());
 }

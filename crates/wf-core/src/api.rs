@@ -1,36 +1,32 @@
+#[cfg(feature = "memory")]
 use crate::process::AuthQuery;
 use crate::profile::ProfileData;
-use std::fmt;
+#[cfg(feature = "memory")]
 use wf_inventory::Inventory;
 
 const PLAYER_INFO_URL: &str = "https://api.warframe.com/cdn/getProfileViewingData.php";
+#[cfg(feature = "memory")]
 const INVENTORY_URL: &str = "https://api.warframe.com/api/inventory.php";
 
-#[derive(Debug)]
-pub struct InventoryAuthorizationRejected(reqwest::StatusCode);
-
-impl fmt::Display for InventoryAuthorizationRejected {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "Inventory authorization was rejected with status {}",
-            self.0
-        )
-    }
-}
-
-impl std::error::Error for InventoryAuthorizationRejected {}
-
-pub fn is_inventory_authorization_rejected(error: &anyhow::Error) -> bool {
-    error
-        .downcast_ref::<InventoryAuthorizationRejected>()
-        .is_some()
+#[derive(Debug, thiserror::Error)]
+pub enum ApiError {
+    #[error("Inventory authorization was rejected with status {0}")]
+    AuthorizationRejected(reqwest::StatusCode),
+    #[error("Inventory API returned status: {0}")]
+    Status(reqwest::StatusCode),
+    #[error("Inventory request failed: {0}")]
+    Request(#[source] reqwest::Error),
+    #[error("Failed to parse inventory JSON: {0}")]
+    Parse(#[source] reqwest::Error),
 }
 
 /// Fetches the player's profile data from the Warframe API using the provided account ID.
 /// Returns a ProfileData struct on success.
-pub async fn fetch_player_profile(account_id: &str) -> Result<ProfileData, reqwest::Error> {
-    reqwest::Client::new()
+pub async fn fetch_player_profile(
+    client: &reqwest::Client,
+    account_id: &str,
+) -> Result<ProfileData, reqwest::Error> {
+    client
         .get(PLAYER_INFO_URL)
         .query(&[("playerId", account_id)])
         .send()
@@ -41,15 +37,22 @@ pub async fn fetch_player_profile(account_id: &str) -> Result<ProfileData, reqwe
 
 /// Fetches the player's full inventory using the authenticated query.
 /// Returns the deserialized Inventory on success.
-pub async fn fetch_inventory(auth: &AuthQuery) -> anyhow::Result<Inventory> {
+#[cfg(feature = "memory")]
+pub(crate) async fn fetch_inventory(
+    client: &reqwest::Client,
+    auth: &AuthQuery,
+) -> Result<Inventory, ApiError> {
     log::info!("Fetching inventory from API...");
 
-    let response = reqwest::Client::new()
+    let response = client
         .get(INVENTORY_URL)
-        .query(&[("accountId", &auth.account_id), ("nonce", &auth.nonce)])
+        .query(&[
+            ("accountId", auth.account_id.as_ref()),
+            ("nonce", auth.nonce.as_ref()),
+        ])
         .send()
         .await
-        .map_err(|error| anyhow::anyhow!("Inventory request failed: {}", error.without_url()))?;
+        .map_err(|error| ApiError::Request(error.without_url()))?;
 
     if !response.status().is_success() {
         if matches!(
@@ -58,17 +61,15 @@ pub async fn fetch_inventory(auth: &AuthQuery) -> anyhow::Result<Inventory> {
                 | reqwest::StatusCode::UNAUTHORIZED
                 | reqwest::StatusCode::FORBIDDEN
         ) {
-            return Err(InventoryAuthorizationRejected(response.status()).into());
+            return Err(ApiError::AuthorizationRejected(response.status()));
         }
-        return Err(anyhow::anyhow!(
-            "Inventory API returned status: {}",
-            response.status()
-        ));
+        return Err(ApiError::Status(response.status()));
     }
 
-    let inventory: Inventory = response.json().await.map_err(|error| {
-        anyhow::anyhow!("Failed to parse inventory JSON: {}", error.without_url())
-    })?;
+    let inventory: Inventory = response
+        .json()
+        .await
+        .map_err(|error| ApiError::Parse(error.without_url()))?;
 
     log::info!("Successfully fetched inventory data");
     Ok(inventory)

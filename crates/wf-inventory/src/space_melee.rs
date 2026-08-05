@@ -1,37 +1,10 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
-use crate::{ObjectId, Polarity};
+use crate::common::WeaponEntry;
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SpaceMelee {
-    #[serde(rename = "ItemType")]
-    pub item_type: String,
-
-    #[serde(rename = "ItemId")]
-    pub item_id: ObjectId,
-
-    #[serde(rename = "XP")]
-    pub xp: Option<i64>,
-
-    #[serde(rename = "FocusLens")]
-    pub focus_lens: Option<String>,
-
-    #[serde(rename = "Polarity")]
-    pub polarity: Option<Vec<Polarity>>,
-
-    #[serde(rename = "Polarized")]
-    pub polarized: Option<i64>,
-
-    #[serde(rename = "ModSlotPurchases")]
-    pub mod_slot_purchases: Option<i64>,
-
-    #[serde(rename = "IsNew")]
-    pub is_new: Option<bool>,
-
-    #[serde(flatten)]
-    pub other: Option<Value>,
-}
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SpaceMelee(pub WeaponEntry);
 
 #[cfg(test)]
 mod tests {
@@ -48,10 +21,9 @@ mod tests {
         let space_melee: SpaceMelee = from_str(json_data).unwrap();
 
         assert_eq!(
-            space_melee.item_type,
+            space_melee.0.item_type,
             "/Lotus/Weapons/Tenno/Archwing/Melee/GrnArchHand/GrnArchHandWeapon"
         );
-
-        assert_eq!(space_melee.xp.unwrap(), 561680);
+        assert_eq!(space_melee.0.xp.unwrap(), 561_680);
     }
 }

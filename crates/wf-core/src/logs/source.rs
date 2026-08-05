@@ -1,278 +1,3 @@
-use std::future::Future;
-use std::io;
-use std::pin::Pin;
-#[cfg(windows)]
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
-#[cfg(windows)]
-use std::thread::{self, JoinHandle};
-#[cfg(windows)]
-use std::time::Duration;
-
-#[cfg(unix)]
-use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader, Lines};
-#[cfg(windows)]
-use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
-
-#[cfg(windows)]
-const DBWIN_BUFFER_SIZE: usize = 4096;
-#[cfg(windows)]
-const DBWIN_POLL_INTERVAL: Duration = Duration::from_millis(250);
-
-pub trait LogSource: Send {
-    fn recv_chunk(
-        &mut self,
-    ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + '_>>;
-}
-
-#[derive(Debug, Default)]
-pub struct LineAssembler {
-    pending: String,
-}
-
-impl LineAssembler {
-    pub fn push_chunk(&mut self, chunk: &str) -> String {
-        self.pending.push_str(chunk);
-
-        let Some(last_newline) = self.pending.rfind('\n') else {
-            return String::new();
-        };
-
-        let split_at = last_newline + 1;
-        let trailing = self.pending.split_off(split_at);
-        let complete = std::mem::take(&mut self.pending);
-        self.pending = trailing;
-        complete
-    }
-
-    pub fn pending_fragment(&self) -> &str {
-        &self.pending
-    }
-}
-
-#[cfg(unix)]
-pub struct WineDebugLogSource<R> {
-    lines: Lines<BufReader<R>>,
-}
-
-#[cfg(unix)]
-impl<R> WineDebugLogSource<R>
-where
-    R: AsyncRead + Unpin + Send,
-{
-    pub fn new(reader: R) -> Self {
-        Self {
-            lines: BufReader::new(reader).lines(),
-        }
-    }
-}
-
-#[cfg(unix)]
-impl<R> LogSource for WineDebugLogSource<R>
-where
-    R: AsyncRead + Unpin + Send,
-{
-    fn recv_chunk(
-        &mut self,
-    ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + '_>> {
-        Box::pin(async move {
-            while let Some(line) = self.lines.next_line().await? {
-                log::trace!("wine debug stderr raw line: {:?}", line);
-                if let Some(message) = decode_wine_debug_line(&line) {
-                    log::debug!("wine debugstr accepted payload: {:?}", message);
-                    return Ok(Some(message));
-                }
-                log::trace!("wine debug stderr ignored line");
-            }
-
-            log::debug!("wine debug stderr source reached EOF");
-            Ok(None)
-        })
-    }
-}
-
-#[cfg(windows)]
-pub struct DbwinLogSource {
-    pid_filter: Option<u32>,
-    receiver: UnboundedReceiver<io::Result<DbwinFrame>>,
-    shutdown: Arc<AtomicBool>,
-    worker: Option<JoinHandle<()>>,
-}
-
-#[cfg(windows)]
-impl DbwinLogSource {
-    pub fn new() -> io::Result<Self> {
-        let mut monitor = platform::DbwinMonitor::new()?;
-        let (sender, receiver) = unbounded_channel();
-        let shutdown = Arc::new(AtomicBool::new(false));
-        let worker_shutdown = Arc::clone(&shutdown);
-
-        let worker = thread::Builder::new()
-            .name("dbwin-log-source".to_string())
-            .spawn(move || {
-                while !worker_shutdown.load(Ordering::Relaxed) {
-                    match monitor.wait_for_message(DBWIN_POLL_INTERVAL) {
-                        Ok(Some(frame)) => {
-                            if sender.send(Ok(frame)).is_err() {
-                                break;
-                            }
-                        }
-                        Ok(None) => {}
-                        Err(error) => {
-                            let _ = sender.send(Err(error));
-                            break;
-                        }
-                    }
-                }
-            })?;
-
-        Ok(Self {
-            pid_filter: None,
-            receiver,
-            shutdown,
-            worker: Some(worker),
-        })
-    }
-
-    pub fn set_pid_filter(&mut self, pid: u32) {
-        self.pid_filter = Some(pid);
-    }
-}
-
-#[cfg(windows)]
-impl Drop for DbwinLogSource {
-    fn drop(&mut self) {
-        self.shutdown.store(true, Ordering::Relaxed);
-        if let Some(worker) = self.worker.take() {
-            let _ = worker.join();
-        }
-    }
-}
-
-#[cfg(windows)]
-impl LogSource for DbwinLogSource {
-    fn recv_chunk(
-        &mut self,
-    ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + '_>> {
-        Box::pin(async move {
-            while let Some(message) = self.receiver.recv().await {
-                let frame = message?;
-                if self.pid_filter.is_some_and(|pid| frame.pid != pid) {
-                    continue;
-                }
-                if frame.text.is_empty() {
-                    continue;
-                }
-                let mut text = frame.text;
-                if !text.ends_with('\n') {
-                    text.push('\n');
-                }
-                return Ok(Some(text));
-            }
-
-            Ok(None)
-        })
-    }
-}
-
-#[cfg(windows)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct DbwinFrame {
-    pid: u32,
-    text: String,
-}
-
-#[cfg(windows)]
-fn decode_dbwin_frame(buffer: &[u8]) -> Option<DbwinFrame> {
-    if buffer.len() < std::mem::size_of::<u32>() {
-        return None;
-    }
-
-    let pid = u32::from_le_bytes(buffer[..4].try_into().ok()?);
-    let payload = &buffer[4..];
-    let end = payload
-        .iter()
-        .position(|byte| *byte == 0)
-        .unwrap_or(payload.len());
-    if end == 0 {
-        return None;
-    }
-
-    let text = String::from_utf8_lossy(&payload[..end]).into_owned();
-    if text.is_empty() {
-        return None;
-    }
-
-    Some(DbwinFrame { pid, text })
-}
-
-#[cfg(unix)]
-fn decode_wine_debug_line(line: &str) -> Option<String> {
-    const ANSI_MARKER: &str = "warn:debugstr:OutputDebugStringA ";
-    const WIDE_MARKER: &str = "warn:debugstr:OutputDebugStringW ";
-
-    if let Some((_, payload)) = line.split_once(ANSI_MARKER) {
-        log::trace!("matched OutputDebugStringA line");
-        return decode_wine_debug_payload(payload);
-    }
-
-    if let Some((_, payload)) = line.split_once(WIDE_MARKER) {
-        log::trace!("matched OutputDebugStringW line");
-        return decode_wine_debug_payload(payload);
-    }
-
-    None
-}
-
-#[cfg(unix)]
-fn decode_wine_debug_payload(payload: &str) -> Option<String> {
-    let payload = payload.strip_prefix('L').unwrap_or(payload);
-    let payload = payload.strip_prefix('"')?;
-
-    let mut decoded = Vec::new();
-    let mut chars = payload.chars();
-
-    while let Some(ch) = chars.next() {
-        match ch {
-            '"' => return Some(String::from_utf8_lossy(&decoded).into_owned()),
-            '\\' => {
-                let escaped = chars.next()?;
-                match escaped {
-                    '\\' => decoded.push(b'\\'),
-                    '"' => decoded.push(b'"'),
-                    '\'' => decoded.push(b'\''),
-                    'a' => decoded.push(0x07),
-                    'b' => decoded.push(0x08),
-                    'f' => decoded.push(0x0c),
-                    'n' => decoded.push(b'\n'),
-                    'r' => decoded.push(b'\r'),
-                    't' => decoded.push(b'\t'),
-                    'v' => decoded.push(0x0b),
-                    'x' => {
-                        let hi = chars.next()?;
-                        let lo = chars.next()?;
-                        let value = u8::from_str_radix(&format!("{hi}{lo}"), 16).ok()?;
-                        decoded.push(value);
-                    }
-                    other => {
-                        let mut buf = [0u8; 4];
-                        decoded.extend_from_slice(other.encode_utf8(&mut buf).as_bytes());
-                    }
-                }
-            }
-            other => {
-                let mut buf = [0u8; 4];
-                decoded.extend_from_slice(other.encode_utf8(&mut buf).as_bytes());
-            }
-        }
-    }
-
-    log::debug!("failed to decode wine debug payload: {:?}", payload);
-    None
-}
-
 #[cfg(windows)]
 mod platform {
     use super::{DBWIN_BUFFER_SIZE, DbwinFrame, decode_dbwin_frame};
@@ -304,13 +29,16 @@ mod platform {
 
     impl DbwinMonitor {
         pub(super) fn new() -> io::Result<Self> {
+            let buffer_size = u32::try_from(DBWIN_BUFFER_SIZE)
+                .map_err(|_| io::Error::other("DBWIN buffer size exceeds u32 range"))?;
+
             unsafe {
                 let mapping = CreateFileMappingA(
                     INVALID_HANDLE_VALUE,
                     null_mut(),
                     PAGE_READWRITE,
                     0,
-                    DBWIN_BUFFER_SIZE as u32,
+                    buffer_size,
                     DBWIN_BUFFER_NAME.as_ptr().cast(),
                 );
                 if mapping.is_null() {
@@ -392,6 +120,280 @@ mod platform {
     }
 }
 
+use std::future::Future;
+use std::io;
+use std::mem;
+use std::pin::Pin;
+#[cfg(windows)]
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+#[cfg(windows)]
+use std::thread::{self, JoinHandle};
+#[cfg(windows)]
+use std::time::Duration;
+
+#[cfg(unix)]
+use tokio::io::{AsyncBufReadExt as _, AsyncRead, BufReader, Lines};
+#[cfg(windows)]
+use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
+
+#[cfg(windows)]
+const DBWIN_BUFFER_SIZE: usize = 4096;
+#[cfg(windows)]
+const DBWIN_POLL_INTERVAL: Duration = Duration::from_millis(250);
+
+pub trait LogSource: Send {
+    fn recv_chunk(
+        &mut self,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + '_>>;
+}
+
+#[derive(Debug, Default)]
+pub struct LineAssembler {
+    pending: String,
+}
+
+impl LineAssembler {
+    pub fn push_chunk(&mut self, chunk: &str) -> String {
+        self.pending.push_str(chunk);
+
+        let Some(last_newline) = self.pending.rfind('\n') else {
+            return String::new();
+        };
+
+        let split_at = last_newline + 1;
+        let trailing = self.pending.split_off(split_at);
+        let complete = mem::take(&mut self.pending);
+        self.pending = trailing;
+        complete
+    }
+
+    #[cfg(test)]
+    pub(crate) fn pending_fragment(&self) -> &str {
+        &self.pending
+    }
+}
+
+#[cfg(unix)]
+pub struct WineDebugLogSource<R> {
+    lines: Lines<BufReader<R>>,
+}
+
+#[cfg(unix)]
+impl<R> WineDebugLogSource<R>
+where
+    R: AsyncRead + Unpin + Send,
+{
+    pub fn new(reader: R) -> Self {
+        Self {
+            lines: BufReader::new(reader).lines(),
+        }
+    }
+}
+
+#[cfg(unix)]
+impl<R> LogSource for WineDebugLogSource<R>
+where
+    R: AsyncRead + Unpin + Send,
+{
+    fn recv_chunk(
+        &mut self,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + '_>> {
+        Box::pin(async move {
+            while let Some(line) = self.lines.next_line().await? {
+                log::trace!("wine debug stderr raw line: {line:?}");
+                if let Some(message) = decode_wine_debug_line(&line) {
+                    log::debug!("wine debugstr accepted payload: {message:?}");
+                    return Ok(Some(message));
+                }
+                log::trace!("wine debug stderr ignored line");
+            }
+
+            log::debug!("wine debug stderr source reached EOF");
+            Ok(None)
+        })
+    }
+}
+
+#[cfg(windows)]
+pub struct DbwinLogSource {
+    pid_filter: Option<u32>,
+    receiver: UnboundedReceiver<io::Result<DbwinFrame>>,
+    shutdown: Arc<AtomicBool>,
+    worker: Option<JoinHandle<()>>,
+}
+
+#[cfg(windows)]
+impl DbwinLogSource {
+    pub fn new() -> io::Result<Self> {
+        let mut monitor = platform::DbwinMonitor::new()?;
+        let (sender, receiver) = unbounded_channel();
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let worker_shutdown = Arc::clone(&shutdown);
+
+        let worker = thread::Builder::new()
+            .name("dbwin-log-source".to_owned())
+            .spawn(move || {
+                while !worker_shutdown.load(Ordering::Relaxed) {
+                    match monitor.wait_for_message(DBWIN_POLL_INTERVAL) {
+                        Ok(Some(frame)) => {
+                            if sender.send(Ok(frame)).is_err() {
+                                break;
+                            }
+                        }
+                        Ok(None) => {}
+                        Err(error) => {
+                            if sender.send(Err(error)).is_err() {
+                                log::debug!("dbwin receiver dropped before error delivery");
+                            }
+                            break;
+                        }
+                    }
+                }
+            })?;
+
+        Ok(Self {
+            pid_filter: None,
+            receiver,
+            shutdown,
+            worker: Some(worker),
+        })
+    }
+
+    pub fn set_pid_filter(&mut self, pid: u32) {
+        self.pid_filter = Some(pid);
+    }
+}
+
+#[cfg(windows)]
+impl Drop for DbwinLogSource {
+    fn drop(&mut self) {
+        self.shutdown.store(true, Ordering::Relaxed);
+        if let Some(worker) = self.worker.take()
+            && worker.join().is_err()
+        {
+            log::warn!("dbwin log source worker thread panicked");
+        }
+    }
+}
+
+#[cfg(windows)]
+impl LogSource for DbwinLogSource {
+    fn recv_chunk(
+        &mut self,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + '_>> {
+        Box::pin(async move {
+            while let Some(message) = self.receiver.recv().await {
+                let frame = message?;
+                if self.pid_filter.is_some_and(|pid| frame.pid != pid) {
+                    continue;
+                }
+                if frame.text.is_empty() {
+                    continue;
+                }
+                let mut text = frame.text;
+                if !text.ends_with('\n') {
+                    text.push('\n');
+                }
+                return Ok(Some(text));
+            }
+
+            Ok(None)
+        })
+    }
+}
+
+#[cfg(windows)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DbwinFrame {
+    pid: u32,
+    text: String,
+}
+
+#[cfg(windows)]
+fn decode_dbwin_frame(buffer: &[u8]) -> Option<DbwinFrame> {
+    let (pid_bytes, payload) = buffer.split_at_checked(size_of::<u32>())?;
+    let pid = u32::from_le_bytes(pid_bytes.try_into().ok()?);
+    let end = payload
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(payload.len());
+
+    let text = String::from_utf8_lossy(payload.get(..end)?).into_owned();
+    if text.is_empty() {
+        return None;
+    }
+
+    Some(DbwinFrame { pid, text })
+}
+
+#[cfg(unix)]
+fn decode_wine_debug_line(line: &str) -> Option<String> {
+    const ANSI_MARKER: &str = "warn:debugstr:OutputDebugStringA ";
+    const WIDE_MARKER: &str = "warn:debugstr:OutputDebugStringW ";
+
+    if let Some((_, payload)) = line.split_once(ANSI_MARKER) {
+        log::trace!("matched OutputDebugStringA line");
+        return decode_wine_debug_payload(payload);
+    }
+
+    if let Some((_, payload)) = line.split_once(WIDE_MARKER) {
+        log::trace!("matched OutputDebugStringW line");
+        return decode_wine_debug_payload(payload);
+    }
+
+    None
+}
+
+#[cfg(unix)]
+fn decode_wine_debug_payload(payload: &str) -> Option<String> {
+    let payload = payload.strip_prefix('L').unwrap_or(payload);
+    let payload = payload.strip_prefix('"')?;
+
+    let mut decoded = Vec::new();
+    let mut chars = payload.chars();
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' => return Some(String::from_utf8_lossy(&decoded).into_owned()),
+            '\\' => {
+                let escaped = chars.next()?;
+                match escaped {
+                    '\\' => decoded.push(b'\\'),
+                    '"' => decoded.push(b'"'),
+                    '\'' => decoded.push(b'\''),
+                    'a' => decoded.push(0x07),
+                    'b' => decoded.push(0x08),
+                    'f' => decoded.push(0x0c),
+                    'n' => decoded.push(b'\n'),
+                    'r' => decoded.push(b'\r'),
+                    't' => decoded.push(b'\t'),
+                    'v' => decoded.push(0x0b),
+                    'x' => {
+                        let hi = chars.next()?;
+                        let lo = chars.next()?;
+                        let value = u8::from_str_radix(&format!("{hi}{lo}"), 16).ok()?;
+                        decoded.push(value);
+                    }
+                    other => {
+                        let mut buf = [0_u8; 4];
+                        decoded.extend_from_slice(other.encode_utf8(&mut buf).as_bytes());
+                    }
+                }
+            }
+            other => {
+                let mut buf = [0_u8; 4];
+                decoded.extend_from_slice(other.encode_utf8(&mut buf).as_bytes());
+            }
+        }
+    }
+
+    log::debug!("failed to decode wine debug payload: {payload:?}");
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::LineAssembler;
@@ -404,7 +406,7 @@ mod tests {
     #[test]
     fn decode_dbwin_frame_reads_pid_and_message() {
         let mut frame = Vec::new();
-        frame.extend_from_slice(&1234u32.to_le_bytes());
+        frame.extend_from_slice(&1234_u32.to_le_bytes());
         frame.extend_from_slice(b"72.458 Sys [Info]: Logged in sample_account\0ignored");
 
         let decoded = decode_dbwin_frame(&frame).unwrap();
@@ -419,7 +421,7 @@ mod tests {
         assert!(decode_dbwin_frame(&[1, 2, 3]).is_none());
 
         let mut frame = Vec::new();
-        frame.extend_from_slice(&77u32.to_le_bytes());
+        frame.extend_from_slice(&77_u32.to_le_bytes());
         frame.push(0);
         assert!(decode_dbwin_frame(&frame).is_none());
     }

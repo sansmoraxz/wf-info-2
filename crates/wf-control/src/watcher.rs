@@ -1,20 +1,27 @@
-use chrono::Utc;
 use std::collections::HashSet;
-use std::sync::{
-    Arc, LazyLock,
-    atomic::{AtomicBool, Ordering},
-};
+use std::error::Error;
+use std::mem;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+
+use chrono::Utc;
+use tokio::time::sleep;
+use wf_core::account::{AccountInfo, Username};
+use wf_core::logs::pattern::LogProcessingEngine;
+use wf_core::logs::{self, LineAssembler, LogEvent, LogSource};
 use wf_ocr::{RelicRecognizer, load_image};
 
-use crate::screenshot::capture_screen;
+use crate::events::{EventBus, RelicSelectionPopup, TradeFailedEvent, TradeSuccessEvent};
+use crate::screenshot::{ScreenshotState, capture_screen};
 use crate::{
     AccountLoginEvent, AccountLogoutEvent, DaemonEvent, DmTabOpenedEvent, SystemQuitReason,
 };
-use wf_core::account::AccountInfo;
-use wf_core::logs::pattern::LogProcessingEngine;
-use wf_core::logs::{self, LineAssembler, LogEvent, LogSource};
 
+#[cfg(feature = "memory")]
+use crate::events::Source;
+#[cfg(feature = "memory")]
+use crate::inventory::inventory_summary;
 #[cfg(feature = "memory")]
 use crate::{InventoryFetchedEvent, ProfileUpdatedEvent};
 #[cfg(feature = "memory")]
@@ -30,6 +37,12 @@ impl GameLifecycleTracker {
         self.quit_requested.store(true, Ordering::SeqCst);
     }
 
+    #[must_use]
+    pub fn is_quit_requested(&self) -> bool {
+        self.quit_requested.load(Ordering::SeqCst)
+    }
+
+    #[must_use]
     pub fn exit_reason(&self) -> SystemQuitReason {
         if self.quit_requested.load(Ordering::SeqCst) {
             SystemQuitReason::Requested
@@ -39,75 +52,207 @@ impl GameLifecycleTracker {
     }
 }
 
-struct WatchState {
-    current_username: Option<String>,
-    /// Usernames for which we issued `IRC out: WHO` (self-initiated DMs).
-    /// Used to suppress DmTabOpened events for tabs we opened ourselves.
-    self_initiated_dms: HashSet<String>,
-    /// Pending trade stored from recent confirmations
-    trades: Option<logs::TradeInfo>,
-    // Relic selection open
-    relic_countdown: bool,
+/// Whether login events trigger the automatic profile/inventory fetch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutoCallbacks {
+    Enabled,
+    Skip,
 }
 
-impl WatchState {
-    fn new() -> Self {
-        Self {
-            current_username: None,
-            self_initiated_dms: HashSet::new(),
-            trades: None,
-            relic_countdown: false,
-        }
-    }
+/// Whether the relic reward-selection window is on screen.
+#[derive(Debug, Default, PartialEq, Eq)]
+enum RelicState {
+    #[default]
+    Closed,
+    Open,
+}
 
-    fn accept_login(&mut self, username: &str) -> bool {
-        if self.current_username.as_deref() == Some(username) {
+impl RelicState {
+    /// Transition to open. Returns `false` on a duplicate open (window
+    /// already showing), so the caller can skip re-triggering OCR.
+    fn open(&mut self) -> bool {
+        if *self == Self::Open {
             return false;
         }
-        self.current_username = Some(username.to_string());
+        *self = Self::Open;
         true
     }
 
-    fn reset_login(&mut self) {
-        self.current_username = None;
+    /// Transition to closed. Returns `false` when the window was never
+    /// observed open (stale close event).
+    fn close(&mut self) -> bool {
+        if *self == Self::Closed {
+            return false;
+        }
+        *self = Self::Closed;
+        true
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+enum SessionState {
+    #[default]
+    LoggedOut,
+    LoggedIn {
+        username: Username,
+    },
+}
+
+impl SessionState {
+    /// Transition to logged-in. Returns `false` when this is a duplicate
+    /// login for the same username (dedup lives in the transition).
+    fn login(&mut self, username: &Username) -> bool {
+        if matches!(self, Self::LoggedIn { username: u } if u == username) {
+            return false;
+        }
+        *self = Self::LoggedIn {
+            username: username.clone(),
+        };
+        true
+    }
+
+    fn logout(&mut self) {
+        *self = Self::LoggedOut;
+    }
+}
+
+#[derive(Debug, Default)]
+enum TradeState {
+    #[default]
+    Idle,
+    Pending(logs::TradeInfo),
+}
+
+impl TradeState {
+    fn confirm_popup(&mut self, info: logs::TradeInfo) {
+        *self = Self::Pending(info);
+    }
+
+    /// Take the pending trade on success/failure; `None` when no trade was
+    /// pending (log stream out of sync).
+    fn resolve(&mut self) -> Option<logs::TradeInfo> {
+        match mem::take(self) {
+            Self::Pending(info) => Some(info),
+            Self::Idle => None,
+        }
+    }
+}
+
+struct WatchState {
+    events: EventBus,
+    #[cfg_attr(
+        not(feature = "memory"),
+        allow(dead_code, reason = "only read by the memory-feature login handler")
+    )]
+    http: reqwest::Client,
+    screenshot: Arc<ScreenshotState>,
+    #[cfg_attr(
+        not(feature = "memory"),
+        allow(dead_code, reason = "only read by the memory-feature login handler")
+    )]
+    warframe_pid: Option<u32>,
+    #[cfg_attr(
+        not(feature = "memory"),
+        allow(dead_code, reason = "only read by the memory-feature login handler")
+    )]
+    auto_callbacks: AutoCallbacks,
+    session: SessionState,
+    /// Usernames for which we issued `IRC out: WHO` (self-initiated DMs).
+    /// Used to suppress DmTabOpened events for tabs we opened ourselves.
+    self_initiated_dms: HashSet<Username>,
+    trade: TradeState,
+    relic: RelicState,
+    /// `None` when the OCR engine failed to initialize; relic OCR is skipped.
+    relic_recognizer: Option<Arc<RelicRecognizer>>,
+}
+
+impl WatchState {
+    fn new(
+        events: EventBus,
+        http: reqwest::Client,
+        screenshot: Arc<ScreenshotState>,
+        warframe_pid: Option<u32>,
+        auto_callbacks: AutoCallbacks,
+    ) -> Self {
+        let relic_recognizer = match wf_ocr::new_default_ocr_engine() {
+            Ok(engine) => Some(Arc::new(RelicRecognizer::from(engine))),
+            Err(e) => {
+                log::error!("OCR engine unavailable, relic OCR disabled: {e}");
+                None
+            }
+        };
+        Self {
+            events,
+            http,
+            screenshot,
+            warframe_pid,
+            auto_callbacks,
+            session: SessionState::default(),
+            self_initiated_dms: HashSet::new(),
+            trade: TradeState::default(),
+            relic: RelicState::default(),
+            relic_recognizer,
+        }
+    }
+
+    /// Resolve the pending trade, emitting `TradeSuccess` when `fail_reason`
+    /// is `None` and `TradeFailed` otherwise.
+    fn resolve_trade(&mut self, fail_reason: Option<String>) {
+        let Some(trades) = self.trade.resolve() else {
+            log::error!("No trade activity in watch buffer. Something's probably wrong");
+            return;
+        };
+        match &fail_reason {
+            Some(reason) => log::info!("Trade failed: {trades:?}, reason: {reason}"),
+            None => log::info!("Trade confirmed: {trades:?}"),
+        }
+        match fail_reason {
+            Some(reason) => self
+                .events
+                .emit(DaemonEvent::TradeFailed(TradeFailedEvent(trades, reason))),
+            None => self
+                .events
+                .emit(DaemonEvent::TradeSuccess(TradeSuccessEvent(trades))),
+        }
     }
 }
 
 fn event_emitter_fn(
     mut state: WatchState,
     entries: Vec<LogEvent>,
-    _warframe_pid: Option<u32>,
-    _skip_cb: bool,
     lifecycle: &GameLifecycleTracker,
 ) -> WatchState {
     for entry in entries {
         match entry {
             LogEvent::Login(AccountInfo { username, .. }) => {
-                if !state.accept_login(&username) {
-                    log::debug!("Duplicate login event for username={}", username);
+                if !state.session.login(&username) {
+                    log::debug!("Duplicate login event for username={username}");
                     continue;
                 }
-                log::info!("User logged in: username={}", username);
-                crate::emit(DaemonEvent::AccountLogin(AccountLoginEvent {
-                    timestamp: Utc::now(),
-                    username: username.clone(),
-                }));
-                #[cfg(feature = "memory")]
-                tokio::spawn(handle_login_event(username, _warframe_pid, _skip_cb));
+                log::info!("User logged in: username={username}");
+                state
+                    .events
+                    .emit(DaemonEvent::AccountLogin(AccountLoginEvent {
+                        timestamp: Utc::now(),
+                        username: username.clone(),
+                    }));
+                spawn_login_callbacks(&state, username);
             }
             LogEvent::Logout => {
-                state.reset_login();
+                state.session.logout();
                 log::info!("User logged out");
-                crate::emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
-                    timestamp: Utc::now(),
-                }));
+                state
+                    .events
+                    .emit(DaemonEvent::AccountLogout(AccountLogoutEvent {
+                        timestamp: Utc::now(),
+                    }));
             }
             LogEvent::QuitRequested => {
                 log::info!("Warframe quit command observed");
                 lifecycle.mark_quit_requested();
             }
             LogEvent::WhoQuery(username) => {
-                log::debug!("Self-initiated DM WHO query for {}", username);
+                log::debug!("Self-initiated DM WHO query for {username}");
                 state.self_initiated_dms.insert(username);
             }
             LogEvent::DmTabOpened(info) => {
@@ -119,57 +264,44 @@ fn event_emitter_fn(
                         info.username,
                         info.platform
                     );
-                    crate::emit(DaemonEvent::DmTabOpened(DmTabOpenedEvent {
-                        timestamp: Utc::now(),
-                        username: info.username,
-                        platform: info.platform,
-                    }));
+                    state
+                        .events
+                        .emit(DaemonEvent::DmTabOpened(DmTabOpenedEvent {
+                            timestamp: Utc::now(),
+                            username: info.username,
+                            platform: info.platform,
+                        }));
                 }
             }
-            LogEvent::TradeSuccess => {
-                if let Some(trades) = state.trades.take() {
-                    log::info!("Trade confirmed: {:?}", &trades);
-                    let popup = crate::events::TradeConfirmPopupEvent {
-                        sent: trades.sent,
-                        received: trades.received,
-                        name: trades.name,
-                        platform: trades.platform,
-                    };
-                    crate::emit(DaemonEvent::TradeSuccess(crate::events::TradeSuccessEvent(
-                        popup,
-                    )));
-                } else {
-                    log::error!("No trade activity in watch buffer. Something's probably wrong");
-                }
-            }
-            LogEvent::TradeFail(reason) => {
-                if let Some(trades) = state.trades.take() {
-                    log::info!("Trade failed: {:?}, reason: {}", &trades, reason);
-                    let popup = crate::events::TradeConfirmPopupEvent {
-                        sent: trades.sent,
-                        received: trades.received,
-                        name: trades.name,
-                        platform: trades.platform,
-                    };
-                    crate::emit(DaemonEvent::TradeFailed(crate::events::TradeFailedEvent(
-                        popup, reason,
-                    )));
-                } else {
-                    log::error!("No trade in watch buffer. Something's probably wrong");
-                }
-            }
+            LogEvent::TradeSuccess => state.resolve_trade(None),
+            LogEvent::TradeFail(reason) => state.resolve_trade(Some(reason)),
             LogEvent::TradeConfirmPopup(info) => {
-                log::info!("Got trade request confirmation: {:?}", info);
-                state.trades = Some(info);
+                log::info!("Got trade request confirmation: {info:?}");
+                state.trade.confirm_popup(info);
             }
             LogEvent::RelicOpen => {
+                if !state.relic.open() {
+                    log::debug!("Duplicate relic open event; window already showing");
+                    continue;
+                }
                 log::info!("Relic selection window opened");
-                state.relic_countdown = true;
-                tokio::spawn(handle_relic_selection_popup());
+                let Some(ref recognizer) = state.relic_recognizer else {
+                    log::error!("OCR engine unavailable; skipping relic recognition");
+                    continue;
+                };
+                tokio::spawn(handle_relic_selection_popup(
+                    state.events.clone(),
+                    Arc::clone(&state.screenshot),
+                    Arc::clone(recognizer),
+                ));
             }
             LogEvent::RelicClose => {
-                state.relic_countdown = false;
+                if !state.relic.close() {
+                    log::debug!("Relic close event without an observed open");
+                    continue;
+                }
                 log::info!("Relic selection window closed");
+                state.events.emit(DaemonEvent::RelicSelectionClosed);
             }
         }
     }
@@ -177,16 +309,33 @@ fn event_emitter_fn(
 }
 
 #[cfg(feature = "memory")]
-async fn handle_login_event(user_name: String, known_pid: Option<u32>, skip_cb: bool) {
+fn spawn_login_callbacks(state: &WatchState, username: Username) {
+    tokio::spawn(handle_login_event(
+        state.events.clone(),
+        state.http.clone(),
+        username,
+        state.warframe_pid,
+        state.auto_callbacks,
+    ));
+}
+
+#[cfg(not(feature = "memory"))]
+fn spawn_login_callbacks(_state: &WatchState, _username: Username) {}
+
+#[cfg(feature = "memory")]
+async fn handle_login_event(
+    events: EventBus,
+    http: reqwest::Client,
+    user_name: Username,
+    known_pid: Option<u32>,
+    auto_callbacks: AutoCallbacks,
+) {
     let Some(pid) = known_pid.or_else(process::get_warframe_pid) else {
         log::info!("Warframe not running - skipping profile and inventory fetch");
         return;
     };
 
-    log::info!(
-        "Warframe running (PID: {}), attempting to resolve account authorization...",
-        pid
-    );
+    log::info!("Warframe running (PID: {pid}), attempting to resolve account authorization...");
     let auth = match process::scan_memory_for_auth_with_retry(pid, 5, Duration::from_secs(3)).await
     {
         Ok(Some(auth)) => auth,
@@ -196,36 +345,57 @@ async fn handle_login_event(user_name: String, known_pid: Option<u32>, skip_cb: 
             return;
         }
         Err(e) => {
-            log::error!("Memory scan error: {}", e);
+            log::error!("Memory scan error: {e}");
             log::info!("Tip: Grant necessary permissions or try running with sudo");
             return;
         }
     };
 
     log::info!("Resolved account authorization from process memory");
-    match api::fetch_player_profile(&auth.account_id).await {
-        Ok(profile) => {
-            log::info!("Fetched profile for {}: {:?}", user_name, profile);
-            if let Err(e) = storage::save_encrypted_profile(&profile) {
-                log::error!("Failed to save profile for {}: {}", user_name, e);
-            } else {
-                crate::emit(DaemonEvent::ProfileUpdated(ProfileUpdatedEvent {
-                    timestamp: Utc::now(),
-                    account_id: auth.account_id.clone(),
-                }));
-            }
-        }
-        Err(e) => {
-            log::error!("Failed to fetch profile for {}: {}", user_name, e);
-        }
-    }
+    refresh_profile(&events, &http, &user_name, &auth.account_id).await;
 
-    if skip_cb {
+    if auto_callbacks == AutoCallbacks::Skip {
         log::info!("Skipping auto fetch inventory. Fetch manually if required.");
         return;
     }
 
+    refresh_inventory(&events, &http, pid, auth).await;
+}
+
+#[cfg(feature = "memory")]
+async fn refresh_profile(
+    events: &EventBus,
+    http: &reqwest::Client,
+    user_name: &Username,
+    account_id: &process::AccountId,
+) {
+    match api::fetch_player_profile(http, account_id.as_ref()).await {
+        Ok(profile) => {
+            log::info!("Fetched profile for {user_name}: {profile:?}");
+            if let Err(e) = storage::save_encrypted_profile(&profile) {
+                log::error!("Failed to save profile for {user_name}: {e}");
+            } else {
+                events.emit(DaemonEvent::ProfileUpdated(ProfileUpdatedEvent {
+                    timestamp: Utc::now(),
+                    account_id: account_id.clone(),
+                }));
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to fetch profile for {user_name}: {e}");
+        }
+    }
+}
+
+#[cfg(feature = "memory")]
+async fn refresh_inventory(
+    events: &EventBus,
+    http: &reqwest::Client,
+    pid: u32,
+    auth: process::AuthQuery,
+) {
     match inventory_refresh::fetch_inventory_with_auth_from_process(
+        http,
         pid,
         auth,
         5,
@@ -236,15 +406,15 @@ async fn handle_login_event(user_name: String, known_pid: Option<u32>, skip_cb: 
         Ok(Some(result)) => {
             log::info!("Successfully fetched live inventory");
             if let Err(e) = storage::save_inventory(&result.inventory) {
-                log::error!("Failed to save inventory: {}", e);
+                log::error!("Failed to save inventory: {e}");
             } else {
-                if let Err(e) = storage::touch_inventory_updated(Some("auto")) {
-                    log::warn!("Failed to update inventory metadata: {}", e);
+                if let Err(e) = storage::touch_inventory_updated(Some(&Source::Auto.to_string())) {
+                    log::warn!("Failed to update inventory metadata: {e}");
                 }
-                crate::emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
+                events.emit(DaemonEvent::InventoryFetched(InventoryFetchedEvent {
                     timestamp: Utc::now(),
-                    source: "auto".to_string(),
-                    summary: crate::inventory::inventory_summary(&result.inventory),
+                    source: Source::Auto,
+                    summary: inventory_summary(&result.inventory),
                 }));
             }
         }
@@ -253,84 +423,79 @@ async fn handle_login_event(user_name: String, known_pid: Option<u32>, skip_cb: 
             log::info!("Tip: Make sure you're logged into Warframe");
         }
         Err(e) => {
-            log::error!("Live inventory fetch failed: {}", e);
+            log::error!("Live inventory fetch failed: {e}");
         }
     }
 }
 
-static RELIC_RECOG_ENGINE: LazyLock<wf_ocr::RelicRecognizer> =
-    LazyLock::new(|| RelicRecognizer::new(&wf_ocr::DEFAULT_OCR_ENGINE));
+async fn handle_relic_selection_popup(
+    events: EventBus,
+    shots: Arc<ScreenshotState>,
+    recognizer: Arc<RelicRecognizer>,
+) {
+    sleep(Duration::from_millis(500)).await;
 
-async fn handle_relic_selection_popup() {
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    let res = capture_screen().await;
+    let res = capture_screen(&shots).await;
     match res {
-        Ok((image_bytes, _)) => match load_image(image_bytes) {
-            Ok(img) => match RELIC_RECOG_ENGINE.recognize_and_list(&img) {
-                Ok(mut v) => {
-                    log::info!("Got relic items: {:?}", v);
-                    let filtered: Vec<String> = v.drain(..).map(|e| e.text).collect();
-                    let popup = crate::events::RelicSelectionPopup { items: filtered };
-                    crate::emit(DaemonEvent::RelicSelectionOpen(popup));
+        Ok((image_bytes, _)) => match load_image(&image_bytes) {
+            Ok(img) => match recognizer.recognize_and_list(&img) {
+                Ok(v) => {
+                    log::info!("Got relic items: {v:?}");
+                    let filtered: Vec<String> = v.into_iter().map(|e| e.text).collect();
+                    let popup = RelicSelectionPopup { items: filtered };
+                    events.emit(DaemonEvent::RelicSelectionOpen(popup));
                 }
-                Err(e) => log::error!("OCR failed on screenshot image {}", e),
+                Err(e) => log::error!("OCR failed on screenshot image {e}"),
             },
-            Err(e) => log::error!("Failed to parse screenshot image {}", e),
+            Err(e) => log::error!("Failed to parse screenshot image {e}"),
         },
-        Err(e) => log::error!("Failed to capture screenshot for relic ocr {}", e),
+        Err(e) => log::error!("Failed to capture screenshot for relic ocr {e}"),
     }
 }
 
-pub async fn observe_warframe_activity<S: LogSource>(
-    source: S,
-    warframe_pid: Option<u32>,
-    skip_cb: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
-    observe_warframe_activity_with_lifecycle(
-        source,
-        warframe_pid,
-        skip_cb,
-        GameLifecycleTracker::default(),
-    )
-    .await
-}
-
-pub async fn observe_warframe_activity_with_lifecycle<S: LogSource>(
+pub async fn observe_warframe_activity_with_lifecycle<S>(
+    events: EventBus,
+    http: reqwest::Client,
+    screenshot: Arc<ScreenshotState>,
     mut source: S,
     warframe_pid: Option<u32>,
-    skip_cb: bool,
+    auto_callbacks: AutoCallbacks,
     lifecycle: GameLifecycleTracker,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn Error>>
+where
+    S: LogSource,
+{
     log::info!("Watching for Warframe activity...");
     let log_processor = LogProcessingEngine::new()?;
-    let mut state = WatchState::new();
+    let mut state = WatchState::new(events, http, screenshot, warframe_pid, auto_callbacks);
     let mut assembler = LineAssembler::default();
 
     loop {
-        match source.recv_chunk().await? {
-            Some(chunk) => {
-                let lines = assembler.push_chunk(&chunk);
-                if lines.is_empty() {
-                    continue;
-                }
-                let entries = log_processor.extract_events(&lines);
-                log::debug!("Observed entries: {:?}", entries);
-                state = event_emitter_fn(state, entries, warframe_pid, skip_cb, &lifecycle);
+        if let Some(chunk) = source.recv_chunk().await? {
+            let lines = assembler.push_chunk(&chunk);
+            if lines.is_empty() {
+                continue;
             }
-            None => {
-                log::info!("Log source closed");
-                return Ok(());
-            }
+            let entries = log_processor.extract_events(&lines);
+            log::debug!("Observed entries: {entries:?}");
+            state = event_emitter_fn(state, entries, &lifecycle);
+        } else {
+            log::info!("Log source closed");
+            return Ok(());
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::collections::{HashSet, VecDeque};
+    use std::future::Future;
     use std::io;
+    use std::pin::Pin;
+
+    use wf_core::account::Platform;
+
+    use super::*;
 
     const USERNAME: &str = "Jasper123";
 
@@ -363,11 +528,32 @@ mod tests {
     impl LogSource for MockLogSource {
         fn recv_chunk(
             &mut self,
-        ) -> std::pin::Pin<
-            Box<dyn std::future::Future<Output = io::Result<Option<String>>> + Send + '_>,
-        > {
+        ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + '_>> {
             Box::pin(async move { self.chunks.pop_front().unwrap_or(Ok(None)) })
         }
+    }
+
+    async fn observe_warframe_activity<S>(
+        events: EventBus,
+        http: reqwest::Client,
+        screenshot: Arc<ScreenshotState>,
+        source: S,
+        warframe_pid: Option<u32>,
+        auto_callbacks: AutoCallbacks,
+    ) -> Result<(), Box<dyn Error>>
+    where
+        S: LogSource,
+    {
+        observe_warframe_activity_with_lifecycle(
+            events,
+            http,
+            screenshot,
+            source,
+            warframe_pid,
+            auto_callbacks,
+            GameLifecycleTracker::default(),
+        )
+        .await
     }
 
     #[test]
@@ -410,7 +596,7 @@ mod tests {
         match &events[0] {
             LogEvent::Login(info) => {
                 assert_eq!(info.username, USERNAME);
-                assert_eq!(info.platform, wf_core::account::Platform::PC);
+                assert_eq!(info.platform, Platform::Pc);
                 assert_eq!(info.clan, "TestC#963");
             }
             _ => panic!("expected Login from name-change"),
@@ -461,7 +647,7 @@ mod tests {
         match &events[0] {
             LogEvent::Login(info) => {
                 assert_eq!(info.username, USERNAME);
-                assert_eq!(info.platform, wf_core::account::Platform::PLAYSTATION);
+                assert_eq!(info.platform, Platform::Playstation);
                 assert_eq!(info.clan, "Test Clan#963");
             }
             _ => panic!("expected Login from legacy name-change line"),
@@ -470,15 +656,17 @@ mod tests {
 
     #[test]
     fn test_duplicate_login_suppression_resets_on_logout() {
-        let mut state = WatchState::new();
+        let mut session = SessionState::default();
 
-        assert!(state.accept_login(USERNAME));
-        assert!(!state.accept_login(USERNAME));
-        assert!(state.accept_login("AnotherPlayer"));
-        assert!(!state.accept_login("AnotherPlayer"));
+        let jasper = Username::from(USERNAME);
+        let another = Username::from("AnotherPlayer");
+        assert!(session.login(&jasper));
+        assert!(!session.login(&jasper));
+        assert!(session.login(&another));
+        assert!(!session.login(&another));
 
-        state.reset_login();
-        assert!(state.accept_login("AnotherPlayer"));
+        session.logout();
+        assert!(session.login(&another));
     }
 
     #[test]
@@ -487,10 +675,14 @@ mod tests {
         assert_eq!(lifecycle.exit_reason(), SystemQuitReason::Unexpected);
 
         event_emitter_fn(
-            WatchState::new(),
+            WatchState::new(
+                EventBus::new(),
+                reqwest::Client::new(),
+                Arc::new(ScreenshotState::default()),
+                None,
+                AutoCallbacks::Skip,
+            ),
             vec![LogEvent::QuitRequested],
-            None,
-            true,
             &lifecycle,
         );
 
@@ -501,7 +693,7 @@ mod tests {
     fn test_incremental_dm_tab_detection() {
         let mut harness = ChunkHarness::new();
 
-        let _ = harness.feed(
+        harness.feed(
             "0.049 Sys [Diag]: Build Label: 2026.02.13.16.03\r\n\
              72.458 Sys [Info]: Logged in sample_account (2baaaaaaaaaaaaaaaaaaaaaa)\r\n",
         );
@@ -515,7 +707,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_alpha");
-                assert_eq!(info.platform, wf_core::account::Platform::PC);
+                assert_eq!(info.platform, Platform::Pc);
             }
             _ => panic!("expected DirectMessage"),
         }
@@ -527,7 +719,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_bravo");
-                assert_eq!(info.platform, wf_core::account::Platform::PC);
+                assert_eq!(info.platform, Platform::Pc);
             }
             _ => panic!("expected DirectMessage"),
         }
@@ -544,7 +736,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_charlie");
-                assert_eq!(info.platform, wf_core::account::Platform::PC);
+                assert_eq!(info.platform, Platform::Pc);
             }
             _ => panic!("expected DirectMessage"),
         }
@@ -556,7 +748,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_delta");
-                assert_eq!(info.platform, wf_core::account::Platform::XBOX);
+                assert_eq!(info.platform, Platform::Xbox);
             }
             _ => panic!("expected DirectMessage"),
         }
@@ -565,10 +757,10 @@ mod tests {
     #[test]
     fn test_self_initiated_dm_filtered_out() {
         let mut harness = ChunkHarness::new();
-        let mut self_initiated: HashSet<String> = HashSet::new();
+        let mut self_initiated: HashSet<Username> = HashSet::new();
 
         let filter_events =
-            |events: Vec<LogEvent>, initiated: &mut HashSet<String>| -> Vec<LogEvent> {
+            |events: Vec<LogEvent>, initiated: &mut HashSet<Username>| -> Vec<LogEvent> {
                 events
                     .into_iter()
                     .filter(|e| match e {
@@ -599,7 +791,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_echo");
-                assert_eq!(info.platform, wf_core::account::Platform::PC);
+                assert_eq!(info.platform, Platform::Pc);
             }
             _ => panic!("expected DmTabOpened"),
         }
@@ -635,7 +827,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_foxtrot");
-                assert_eq!(info.platform, wf_core::account::Platform::PLAYSTATION);
+                assert_eq!(info.platform, Platform::Playstation);
             }
             _ => panic!("expected DmTabOpened"),
         }
@@ -662,7 +854,7 @@ mod tests {
         match &events[0] {
             LogEvent::DmTabOpened(info) => {
                 assert_eq!(info.username, "redacted_echo");
-                assert_eq!(info.platform, wf_core::account::Platform::PC);
+                assert_eq!(info.platform, Platform::Pc);
             }
             _ => panic!("expected DmTabOpened"),
         }
@@ -739,8 +931,15 @@ mod tests {
             chunks: VecDeque::from([Ok(None)]),
         };
 
-        observe_warframe_activity(source, Some(1234), true)
-            .await
-            .unwrap();
+        observe_warframe_activity(
+            EventBus::new(),
+            reqwest::Client::new(),
+            Arc::new(ScreenshotState::default()),
+            source,
+            Some(1234),
+            AutoCallbacks::Skip,
+        )
+        .await
+        .unwrap();
     }
 }

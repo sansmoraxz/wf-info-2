@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ProductCategory;
 use crate::common::{Drop, Patchlog};
+use crate::components::Component;
 use crate::enums::GearType;
 use crate::props::{BuildableProps, ItemDetailProps, ItemIdentityProps, TradableProps};
 use crate::traits::{Buildable, Droppable, Item};
@@ -38,7 +39,7 @@ pub struct Gear {
 
 impl ProductCategory for Gear {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["Consumables".to_string(), "SpectreLoadouts".to_string()]
+        vec!["Consumables".to_owned(), "SpectreLoadouts".to_owned()]
     }
 }
 
@@ -53,7 +54,7 @@ impl Item for Gear {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        self.type_field.as_str()
+        self.type_field.as_ref()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()
@@ -100,7 +101,7 @@ impl Buildable for Gear {
     fn bp_cost(&self) -> Option<i64> {
         self.build.bp_cost
     }
-    fn components(&self) -> &[crate::components::Component] {
+    fn components(&self) -> &[Component] {
         &self.build.components
     }
 }

@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::ProductCategory;
-use crate::common::{Drop, Patchlog};
+use crate::common::{Drop, Introduced, Patchlog};
+use crate::components::Component;
 use crate::enums::{MiscType, Polarity, Rarity};
 use crate::props::{
     BuildableProps, ComponentWeapon, ItemDetailProps, ItemIdentityProps, MeleeProps, PrimeProps,
@@ -82,16 +83,18 @@ pub struct Misc {
 
 impl ProductCategory for Misc {
     fn get_product_categories(&self) -> Vec<String> {
-        match &self.product_category {
-            Some(v) => vec![v.clone()],
-            None => vec![
-                "MiscItems".into(),
-                "FusionTreasures".into(),
-                "Ships".into(),
-                "Drones".into(),
-                "CrewShips".into(),
-            ],
-        }
+        self.product_category.as_ref().map_or_else(
+            || {
+                vec![
+                    "MiscItems".into(),
+                    "FusionTreasures".into(),
+                    "Ships".into(),
+                    "Drones".into(),
+                    "CrewShips".into(),
+                ]
+            },
+            |v| vec![v.clone()],
+        )
     }
 }
 
@@ -101,6 +104,7 @@ impl Misc {
     /// Returns `WeaponTypeStats::Ranged` for gun-like misc items,
     /// `WeaponTypeStats::Melee` for melee-like misc items,
     /// or `WeaponTypeStats::None` for non-weapon items.
+    #[must_use]
     pub fn weapon_type_stats(&self) -> WeaponTypeStats {
         let w = self.weapon.as_armed();
         WeaponTypeStats::detect(
@@ -130,16 +134,19 @@ impl Misc {
     }
 
     /// Check if this misc item is a weapon (has weapon-specific stats)
+    #[must_use]
     pub fn is_weapon(&self) -> bool {
         !matches!(self.weapon_type_stats(), WeaponTypeStats::None)
     }
 
     /// Check if this misc item is a ranged weapon
+    #[must_use]
     pub fn is_ranged_weapon(&self) -> bool {
         self.weapon_type_stats().is_ranged()
     }
 
     /// Check if this misc item is a melee weapon
+    #[must_use]
     pub fn is_melee_weapon(&self) -> bool {
         self.weapon_type_stats().is_melee()
     }
@@ -156,7 +163,7 @@ impl Item for Misc {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        self.type_field.as_str()
+        self.type_field.as_ref()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()
@@ -203,7 +210,7 @@ impl Buildable for Misc {
     fn bp_cost(&self) -> Option<i64> {
         self.build.bp_cost
     }
-    fn components(&self) -> &[crate::components::Component] {
+    fn components(&self) -> &[Component] {
         &self.build.components
     }
 }
@@ -218,7 +225,7 @@ impl WikiaLinked for Misc {
     fn wikia_thumbnail(&self) -> Option<&str> {
         self.wikia.wikia_thumbnail.as_deref()
     }
-    fn introduced(&self) -> Option<&crate::common::Introduced> {
+    fn introduced(&self) -> Option<&Introduced> {
         self.wikia.introduced.as_ref()
     }
     fn release_date(&self) -> Option<&str> {

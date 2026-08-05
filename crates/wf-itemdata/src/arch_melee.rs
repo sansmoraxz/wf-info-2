@@ -3,7 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ProductCategory;
-use crate::common::Patchlog;
+use crate::common::{Introduced, Patchlog};
+use crate::components::Component;
 use crate::damage::{Attack, DamageBreakdown};
 use crate::enums::{ArchMeleeProductCategory, ArchMeleeType, Polarity, Slot};
 use crate::props::{
@@ -50,7 +51,7 @@ pub struct ArchMelee {
 
 impl ProductCategory for ArchMelee {
     fn get_product_categories(&self) -> Vec<String> {
-        vec![self.product_category.as_str().to_string()]
+        vec![self.product_category.as_ref().to_owned()]
     }
 }
 
@@ -65,7 +66,7 @@ impl Item for ArchMelee {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        self.type_field.as_str()
+        self.type_field.as_ref()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()
@@ -109,7 +110,7 @@ impl Buildable for ArchMelee {
     fn bp_cost(&self) -> Option<i64> {
         self.build.bp_cost
     }
-    fn components(&self) -> &[crate::components::Component] {
+    fn components(&self) -> &[Component] {
         &self.build.components
     }
 }
@@ -139,7 +140,7 @@ impl WikiaLinked for ArchMelee {
     fn wikia_thumbnail(&self) -> Option<&str> {
         self.wikia.wikia_thumbnail.as_deref()
     }
-    fn introduced(&self) -> Option<&crate::common::Introduced> {
+    fn introduced(&self) -> Option<&Introduced> {
         self.wikia.introduced.as_ref()
     }
     fn release_date(&self) -> Option<&str> {
@@ -194,7 +195,7 @@ impl MeleeWeapon for ArchMelee {
         self.melee.range
     }
     fn stance_polarity(&self) -> Option<&str> {
-        self.melee.stance_polarity.as_ref().map(|p| p.as_str())
+        self.melee.stance_polarity.as_ref().map(AsRef::as_ref)
     }
     fn slam_attack(&self) -> Option<i64> {
         self.melee.slam_attack
@@ -237,8 +238,8 @@ mod tests {
         assert!(rec.trade.masterable);
 
         // Weapon stats
-        assert!((rec.weapon.critical_chance - 0.15).abs() < 0.01);
-        assert!((rec.weapon.total_damage - 392.0).abs() < 0.01);
+        assert!((rec.weapon.critical_chance - 0.15).abs() < 0.01_f64);
+        assert!((rec.weapon.total_damage - 392.0).abs() < 0.01_f64);
         assert_eq!(rec.weapon.damage_per_shot.len(), 20);
 
         // Melee stats
@@ -258,8 +259,8 @@ mod tests {
         let rec: ArchMelee = from_str(json_data).unwrap();
 
         assert_eq!(rec.identity.name, "Centaur");
-        assert!((rec.weapon.total_damage - 376.0).abs() < 1.0);
-        assert!((rec.weapon.critical_chance - 0.25).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 376.0).abs() < 1.0_f64);
+        assert!((rec.weapon.critical_chance - 0.25).abs() < 0.01_f64);
         assert_eq!(rec.melee.blocking_angle, Some(90));
     }
 
@@ -272,8 +273,8 @@ mod tests {
         let rec: ArchMelee = from_str(json_data).unwrap();
 
         assert_eq!(rec.identity.name, "Agkuza");
-        assert!((rec.weapon.total_damage - 436.0).abs() < 1.0);
-        assert!((rec.weapon.critical_chance - 0.05).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 436.0).abs() < 1.0_f64);
+        assert!((rec.weapon.critical_chance - 0.05).abs() < 0.01_f64);
         assert_eq!(rec.melee.blocking_angle, Some(90));
     }
 }

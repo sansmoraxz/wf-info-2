@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ProductCategory;
-use crate::common::{Drop, Patchlog};
+use crate::common::{Drop, Introduced, Patchlog};
 use crate::damage::{Attack, DamageBreakdown};
 use crate::enums::RailjackType;
 use crate::props::{
@@ -47,9 +47,9 @@ pub struct Railjack {
 impl ProductCategory for Railjack {
     fn get_product_categories(&self) -> Vec<String> {
         vec![
-            "CrewShipWeapons".to_string(),
-            "CrewShipRawSalvage".to_string(),
-            "CrewShipSalvagedWeapons".to_string(),
+            "CrewShipWeapons".to_owned(),
+            "CrewShipRawSalvage".to_owned(),
+            "CrewShipSalvagedWeapons".to_owned(),
         ]
     }
 }
@@ -65,7 +65,7 @@ impl Item for Railjack {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        self.type_field.as_str()
+        self.type_field.as_ref()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()
@@ -97,7 +97,7 @@ impl WikiaLinked for Railjack {
     fn wikia_thumbnail(&self) -> Option<&str> {
         self.wikia.wikia_thumbnail.as_deref()
     }
-    fn introduced(&self) -> Option<&crate::common::Introduced> {
+    fn introduced(&self) -> Option<&Introduced> {
         self.wikia.introduced.as_ref()
     }
     fn release_date(&self) -> Option<&str> {
@@ -146,10 +146,10 @@ impl RangedWeapon for Railjack {
         self.gun.multishot
     }
     fn noise(&self) -> &str {
-        self.gun.noise.as_str()
+        self.gun.noise.as_ref()
     }
     fn trigger(&self) -> &str {
-        self.gun.trigger.as_str()
+        self.gun.trigger.as_ref()
     }
     fn magazine_size(&self) -> Option<i64> {
         self.gun.magazine_size
@@ -184,9 +184,9 @@ mod tests {
         assert!(!rec.trade.tradable);
 
         // Weapon stats
-        assert!((rec.weapon.critical_chance - 0.1).abs() < 0.01);
-        assert!((rec.weapon.total_damage - 227.0).abs() < 0.01);
-        assert!((rec.weapon.fire_rate - 8.33).abs() < 0.01);
+        assert!((rec.weapon.critical_chance - 0.1).abs() < 0.01_f64);
+        assert!((rec.weapon.total_damage - 227.0).abs() < 0.01_f64);
+        assert!((rec.weapon.fire_rate - 8.33).abs() < 0.01_f64);
         assert_eq!(rec.weapon.damage_per_shot.len(), 20);
 
         // Gun stats
@@ -209,8 +209,8 @@ mod tests {
             "/Lotus/Weapons/CrewShip/MassDriver/AutoCannon/AutoCannon"
         );
         assert_eq!(rec.identity.name, "Apoc");
-        assert!((rec.weapon.total_damage - 126.0).abs() < 1.0);
-        assert!((rec.weapon.fire_rate - 8.33).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 126.0).abs() < 1.0_f64);
+        assert!((rec.weapon.fire_rate - 8.33).abs() < 0.01_f64);
     }
 
     #[test]
@@ -222,7 +222,7 @@ mod tests {
         let rec: Railjack = from_str(json_data).unwrap();
 
         assert_eq!(rec.identity.name, "Apoc Mk Ii");
-        assert!((rec.weapon.total_damage - 386.0).abs() < 1.0);
-        assert!((rec.weapon.critical_chance - 0.14).abs() < 0.01);
+        assert!((rec.weapon.total_damage - 386.0).abs() < 1.0_f64);
+        assert!((rec.weapon.critical_chance - 0.14).abs() < 0.01_f64);
     }
 }

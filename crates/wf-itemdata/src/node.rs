@@ -40,7 +40,7 @@ pub struct Node {
 
 impl ProductCategory for Node {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["Node".to_string()]
+        vec!["Node".to_owned()]
     }
 }
 
@@ -55,7 +55,7 @@ impl Item for Node {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        self.type_field.as_str()
+        self.type_field.as_ref()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()

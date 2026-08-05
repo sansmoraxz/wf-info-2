@@ -1,61 +1,61 @@
+#![allow(
+    clippy::type_complexity,
+    reason = "tuple-typed fixture tables read best inline; a type alias per test adds noise"
+)]
+
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 
 use crate as itemdata;
 use crate::enums::VaultStatus;
 use crate::traits::{
-    Buildable, Character, Droppable, Equippable, HasAbilities, Item, MeleeWeapon, Prime,
-    RangedWeapon, Weapon, WikiaLinked,
+    Buildable as _, Character as _, Droppable as _, Equippable as _, HasAbilities as _, Item,
+    MeleeWeapon as _, Prime as _, RangedWeapon as _, Weapon as _, WikiaLinked as _,
+};
+use crate::{
+    arcane, arch_gun, arch_melee, archwing, enemy, fish, gear, glyph, melee, misc, mods, node, pet,
+    primary, quest, railjack, relics, resource, secondary, sentinel, sentinel_weapon, sigil, skin,
+    warframe,
 };
 use wf_inventory as inventory;
+use wf_inventory::suit::Suit;
 
 // ── Helpers ──
 
-macro_rules! load_json {
-    ($file:literal) => {{
-        // Try local dev copy first, then cached web download
-        let local = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/warframe-items-data/json/",
-            $file
-        );
-        if std::path::Path::new(local).exists() {
-            std::fs::read_to_string(local).unwrap()
-        } else if let Ok(cached) = crate::item_data_fetch::cached_path($file) {
-            if cached.exists() {
-                std::fs::read_to_string(cached).unwrap()
-            } else {
-                panic!(
-                    "Item data file '{}' not found locally or in cache. \
-                     Run the daemon once or download warframe-items-data.",
-                    $file
-                );
-            }
-        } else {
-            panic!("Could not determine cache path for '{}'", $file);
-        }
-    }};
+fn load_json(file: &str) -> String {
+    let path = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/testdata/items")).join(file);
+    fs::read_to_string(&path).unwrap_or_else(|e| {
+        panic!(
+            "failed to read test fixture {}: {e}. Run `just fetch-testdata` to refresh fixtures.",
+            path.display()
+        )
+    })
 }
 
-fn find_by_name<'a, T: Item>(items: &'a [T], name: &str) -> &'a T {
+fn find_by_name<'a, T>(items: &'a [T], name: &str) -> &'a T
+where
+    T: Item,
+{
     items
         .iter()
         .find(|i| i.name() == name)
-        .unwrap_or_else(|| panic!("item '{}' not found", name))
+        .unwrap_or_else(|| panic!("item '{name}' not found"))
 }
 
 // ── Warframes ──
 
 #[test]
 fn test_warframes_deserialize_all() {
-    let raw = load_json!("Warframes.json");
-    let arr: itemdata::warframe::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Warframes.json");
+    let arr: warframe::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 100);
 }
 
 #[test]
 fn test_warframes_tabular_fields() {
-    let raw = load_json!("Warframes.json");
-    let arr: itemdata::warframe::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Warframes.json");
+    let arr: warframe::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, health, armor, shield, power, abilities, is_prime, vaulted)
     let cases: &[(&str, &str, i64, i64, i64, i64, usize, bool, Option<bool>)] = &[
@@ -121,37 +121,31 @@ fn test_warframes_tabular_fields() {
 
 #[test]
 fn test_warframes_variant_discrimination() {
-    let raw = load_json!("Warframes.json");
-    let arr: itemdata::warframe::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Warframes.json");
+    let arr: warframe::Root = serde_json::from_str(&raw).unwrap();
 
     // Suits variant
     let excal = find_by_name(&arr, "Excalibur");
-    assert!(matches!(excal, itemdata::warframe::WarframeEntry::Suits(_)));
+    assert!(matches!(excal, warframe::WarframeEntry::Suits(_)));
     assert_eq!(excal.build_price(), Some(25000));
     assert!(excal.wikia_url().is_some());
     assert_eq!(excal.vault_status(), VaultStatus::NotPrime);
 
     // Suits prime variant
     let ash = find_by_name(&arr, "Ash Prime");
-    assert!(matches!(ash, itemdata::warframe::WarframeEntry::Suits(_)));
+    assert!(matches!(ash, warframe::WarframeEntry::Suits(_)));
     assert_eq!(ash.vault_date(), Some("2017-05-30"));
     assert!(matches!(ash.vault_status(), VaultStatus::Vaulted { .. }));
     assert!(!ash.is_accessible());
 
     // MechSuits variant
     let bw = find_by_name(&arr, "Bonewidow");
-    assert!(matches!(
-        bw,
-        itemdata::warframe::WarframeEntry::MechSuits(_)
-    ));
+    assert!(matches!(bw, warframe::WarframeEntry::MechSuits(_)));
     assert_eq!(bw.mastery_req(), Some(0));
 
     // Helminth variant
     let helminth = find_by_name(&arr, "Helminth");
-    assert!(matches!(
-        helminth,
-        itemdata::warframe::WarframeEntry::Helminth(_)
-    ));
+    assert!(matches!(helminth, warframe::WarframeEntry::Helminth(_)));
     assert!(helminth.build_price().is_none());
     assert!(!helminth.tradable());
 }
@@ -160,15 +154,15 @@ fn test_warframes_variant_discrimination() {
 
 #[test]
 fn test_primary_deserialize_all() {
-    let raw = load_json!("Primary.json");
-    let arr: itemdata::primary::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Primary.json");
+    let arr: primary::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 100);
 }
 
 #[test]
 fn test_primary_tabular_fields() {
-    let raw = load_json!("Primary.json");
-    let arr: itemdata::primary::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Primary.json");
+    let arr: primary::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, type, crit_chance, total_damage, mag_size, trigger, disposition, is_prime, vaulted)
     let cases: &[(
@@ -225,8 +219,11 @@ fn test_primary_tabular_fields() {
         let item = find_by_name(&arr, name);
         assert_eq!(item.unique_name(), unique, "{name} unique_name");
         assert_eq!(item.type_field(), typ, "{name} type");
-        assert!((item.critical_chance() - crit).abs() < 0.01, "{name} crit");
-        assert!((item.total_damage() - dmg).abs() < 0.5, "{name} dmg");
+        assert!(
+            (item.critical_chance() - crit).abs() < 0.01_f64,
+            "{name} crit"
+        );
+        assert!((item.total_damage() - dmg).abs() < 0.5_f64, "{name} dmg");
         assert_eq!(item.magazine_size(), Some(mag), "{name} mag_size");
         assert_eq!(item.trigger(), trigger, "{name} trigger");
         assert_eq!(item.disposition(), Some(dispo), "{name} disposition");
@@ -240,15 +237,15 @@ fn test_primary_tabular_fields() {
 
 #[test]
 fn test_secondary_deserialize_all() {
-    let raw = load_json!("Secondary.json");
-    let arr: itemdata::secondary::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Secondary.json");
+    let arr: secondary::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 50);
 }
 
 #[test]
 fn test_secondary_tabular_fields() {
-    let raw = load_json!("Secondary.json");
-    let arr: itemdata::secondary::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Secondary.json");
+    let arr: secondary::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, type, crit_chance, total_damage, mag_size, trigger, disposition, is_prime, vaulted)
     let cases: &[(
@@ -317,8 +314,11 @@ fn test_secondary_tabular_fields() {
         let item = find_by_name(&arr, name);
         assert_eq!(item.unique_name(), unique, "{name} unique_name");
         assert_eq!(item.type_field(), typ, "{name} type");
-        assert!((item.critical_chance() - crit).abs() < 0.01, "{name} crit");
-        assert!((item.total_damage() - dmg).abs() < 0.5, "{name} dmg");
+        assert!(
+            (item.critical_chance() - crit).abs() < 0.01_f64,
+            "{name} crit"
+        );
+        assert!((item.total_damage() - dmg).abs() < 0.5_f64, "{name} dmg");
         assert_eq!(item.magazine_size(), Some(mag), "{name} mag");
         assert_eq!(item.trigger(), trigger, "{name} trigger");
         assert_eq!(item.disposition(), Some(dispo), "{name} dispo");
@@ -332,15 +332,15 @@ fn test_secondary_tabular_fields() {
 
 #[test]
 fn test_melee_deserialize_all() {
-    let raw = load_json!("Melee.json");
-    let arr: itemdata::melee::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Melee.json");
+    let arr: melee::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 100);
 }
 
 #[test]
 fn test_melee_tabular_fields() {
-    let raw = load_json!("Melee.json");
-    let arr: itemdata::melee::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Melee.json");
+    let arr: melee::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, crit_chance, total_damage, disposition, is_prime, blocking_angle)
     let cases: &[(&str, &str, f64, f64, i64, bool, i64)] = &[
@@ -376,8 +376,11 @@ fn test_melee_tabular_fields() {
     for &(name, unique, crit, dmg, dispo, prime, block_angle) in cases {
         let item = find_by_name(&arr, name);
         assert_eq!(item.unique_name(), unique, "{name} unique_name");
-        assert!((item.critical_chance() - crit).abs() < 0.01, "{name} crit");
-        assert!((item.total_damage() - dmg).abs() < 0.5, "{name} dmg");
+        assert!(
+            (item.critical_chance() - crit).abs() < 0.01_f64,
+            "{name} crit"
+        );
+        assert!((item.total_damage() - dmg).abs() < 0.5_f64, "{name} dmg");
         assert_eq!(item.disposition(), Some(dispo), "{name} dispo");
         assert_eq!(item.is_prime(), prime, "{name} prime");
         assert_eq!(
@@ -398,15 +401,15 @@ fn test_melee_tabular_fields() {
 
 #[test]
 fn test_archwing_deserialize_all() {
-    let raw = load_json!("Archwing.json");
-    let arr: itemdata::archwing::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Archwing.json");
+    let arr: archwing::Root = serde_json::from_str(&raw).unwrap();
     assert!(!arr.is_empty());
 }
 
 #[test]
 fn test_archwing_tabular_fields() {
-    let raw = load_json!("Archwing.json");
-    let arr: itemdata::archwing::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Archwing.json");
+    let arr: archwing::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, health, armor, shield, abilities_count, is_prime, build_price)
     let cases: &[(&str, &str, i64, i64, i64, usize, bool, i64)] = &[
@@ -459,15 +462,15 @@ fn test_archwing_tabular_fields() {
 
 #[test]
 fn test_archgun_deserialize_all() {
-    let raw = load_json!("Arch-Gun.json");
-    let arr: itemdata::arch_gun::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Arch-Gun.json");
+    let arr: arch_gun::Root = serde_json::from_str(&raw).unwrap();
     assert!(!arr.is_empty());
 }
 
 #[test]
 fn test_archgun_tabular_fields() {
-    let raw = load_json!("Arch-Gun.json");
-    let arr: itemdata::arch_gun::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Arch-Gun.json");
+    let arr: arch_gun::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, total_damage, fire_rate, crit_chance, mag_size, trigger, dispo, is_prime)
     let cases: &[(&str, &str, f64, f64, f64, i64, &str, i64, bool)] = &[
@@ -510,9 +513,12 @@ fn test_archgun_tabular_fields() {
         let item = find_by_name(&arr, name);
         assert_eq!(item.unique_name(), unique, "{name} unique_name");
         assert_eq!(item.category(), "Arch-Gun", "{name} category");
-        assert!((item.total_damage() - dmg).abs() < 1.0, "{name} dmg");
-        assert!((item.fire_rate() - rate).abs() < 0.1, "{name} rate");
-        assert!((item.critical_chance() - crit).abs() < 0.01, "{name} crit");
+        assert!((item.total_damage() - dmg).abs() < 1.0_f64, "{name} dmg");
+        assert!((item.fire_rate() - rate).abs() < 0.1_f64, "{name} rate");
+        assert!(
+            (item.critical_chance() - crit).abs() < 0.01_f64,
+            "{name} crit"
+        );
         assert_eq!(item.magazine_size(), Some(mag), "{name} mag");
         assert_eq!(item.trigger(), trigger, "{name} trigger");
         assert_eq!(item.disposition(), Some(dispo), "{name} dispo");
@@ -525,15 +531,15 @@ fn test_archgun_tabular_fields() {
 
 #[test]
 fn test_archmelee_deserialize_all() {
-    let raw = load_json!("Arch-Melee.json");
-    let arr: itemdata::arch_melee::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Arch-Melee.json");
+    let arr: arch_melee::Root = serde_json::from_str(&raw).unwrap();
     assert!(!arr.is_empty());
 }
 
 #[test]
 fn test_archmelee_tabular_fields() {
-    let raw = load_json!("Arch-Melee.json");
-    let arr: itemdata::arch_melee::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Arch-Melee.json");
+    let arr: arch_melee::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, total_damage, crit_chance, blocking_angle, slam_attack)
     let cases: &[(&str, &str, f64, f64, i64, i64)] = &[
@@ -567,8 +573,11 @@ fn test_archmelee_tabular_fields() {
         let item = find_by_name(&arr, name);
         assert_eq!(item.unique_name(), unique, "{name} unique_name");
         assert_eq!(item.category(), "Arch-Melee", "{name} category");
-        assert!((item.total_damage() - dmg).abs() < 1.0, "{name} dmg");
-        assert!((item.critical_chance() - crit).abs() < 0.01, "{name} crit");
+        assert!((item.total_damage() - dmg).abs() < 1.0_f64, "{name} dmg");
+        assert!(
+            (item.critical_chance() - crit).abs() < 0.01_f64,
+            "{name} crit"
+        );
         assert_eq!(item.blocking_angle(), Some(block_angle), "{name} blocking");
         assert_eq!(item.slam_attack(), Some(slam), "{name} slam");
         assert_eq!(item.combo_duration(), Some(5), "{name} combo_dur");
@@ -580,15 +589,15 @@ fn test_archmelee_tabular_fields() {
 
 #[test]
 fn test_arcanes_deserialize_all() {
-    let raw = load_json!("Arcanes.json");
-    let arr: itemdata::arcane::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Arcanes.json");
+    let arr: arcane::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 50);
 }
 
 #[test]
 fn test_arcanes_tabular_fields() {
-    let raw = load_json!("Arcanes.json");
-    let arr: itemdata::arcane::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Arcanes.json");
+    let arr: arcane::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, type, rarity, tradable, level_stats_count)
     let cases: &[(&str, &str, &str, itemdata::Rarity, bool, usize)] = &[
@@ -633,15 +642,15 @@ fn test_arcanes_tabular_fields() {
 
 #[test]
 fn test_mods_deserialize_all() {
-    let raw = load_json!("Mods.json");
-    let arr: itemdata::mods::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Mods.json");
+    let arr: mods::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 1000);
 }
 
 #[test]
 fn test_mods_tabular_fields() {
-    let raw = load_json!("Mods.json");
-    let arr: itemdata::mods::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Mods.json");
+    let arr: mods::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, type_field, tradable, is_regular, is_riven, is_set_member, is_set_definition)
     let cases: &[(&str, &str, &str, bool, bool, bool, bool, bool)] = &[
@@ -701,18 +710,18 @@ fn test_mods_tabular_fields() {
 
 #[test]
 fn test_mods_variant_details() {
-    let raw = load_json!("Mods.json");
-    let arr: itemdata::mods::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Mods.json");
+    let arr: mods::Root = serde_json::from_str(&raw).unwrap();
 
     // Regular mod details
     let serration = find_by_name(&arr, "Serration");
     match serration {
-        itemdata::mods::ModEntry::Regular(m) => {
+        mods::ModEntry::Regular(m) => {
             assert_eq!(m.rarity, itemdata::Rarity::Uncommon);
             assert_eq!(m.polarity, itemdata::Polarity::Madurai);
             assert_eq!(m.base_drain, 2);
             assert_eq!(m.fusion_limit, 3);
-            assert_eq!(m.compat_name, Some("Rifle".to_string()));
+            assert_eq!(m.compat_name, Some("Rifle".to_owned()));
         }
         _ => panic!("Expected Regular variant"),
     }
@@ -721,7 +730,7 @@ fn test_mods_variant_details() {
     // Riven mod details
     let riven = find_by_name(&arr, "Archgun Riven Mod");
     match riven {
-        itemdata::mods::ModEntry::Riven(r) => {
+        mods::ModEntry::Riven(r) => {
             assert!(!r.available_challenges.is_empty());
         }
         _ => panic!("Expected Riven variant"),
@@ -737,7 +746,7 @@ fn test_mods_variant_details() {
     // Set definition details
     let set_def = find_by_name(&arr, "Amarsetmod");
     match set_def {
-        itemdata::mods::ModEntry::SetDefinition(m) => {
+        mods::ModEntry::SetDefinition(m) => {
             assert_eq!(m.num_upgrades_in_set, 3);
         }
         _ => panic!("Expected SetDefinition variant"),
@@ -746,8 +755,8 @@ fn test_mods_variant_details() {
 
 #[test]
 fn test_mods_all_variants_present() {
-    let raw = load_json!("Mods.json");
-    let arr: itemdata::mods::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Mods.json");
+    let arr: mods::Root = serde_json::from_str(&raw).unwrap();
 
     let mut has_regular = false;
     let mut has_riven = false;
@@ -756,10 +765,10 @@ fn test_mods_all_variants_present() {
 
     for m in &arr {
         match m {
-            itemdata::mods::ModEntry::Regular(_) => has_regular = true,
-            itemdata::mods::ModEntry::Riven(_) => has_riven = true,
-            itemdata::mods::ModEntry::SetMember(_) => has_set_member = true,
-            itemdata::mods::ModEntry::SetDefinition(_) => has_set_def = true,
+            mods::ModEntry::Regular(_) => has_regular = true,
+            mods::ModEntry::Riven(_) => has_riven = true,
+            mods::ModEntry::SetMember(_) => has_set_member = true,
+            mods::ModEntry::SetDefinition(_) => has_set_def = true,
         }
     }
 
@@ -773,15 +782,15 @@ fn test_mods_all_variants_present() {
 
 #[test]
 fn test_pets_deserialize_all() {
-    let raw = load_json!("Pets.json");
-    let arr: itemdata::pet::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Pets.json");
+    let arr: pet::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 10);
 }
 
 #[test]
 fn test_pets_tabular_fields() {
-    let raw = load_json!("Pets.json");
-    let arr: itemdata::pet::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Pets.json");
+    let arr: pet::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, tradable, has_wikia, has_build_price)
     let cases: &[(&str, &str, bool, bool, bool)] = &[
@@ -820,17 +829,17 @@ fn test_pets_tabular_fields() {
 
 #[test]
 fn test_pets_all_variants_present() {
-    let raw = load_json!("Pets.json");
-    let arr: itemdata::pet::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Pets.json");
+    let arr: pet::Root = serde_json::from_str(&raw).unwrap();
 
     let mut has_kubrow = false;
     let mut has_component = false;
     let mut has_special = false;
     for pet in &arr {
         match pet {
-            itemdata::pet::PetEntry::KubrowPets(_) => has_kubrow = true,
-            itemdata::pet::PetEntry::Pistols(_) => has_component = true,
-            itemdata::pet::PetEntry::SpecialItems(_) => has_special = true,
+            pet::PetEntry::KubrowPets(_) => has_kubrow = true,
+            pet::PetEntry::Pistols(_) => has_component = true,
+            pet::PetEntry::SpecialItems(_) => has_special = true,
         }
     }
     assert!(has_kubrow, "Should have KubrowPets entries");
@@ -840,13 +849,13 @@ fn test_pets_all_variants_present() {
 
 #[test]
 fn test_pets_variant_details() {
-    let raw = load_json!("Pets.json");
-    let arr: itemdata::pet::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Pets.json");
+    let arr: pet::Root = serde_json::from_str(&raw).unwrap();
 
     // KubrowPets variant
     let kavat = find_by_name(&arr, "Adarza Kavat");
     match kavat {
-        itemdata::pet::PetEntry::KubrowPets(p) => {
+        pet::PetEntry::KubrowPets(p) => {
             assert_eq!(p.stats.health, 310);
             assert_eq!(p.stats.armor, 300);
             assert_eq!(p.stats.shield, 270);
@@ -856,12 +865,12 @@ fn test_pets_variant_details() {
 
     // Pistols (component) variant
     let core = find_by_name(&arr, "Adlet Core");
-    assert!(matches!(core, itemdata::pet::PetEntry::Pistols(_)));
+    assert!(matches!(core, pet::PetEntry::Pistols(_)));
 
     // SpecialItems variant
     let venari = find_by_name(&arr, "Venari");
     match venari {
-        itemdata::pet::PetEntry::SpecialItems(p) => {
+        pet::PetEntry::SpecialItems(p) => {
             assert_eq!(p.stats.health, 900);
             assert_eq!(p.stats.armor, 350);
             assert!(p.exclude_from_codex);
@@ -874,15 +883,15 @@ fn test_pets_variant_details() {
 
 #[test]
 fn test_sentinels_deserialize_all() {
-    let raw = load_json!("Sentinels.json");
-    let arr: itemdata::sentinel::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Sentinels.json");
+    let arr: sentinel::Root = serde_json::from_str(&raw).unwrap();
     assert!(!arr.is_empty());
 }
 
 #[test]
 fn test_sentinels_tabular_fields() {
-    let raw = load_json!("Sentinels.json");
-    let arr: itemdata::sentinel::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Sentinels.json");
+    let arr: sentinel::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, health, armor, shield, is_prime, vaulted)
     let cases: &[(&str, &str, i64, i64, i64, bool, Option<bool>)] = &[
@@ -931,15 +940,15 @@ fn test_sentinels_tabular_fields() {
 
 #[test]
 fn test_sentinel_weapons_deserialize_all() {
-    let raw = load_json!("SentinelWeapons.json");
-    let arr: itemdata::sentinel_weapon::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("SentinelWeapons.json");
+    let arr: sentinel_weapon::Root = serde_json::from_str(&raw).unwrap();
     assert!(!arr.is_empty());
 }
 
 #[test]
 fn test_sentinel_weapons_tabular_fields() {
-    let raw = load_json!("SentinelWeapons.json");
-    let arr: itemdata::sentinel_weapon::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("SentinelWeapons.json");
+    let arr: sentinel_weapon::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, total_damage, fire_rate, disposition)
     let cases: &[(&str, &str, f64, f64, i64)] = &[
@@ -969,8 +978,8 @@ fn test_sentinel_weapons_tabular_fields() {
     for &(name, unique, dmg, rate, dispo) in cases {
         let item = find_by_name(&arr, name);
         assert_eq!(item.unique_name(), unique, "{name} unique_name");
-        assert!((item.total_damage() - dmg).abs() < 1.0, "{name} dmg");
-        assert!((item.fire_rate() - rate).abs() < 0.1, "{name} rate");
+        assert!((item.total_damage() - dmg).abs() < 1.0_f64, "{name} dmg");
+        assert!((item.fire_rate() - rate).abs() < 0.1_f64, "{name} rate");
         assert_eq!(item.disposition(), Some(dispo), "{name} dispo");
         assert_eq!(item.damage_per_shot().len(), 20, "{name} dps len");
     }
@@ -980,15 +989,15 @@ fn test_sentinel_weapons_tabular_fields() {
 
 #[test]
 fn test_gear_deserialize_all() {
-    let raw = load_json!("Gear.json");
-    let arr: itemdata::gear::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Gear.json");
+    let arr: gear::Root = serde_json::from_str(&raw).unwrap();
     assert!(!arr.is_empty());
 }
 
 #[test]
 fn test_gear_tabular_fields() {
-    let raw = load_json!("Gear.json");
-    let arr: itemdata::gear::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Gear.json");
+    let arr: gear::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, tradable, has_build_price)
     let cases: &[(&str, &str, bool, bool)] = &[
@@ -1030,15 +1039,15 @@ fn test_gear_tabular_fields() {
 
 #[test]
 fn test_misc_deserialize_all() {
-    let raw = load_json!("Misc.json");
-    let arr: itemdata::misc::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Misc.json");
+    let arr: misc::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 100);
 }
 
 #[test]
 fn test_misc_tabular_fields() {
-    let raw = load_json!("Misc.json");
-    let arr: itemdata::misc::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Misc.json");
+    let arr: misc::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, type, tradable)
     let cases: &[(&str, &str, &str, bool)] = &[
@@ -1075,15 +1084,15 @@ fn test_misc_tabular_fields() {
 
 #[test]
 fn test_relics_deserialize_all() {
-    let raw = load_json!("Relics.json");
-    let arr: itemdata::relics::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Relics.json");
+    let arr: relics::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 100);
 }
 
 #[test]
 fn test_relics_tabular_fields() {
-    let raw = load_json!("Relics.json");
-    let arr: itemdata::relics::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Relics.json");
+    let arr: relics::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, tradable)
     let cases: &[(&str, &str, bool)] = &[
@@ -1117,15 +1126,15 @@ fn test_relics_tabular_fields() {
 
 #[test]
 fn test_resources_deserialize_all() {
-    let raw = load_json!("Resources.json");
-    let arr: itemdata::resource::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Resources.json");
+    let arr: resource::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 100);
 }
 
 #[test]
 fn test_resources_tabular_fields() {
-    let raw = load_json!("Resources.json");
-    let arr: itemdata::resource::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Resources.json");
+    let arr: resource::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, type, tradable)
     let cases: &[(&str, &str, &str, bool)] = &[
@@ -1162,15 +1171,15 @@ fn test_resources_tabular_fields() {
 
 #[test]
 fn test_fish_deserialize_all() {
-    let raw = load_json!("Fish.json");
-    let arr: itemdata::fish::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Fish.json");
+    let arr: fish::Root = serde_json::from_str(&raw).unwrap();
     assert!(!arr.is_empty());
 }
 
 #[test]
 fn test_fish_tabular_fields() {
-    let raw = load_json!("Fish.json");
-    let arr: itemdata::fish::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Fish.json");
+    let arr: fish::Root = serde_json::from_str(&raw).unwrap();
 
     // Fish can have duplicate names (size variants), so test by unique_name
     let cases: &[(&str, &str, bool)] = &[
@@ -1195,7 +1204,7 @@ fn test_fish_tabular_fields() {
         let item = arr
             .iter()
             .find(|f| f.unique_name() == unique)
-            .unwrap_or_else(|| panic!("fish with unique_name '{}' not found", unique));
+            .unwrap_or_else(|| panic!("fish with unique_name '{unique}' not found"));
         assert_eq!(item.name(), name, "{unique} name");
         assert_eq!(item.category(), "Fish", "{unique} category");
         assert_eq!(item.type_field(), "Fish", "{unique} type");
@@ -1207,15 +1216,15 @@ fn test_fish_tabular_fields() {
 
 #[test]
 fn test_glyphs_deserialize_all() {
-    let raw = load_json!("Glyphs.json");
-    let arr: itemdata::glyph::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Glyphs.json");
+    let arr: glyph::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 100);
 }
 
 #[test]
 fn test_glyphs_tabular_fields() {
-    let raw = load_json!("Glyphs.json");
-    let arr: itemdata::glyph::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Glyphs.json");
+    let arr: glyph::Root = serde_json::from_str(&raw).unwrap();
 
     let cases: &[(&str, &str, bool)] = &[
         (
@@ -1248,15 +1257,15 @@ fn test_glyphs_tabular_fields() {
 
 #[test]
 fn test_sigils_deserialize_all() {
-    let raw = load_json!("Sigils.json");
-    let arr: itemdata::sigil::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Sigils.json");
+    let arr: sigil::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 100);
 }
 
 #[test]
 fn test_sigils_tabular_fields() {
-    let raw = load_json!("Sigils.json");
-    let arr: itemdata::sigil::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Sigils.json");
+    let arr: sigil::Root = serde_json::from_str(&raw).unwrap();
 
     let cases: &[(&str, &str, bool)] = &[
         (
@@ -1289,15 +1298,15 @@ fn test_sigils_tabular_fields() {
 
 #[test]
 fn test_skins_deserialize_all() {
-    let raw = load_json!("Skins.json");
-    let arr: itemdata::skin::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Skins.json");
+    let arr: skin::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 100);
 }
 
 #[test]
 fn test_skins_tabular_fields() {
-    let raw = load_json!("Skins.json");
-    let arr: itemdata::skin::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Skins.json");
+    let arr: skin::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, type, tradable)
     let cases: &[(&str, &str, &str, bool)] = &[
@@ -1334,15 +1343,15 @@ fn test_skins_tabular_fields() {
 
 #[test]
 fn test_quests_deserialize_all() {
-    let raw = load_json!("Quests.json");
-    let arr: itemdata::quest::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Quests.json");
+    let arr: quest::Root = serde_json::from_str(&raw).unwrap();
     assert!(!arr.is_empty());
 }
 
 #[test]
 fn test_quests_tabular_fields() {
-    let raw = load_json!("Quests.json");
-    let arr: itemdata::quest::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Quests.json");
+    let arr: quest::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, tradable, has_build_price)
     let cases: &[(&str, &str, bool, bool)] = &[
@@ -1378,15 +1387,15 @@ fn test_quests_tabular_fields() {
 
 #[test]
 fn test_nodes_deserialize_all() {
-    let raw = load_json!("Node.json");
-    let arr: itemdata::node::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Node.json");
+    let arr: node::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 100);
 }
 
 #[test]
 fn test_nodes_tabular_fields() {
-    let raw = load_json!("Node.json");
-    let arr: itemdata::node::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Node.json");
+    let arr: node::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, system_name, min_level, max_level)
     let cases: &[(&str, &str, &str, i64, i64)] = &[
@@ -1409,15 +1418,15 @@ fn test_nodes_tabular_fields() {
 
 #[test]
 fn test_enemies_deserialize_all() {
-    let raw = load_json!("Enemy.json");
-    let arr: itemdata::enemy::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Enemy.json");
+    let arr: enemy::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 100);
 }
 
 #[test]
 fn test_enemies_tabular_fields() {
-    let raw = load_json!("Enemy.json");
-    let arr: itemdata::enemy::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Enemy.json");
+    let arr: enemy::Root = serde_json::from_str(&raw).unwrap();
 
     // (unique_name, type, health, armor, shield, resistances_count)
     let cases: &[(&str, &str, i64, i64, i64, usize)] = &[
@@ -1451,7 +1460,7 @@ fn test_enemies_tabular_fields() {
         let item = arr
             .iter()
             .find(|e| e.unique_name() == unique)
-            .unwrap_or_else(|| panic!("enemy '{}' not found", unique));
+            .unwrap_or_else(|| panic!("enemy '{unique}' not found"));
         assert_eq!(item.type_field(), typ, "{unique} type");
         assert_eq!(item.combat.health, health, "{unique} health");
         assert_eq!(item.combat.armor, armor, "{unique} armor");
@@ -1468,15 +1477,15 @@ fn test_enemies_tabular_fields() {
 
 #[test]
 fn test_railjack_deserialize_all() {
-    let raw = load_json!("Railjack.json");
-    let arr: itemdata::railjack::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Railjack.json");
+    let arr: railjack::Root = serde_json::from_str(&raw).unwrap();
     assert!(arr.len() > 50);
 }
 
 #[test]
 fn test_railjack_tabular_fields() {
-    let raw = load_json!("Railjack.json");
-    let arr: itemdata::railjack::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Railjack.json");
+    let arr: railjack::Root = serde_json::from_str(&raw).unwrap();
 
     // (name, unique_name, total_damage, fire_rate, crit_chance)
     let cases: &[(&str, &str, f64, f64, f64)] = &[
@@ -1507,9 +1516,12 @@ fn test_railjack_tabular_fields() {
         let item = find_by_name(&arr, name);
         assert_eq!(item.unique_name(), unique, "{name} unique_name");
         assert_eq!(item.category(), "Railjack", "{name} category");
-        assert!((item.total_damage() - dmg).abs() < 1.0, "{name} dmg");
-        assert!((item.fire_rate() - rate).abs() < 0.1, "{name} rate");
-        assert!((item.critical_chance() - crit).abs() < 0.01, "{name} crit");
+        assert!((item.total_damage() - dmg).abs() < 1.0_f64, "{name} dmg");
+        assert!((item.fire_rate() - rate).abs() < 0.1_f64, "{name} rate");
+        assert!(
+            (item.critical_chance() - crit).abs() < 0.01_f64,
+            "{name} crit"
+        );
     }
 }
 
@@ -1517,8 +1529,8 @@ fn test_railjack_tabular_fields() {
 
 #[test]
 fn test_all_warframes_have_category() {
-    let raw = load_json!("Warframes.json");
-    let arr: itemdata::warframe::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Warframes.json");
+    let arr: warframe::Root = serde_json::from_str(&raw).unwrap();
     for wf in &arr {
         assert_eq!(wf.category(), "Warframes");
         assert!(!wf.unique_name().is_empty());
@@ -1528,8 +1540,8 @@ fn test_all_warframes_have_category() {
 
 #[test]
 fn test_all_primaries_have_20_damage_values() {
-    let raw = load_json!("Primary.json");
-    let arr: itemdata::primary::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Primary.json");
+    let arr: primary::Root = serde_json::from_str(&raw).unwrap();
     for item in &arr {
         assert_eq!(
             item.damage_per_shot().len(),
@@ -1542,8 +1554,8 @@ fn test_all_primaries_have_20_damage_values() {
 
 #[test]
 fn test_all_secondaries_have_20_damage_values() {
-    let raw = load_json!("Secondary.json");
-    let arr: itemdata::secondary::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Secondary.json");
+    let arr: secondary::Root = serde_json::from_str(&raw).unwrap();
     for item in &arr {
         assert_eq!(
             item.damage_per_shot().len(),
@@ -1556,8 +1568,8 @@ fn test_all_secondaries_have_20_damage_values() {
 
 #[test]
 fn test_all_melees_have_20_damage_values() {
-    let raw = load_json!("Melee.json");
-    let arr: itemdata::melee::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Melee.json");
+    let arr: melee::Root = serde_json::from_str(&raw).unwrap();
     for item in &arr {
         assert_eq!(
             item.damage_per_shot().len(),
@@ -1570,8 +1582,8 @@ fn test_all_melees_have_20_damage_values() {
 
 #[test]
 fn test_prime_warframes_have_vault_status() {
-    let raw = load_json!("Warframes.json");
-    let arr: itemdata::warframe::Root = serde_json::from_str(&raw).unwrap();
+    let raw = load_json("Warframes.json");
+    let arr: warframe::Root = serde_json::from_str(&raw).unwrap();
     for wf in &arr {
         if wf.is_prime() {
             let status = wf.vault_status();
@@ -1602,42 +1614,43 @@ fn test_map_warframe_inventory() {
         .unwrap()
     }
 
-    let raw = load_json!("Warframes.json");
-    let arr: itemdata::warframe::Root = serde_json::from_str(&raw).unwrap();
+    #[allow(
+        dead_code,
+        reason = "fields are only read via Debug; the test exercises the join itself"
+    )]
+    #[derive(Debug)]
+    struct Data {
+        info: warframe::WarframeEntry,
+        inventory: Option<Suit>,
+    }
 
-    let info_idx: HashMap<String, itemdata::warframe::WarframeEntry> = arr
+    let raw = load_json("Warframes.json");
+    let arr: warframe::Root = serde_json::from_str(&raw).unwrap();
+
+    let info_idx: HashMap<String, warframe::WarframeEntry> = arr
         .into_iter()
         .map(|item| {
-            let key = item.unique_name().to_string();
+            let key = item.unique_name().to_owned();
             (key, item)
         })
         .collect();
 
-    let inventory: inventory::Inventory = load_test_inventory();
+    let inventory = load_test_inventory();
     let inv_index = inventory
         .suits
         .iter()
         .map(|frame| (frame.item_type.clone(), frame.clone()))
         .collect::<HashMap<_, _>>();
 
-    #[allow(dead_code)]
-    #[derive(Debug)]
-    struct Data {
-        info: itemdata::warframe::WarframeEntry,
-        inventory: Option<inventory::suit::Suit>,
-    }
-
     let data: Vec<Data> = info_idx
         .iter()
-        .map(
-            |(key, info): (&String, &itemdata::warframe::WarframeEntry)| {
-                let inv_data = inv_index.get(key).cloned();
-                Data {
-                    info: info.clone(),
-                    inventory: inv_data,
-                }
-            },
-        )
+        .map(|(key, info)| {
+            let inv_data = inv_index.get(key.as_str()).cloned();
+            Data {
+                info: info.clone(),
+                inventory: inv_data,
+            }
+        })
         .collect();
 
     assert!(!data.is_empty());

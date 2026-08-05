@@ -1,8 +1,9 @@
+use crate::ItemType;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Represents syndicate/faction standing.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Affiliation {
     #[serde(rename = "Tag")]
     pub tag: String,
@@ -20,11 +21,11 @@ pub struct Affiliation {
     pub free_favors_used: Option<Vec<Value>>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents mission completion data.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Mission {
     #[serde(rename = "Tag")]
     pub tag: String,
@@ -37,7 +38,7 @@ pub struct Mission {
 }
 
 /// Represents Nightwave/challenge progress.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChallengeProgressEntry {
     #[serde(rename = "Name")]
     pub name: String,
@@ -47,10 +48,10 @@ pub struct ChallengeProgressEntry {
 }
 
 /// Represents lore fragment scan progress.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LoreFragmentScan {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "Progress")]
     pub progress: Option<i64>,

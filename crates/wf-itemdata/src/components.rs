@@ -68,6 +68,7 @@ impl Component {
     /// Returns `WeaponTypeStats::Ranged` for gun components,
     /// `WeaponTypeStats::Melee` for melee weapon components,
     /// or `WeaponTypeStats::None` for simple materials.
+    #[must_use]
     pub fn weapon_type_stats(&self) -> WeaponTypeStats {
         let w = self.weapon.as_armed();
         WeaponTypeStats::detect(
@@ -97,16 +98,19 @@ impl Component {
     }
 
     /// Check if this component is a weapon (has weapon-specific stats)
+    #[must_use]
     pub fn is_weapon(&self) -> bool {
         !matches!(self.weapon_type_stats(), WeaponTypeStats::None)
     }
 
     /// Check if this component is a ranged weapon
+    #[must_use]
     pub fn is_ranged_weapon(&self) -> bool {
         self.weapon_type_stats().is_ranged()
     }
 
     /// Check if this component is a melee weapon
+    #[must_use]
     pub fn is_melee_weapon(&self) -> bool {
         self.weapon_type_stats().is_melee()
     }

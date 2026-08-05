@@ -1,221 +1,357 @@
-use std::sync::{OnceLock, RwLock};
+use std::sync::Arc;
 
-use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tantivy::Index;
 use tantivy::collector::{Count, TopDocs};
 use tantivy::doc;
-use tantivy::query::{AllQuery, BooleanQuery, Occur};
+use tantivy::query::{AllQuery, BooleanQuery, Occur, Query};
 use tantivy::schema::{
     Field, IndexRecordOption, STORED, STRING, SchemaBuilder, TextFieldIndexing, TextOptions,
-    Value as TantivyValue,
+    Value as _,
 };
 use tantivy::tokenizer::NgramTokenizer;
 
 use wf_core::storage;
-use wf_inventory::Inventory;
+use wf_inventory::long_gun::LongGun;
+use wf_inventory::melee::Melee;
+use wf_inventory::pistol::Pistol;
+use wf_inventory::recipe::{PendingRecipe, Recipe};
+use wf_inventory::space_gun::SpaceGun;
+use wf_inventory::space_melee::SpaceMelee;
+use wf_inventory::space_suit::SpaceSuit;
+use wf_inventory::suit::Suit;
+use wf_inventory::upgrades::{RawUpgrade, Upgrade};
+use wf_inventory::{Inventory, ItemType};
 
-use wf_itemdata::item_data::lookup_item_info;
+use wf_itemdata::item_data::{ItemDetails, ItemIndex};
+
+use crate::market::MarketSummary;
+
+// The wf-inventory item types are unrelated structs that each happen to have
+// a `pub other: Option<Value>` catch-all; Rust has no structural typing, so a
+// blanket impl is impossible and the alternatives (a trait+impls in
+// wf-inventory, or a derive crate) are strictly more code for the same 11
+// impls. A field-accessor macro is the cheapest correct form here.
+// The optional `0` token projects through transparent newtype wrappers.
+macro_rules! impl_has_other {
+    ($($ty:ty $(=> $proj:tt)?),+ $(,)?) => {
+        $(impl HasOther for $ty {
+            fn other_mut(&mut self) -> Option<&mut serde_json::Map<String, serde_json::Value>> {
+                self $(.$proj)? .other.as_mut()
+            }
+        })+
+    };
+}
+
+/// Keys the envelope itself emits. A game item whose catch-all carried one of
+/// these would serialize as a duplicate JSON key in the filter response or
+/// shadow the injected value, so they are stripped at envelope construction —
+/// the same overwrite semantics the old map-insertion code had.
+const RESERVED_ENVELOPE_KEYS: [&str; 5] = ["category", "item_type", "item_id", "details", "market"];
+
+#[derive(Debug, thiserror::Error)]
+pub(super) enum SearchError {
+    #[error(transparent)]
+    Tantivy(#[from] tantivy::TantivyError),
+    #[error(transparent)]
+    Storage(#[from] storage::StorageError),
+}
 
 #[derive(Clone)]
-pub(crate) struct InventorySearchIndex {
+pub(super) struct InventorySearchIndex {
     pub index: Index,
     pub item_type_exact: Field,
     pub item_type_text: Field,
     pub details_name: Field,
     pub details_desc: Field,
     pub category: Field,
-    pub raw_json: Field,
+    /// Index into [`Self::items`]; tantivy stores only this position, the
+    /// envelopes themselves stay typed in memory.
+    pub position: Field,
+    pub items: Vec<InventoryItemEnvelope>,
 }
 
-#[derive(Clone)]
-struct CachedInventoryIndex {
-    meta_last_updated: Option<DateTime<Utc>>,
-    index: InventorySearchIndex,
+/// An inventory snapshot together with the search index built from it. The
+/// two are only ever created (and cached) as a unit, so an index can never
+/// be paired with a different inventory than the one it was built over.
+pub(super) struct IndexedInventory {
+    pub(crate) inventory: Inventory,
+    pub(crate) index: InventorySearchIndex,
+    /// `InventoryMeta::last_updated` at build time; the cache key.
+    last_updated: Option<DateTime<Utc>>,
 }
 
-static INVENTORY_INDEX_CACHE: OnceLock<RwLock<Option<CachedInventoryIndex>>> = OnceLock::new();
+impl IndexedInventory {
+    pub(crate) fn build(
+        inventory: Inventory,
+        last_updated: Option<DateTime<Utc>>,
+        item_index: &ItemIndex,
+    ) -> Result<Self, tantivy::TantivyError> {
+        let items = collect_inventory_items(&inventory, None, item_index);
+        let index = build_tantivy_index(items)?;
+        Ok(Self {
+            inventory,
+            index,
+            last_updated,
+        })
+    }
+}
 
-fn inventory_index_cache() -> &'static RwLock<Option<CachedInventoryIndex>> {
-    INVENTORY_INDEX_CACHE.get_or_init(|| RwLock::new(None))
+/// Shared cache of the current [`IndexedInventory`] pair, keyed by
+/// `InventoryMeta::last_updated`. Owned by the composition root as
+/// `Arc<InventoryIndexCache>`.
+#[derive(Default)]
+pub(super) struct InventoryIndexCache(arc_swap::ArcSwapOption<IndexedInventory>);
+
+impl InventoryIndexCache {
+    /// Return the cached inventory+index pair if it matches
+    /// `meta.last_updated`, otherwise load the stored inventory and build a
+    /// fresh pair.
+    pub(crate) fn get_or_build(
+        &self,
+        meta: &storage::InventoryMeta,
+        item_index: &ItemIndex,
+    ) -> Result<Arc<IndexedInventory>, SearchError> {
+        if let Some(cached) = self.0.load().as_ref()
+            && cached.last_updated == meta.last_updated
+        {
+            return Ok(Arc::clone(cached));
+        }
+
+        let inventory = storage::read_inventory()?;
+        let indexed = Arc::new(IndexedInventory::build(
+            inventory,
+            meta.last_updated,
+            item_index,
+        )?);
+        self.0.store(Some(Arc::clone(&indexed)));
+
+        Ok(indexed)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct ItemEnvelope<T> {
-    pub item_type: String,
+pub(super) struct ItemEnvelope<T> {
+    pub item_type: ItemType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub item_id: Option<String>,
-    // details/market are injected after tantivy retrieval and are never part
-    // of the stored raw_json; skip_deserializing keeps a stray same-named key
-    // in the item's catch-all from being parsed as these types.
+    // details/market are injected after retrieval, per request;
+    // skip_deserializing keeps a stray same-named key in the item's catch-all
+    // from being parsed as these types.
     #[serde(default, skip_serializing_if = "Option::is_none", skip_deserializing)]
-    pub details: Option<wf_itemdata::item_data::ItemDetails>,
+    pub details: Option<Arc<ItemDetails>>,
     #[serde(default, skip_serializing_if = "Option::is_none", skip_deserializing)]
-    pub market: Option<crate::market::MarketSummary>,
+    pub market: Option<MarketSummary>,
     #[serde(flatten)]
     pub item: T,
 }
 
-/// Keys the envelope itself emits. A game item whose catch-all carried one of
-/// these would serialize as a duplicate JSON key (breaking re-parse) or shadow
-/// the injected value, so they are stripped at envelope construction — the
-/// same overwrite semantics the old map-insertion code had.
-const RESERVED_ENVELOPE_KEYS: [&str; 5] = ["category", "item_type", "item_id", "details", "market"];
-
-/// A searchable inventory item tagged with its category.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "category", rename_all = "snake_case")]
-pub(crate) enum InventoryItemEnvelope {
-    Suits(ItemEnvelope<wf_inventory::suit::Suit>),
-    LongGuns(ItemEnvelope<wf_inventory::long_gun::LongGun>),
-    Pistols(ItemEnvelope<wf_inventory::pistol::Pistol>),
-    Melee(ItemEnvelope<wf_inventory::melee::Melee>),
-    SpaceSuits(ItemEnvelope<wf_inventory::space_suit::SpaceSuit>),
-    SpaceGuns(ItemEnvelope<wf_inventory::space_gun::SpaceGun>),
-    SpaceMelee(ItemEnvelope<wf_inventory::space_melee::SpaceMelee>),
-    RawUpgrades(ItemEnvelope<wf_inventory::upgrades::RawUpgrade>),
-    Upgrades(ItemEnvelope<wf_inventory::upgrades::Upgrade>),
-    Recipes(ItemEnvelope<wf_inventory::recipe::Recipe>),
-    PendingRecipes(ItemEnvelope<wf_inventory::recipe::PendingRecipe>),
+/// An inventory category. `Display` emits the wire names used as serde tags
+/// on [`InventoryItemEnvelope`]; `FromStr` additionally accepts the user-facing
+/// aliases previously handled by `normalize_category`.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, strum::Display, strum::EnumString, strum::AsRefStr,
+)]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
+pub(super) enum Category {
+    #[strum(
+        to_string = "suits",
+        serialize = "suit",
+        serialize = "warframe",
+        serialize = "warframes"
+    )]
+    Suits,
+    #[strum(
+        to_string = "long_guns",
+        serialize = "long_gun",
+        serialize = "primary",
+        serialize = "primaries",
+        serialize = "rifles"
+    )]
+    LongGuns,
+    #[strum(
+        to_string = "pistols",
+        serialize = "pistol",
+        serialize = "secondary",
+        serialize = "secondaries"
+    )]
+    Pistols,
+    Melee,
+    #[strum(
+        to_string = "space_suits",
+        serialize = "space_suit",
+        serialize = "archwing"
+    )]
+    SpaceSuits,
+    #[strum(
+        to_string = "space_guns",
+        serialize = "space_gun",
+        serialize = "archgun",
+        serialize = "arch_gun"
+    )]
+    SpaceGuns,
+    #[strum(
+        to_string = "space_melee",
+        serialize = "space_melees",
+        serialize = "archmelee",
+        serialize = "arch_melee"
+    )]
+    SpaceMelee,
+    #[strum(
+        to_string = "raw_upgrades",
+        serialize = "rawmods",
+        serialize = "raw_mods"
+    )]
+    RawUpgrades,
+    #[strum(to_string = "upgrades", serialize = "mods", serialize = "arcanes")]
+    Upgrades,
+    #[strum(to_string = "recipes", serialize = "blueprints")]
+    Recipes,
+    #[strum(to_string = "pending_recipes", serialize = "pending")]
+    PendingRecipes,
 }
 
-macro_rules! for_each_envelope {
-    ($self:expr, $env:ident => $body:expr) => {
-        match $self {
-            InventoryItemEnvelope::Suits($env) => $body,
-            InventoryItemEnvelope::LongGuns($env) => $body,
-            InventoryItemEnvelope::Pistols($env) => $body,
-            InventoryItemEnvelope::Melee($env) => $body,
-            InventoryItemEnvelope::SpaceSuits($env) => $body,
-            InventoryItemEnvelope::SpaceGuns($env) => $body,
-            InventoryItemEnvelope::SpaceMelee($env) => $body,
-            InventoryItemEnvelope::RawUpgrades($env) => $body,
-            InventoryItemEnvelope::Upgrades($env) => $body,
-            InventoryItemEnvelope::Recipes($env) => $body,
-            InventoryItemEnvelope::PendingRecipes($env) => $body,
-        }
-    };
+/// A searchable inventory item tagged with its category.
+#[enum_dispatch::enum_dispatch(EnvelopeAccess)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "category", rename_all = "snake_case")]
+pub(super) enum InventoryItemEnvelope {
+    Suits(ItemEnvelope<Suit>),
+    LongGuns(ItemEnvelope<LongGun>),
+    Pistols(ItemEnvelope<Pistol>),
+    Melee(ItemEnvelope<Melee>),
+    SpaceSuits(ItemEnvelope<SpaceSuit>),
+    SpaceGuns(ItemEnvelope<SpaceGun>),
+    SpaceMelee(ItemEnvelope<SpaceMelee>),
+    RawUpgrades(ItemEnvelope<RawUpgrade>),
+    Upgrades(ItemEnvelope<Upgrade>),
+    Recipes(ItemEnvelope<Recipe>),
+    PendingRecipes(ItemEnvelope<PendingRecipe>),
+}
+
+/// Category-erased view over the `ItemEnvelope<T>` inside each variant —
+/// everything the envelope offers that doesn't depend on the item type.
+/// `enum_dispatch` generates the delegating impl on [`InventoryItemEnvelope`].
+#[enum_dispatch::enum_dispatch]
+pub(super) trait EnvelopeAccess {
+    fn item_type(&self) -> &str;
+    fn set_details(&mut self, details: Arc<ItemDetails>);
+    fn set_market(&mut self, market: MarketSummary);
+}
+
+impl<T: HasOther> EnvelopeAccess for ItemEnvelope<T> {
+    fn item_type(&self) -> &str {
+        self.item_type.as_ref()
+    }
+    fn set_details(&mut self, details: Arc<ItemDetails>) {
+        self.details = Some(details);
+    }
+    fn set_market(&mut self, market: MarketSummary) {
+        self.market = Some(market);
+    }
 }
 
 impl InventoryItemEnvelope {
-    pub fn category(&self) -> &'static str {
+    pub fn category(&self) -> Category {
         match self {
-            Self::Suits(_) => "suits",
-            Self::LongGuns(_) => "long_guns",
-            Self::Pistols(_) => "pistols",
-            Self::Melee(_) => "melee",
-            Self::SpaceSuits(_) => "space_suits",
-            Self::SpaceGuns(_) => "space_guns",
-            Self::SpaceMelee(_) => "space_melee",
-            Self::RawUpgrades(_) => "raw_upgrades",
-            Self::Upgrades(_) => "upgrades",
-            Self::Recipes(_) => "recipes",
-            Self::PendingRecipes(_) => "pending_recipes",
+            Self::Suits(_) => Category::Suits,
+            Self::LongGuns(_) => Category::LongGuns,
+            Self::Pistols(_) => Category::Pistols,
+            Self::Melee(_) => Category::Melee,
+            Self::SpaceSuits(_) => Category::SpaceSuits,
+            Self::SpaceGuns(_) => Category::SpaceGuns,
+            Self::SpaceMelee(_) => Category::SpaceMelee,
+            Self::RawUpgrades(_) => Category::RawUpgrades,
+            Self::Upgrades(_) => Category::Upgrades,
+            Self::Recipes(_) => Category::Recipes,
+            Self::PendingRecipes(_) => Category::PendingRecipes,
         }
-    }
-
-    pub fn item_type(&self) -> &str {
-        for_each_envelope!(self, env => &env.item_type)
     }
 
     pub fn item_count(&self) -> Option<i64> {
-        // Only recipes and raw upgrades model ItemCount; preserve the old
-        // behavior of also finding it in the flattened catch-all elsewhere.
         match self {
             Self::Recipes(env) => Some(env.item.item_count),
             Self::RawUpgrades(env) => Some(env.item.item_count),
-            _ => for_each_envelope!(self, env => extract_other_item_count(env.item.other())),
+            Self::Suits(env) => env.item.item_count,
+            Self::LongGuns(env) => env.item.0.item_count,
+            Self::Pistols(env) => env.item.0.item_count,
+            Self::Melee(env) => env.item.0.item_count,
+            Self::SpaceSuits(env) => env.item.0.item_count,
+            Self::SpaceGuns(env) => env.item.0.item_count,
+            Self::SpaceMelee(env) => env.item.0.item_count,
+            Self::Upgrades(env) => env.item.item_count,
+            Self::PendingRecipes(env) => env.item.item_count,
         }
     }
-
-    pub fn set_details(&mut self, details: wf_itemdata::item_data::ItemDetails) {
-        for_each_envelope!(self, env => env.details = Some(details))
-    }
-
-    pub fn set_market(&mut self, market: crate::market::MarketSummary) {
-        for_each_envelope!(self, env => env.market = Some(market))
-    }
-}
-
-fn extract_other_item_count(other: Option<&serde_json::Value>) -> Option<i64> {
-    other
-        .and_then(|v| v.get("ItemCount").or_else(|| v.get("item_count")))
-        .and_then(|v| v.as_i64())
 }
 
 trait HasOther {
-    fn other(&self) -> Option<&serde_json::Value>;
-    fn other_mut(&mut self) -> Option<&mut serde_json::Value>;
-}
-
-macro_rules! impl_has_other {
-    ($($ty:ty),+ $(,)?) => {
-        $(impl HasOther for $ty {
-            fn other(&self) -> Option<&serde_json::Value> {
-                self.other.as_ref()
-            }
-            fn other_mut(&mut self) -> Option<&mut serde_json::Value> {
-                self.other.as_mut()
-            }
-        })+
-    };
+    fn other_mut(&mut self) -> Option<&mut serde_json::Map<String, serde_json::Value>>;
 }
 
 impl_has_other!(
-    wf_inventory::suit::Suit,
-    wf_inventory::long_gun::LongGun,
-    wf_inventory::pistol::Pistol,
-    wf_inventory::melee::Melee,
-    wf_inventory::space_suit::SpaceSuit,
-    wf_inventory::space_gun::SpaceGun,
-    wf_inventory::space_melee::SpaceMelee,
-    wf_inventory::upgrades::RawUpgrade,
-    wf_inventory::upgrades::Upgrade,
-    wf_inventory::recipe::Recipe,
-    wf_inventory::recipe::PendingRecipe,
+    Suit,
+    LongGun => 0,
+    Pistol => 0,
+    Melee => 0,
+    SpaceSuit => 0,
+    SpaceGun => 0,
+    SpaceMelee => 0,
+    RawUpgrade,
+    Upgrade,
+    Recipe,
+    PendingRecipe,
 );
 
-pub(crate) struct ItemView {
-    pub details_name: Option<String>,
-    pub details_desc: Option<String>,
+pub(super) struct ItemView<'a> {
+    pub details_name: Option<&'a str>,
+    pub details_desc: Option<&'a str>,
     pub envelope: InventoryItemEnvelope,
 }
 
-pub(crate) fn collect_inventory_items(
+/// Count items in the selected category without building envelopes.
+pub(super) fn count_inventory_items(inventory: &Inventory, category: Option<Category>) -> usize {
+    macro_rules! count {
+        ($($cat:ident => $field:ident),+ $(,)?) => {
+            match category {
+                None => 0 $(+ inventory.$field.len())+,
+                $(Some(Category::$cat) => inventory.$field.len(),)+
+            }
+        };
+    }
+    count!(
+        Suits => suits,
+        LongGuns => long_guns,
+        Pistols => pistols,
+        Melee => melee,
+        SpaceSuits => space_suits,
+        SpaceGuns => space_guns,
+        SpaceMelee => space_melee,
+        RawUpgrades => raw_upgrades,
+        Upgrades => upgrades,
+        Recipes => recipes,
+        PendingRecipes => pending_recipes,
+    )
+}
+
+pub(super) fn collect_inventory_items<'a>(
     inventory: &Inventory,
-    category: Option<&str>,
-) -> Vec<ItemView> {
-    let mut items = Vec::new();
-
-    let mut push_item = |envelope: InventoryItemEnvelope| {
-        let info = lookup_item_info(envelope.item_type(), Some(envelope.category()));
-        items.push(ItemView {
-            details_name: info.as_ref().and_then(|item| item.name.clone()),
-            details_desc: info.as_ref().and_then(|item| item.description.clone()),
-            envelope,
-        });
-    };
-
-    let include = |name: &str, selected: Option<&str>| match selected {
-        None => true,
-        Some("unknown") => false,
-        Some(sel) => name == sel,
-    };
-
-    fn envelope<T: Clone + HasOther>(
-        item: &T,
-        item_type: &str,
-        item_id: Option<String>,
-    ) -> ItemEnvelope<T> {
+    category: Option<Category>,
+    item_index: &'a ItemIndex,
+) -> Vec<ItemView<'a>> {
+    fn envelope<T>(item: &T, item_type: &ItemType, item_id: Option<String>) -> ItemEnvelope<T>
+    where
+        T: Clone + HasOther,
+    {
         let mut item = item.clone();
-        if let Some(serde_json::Value::Object(map)) = item.other_mut() {
+        if let Some(map) = item.other_mut() {
             for key in RESERVED_ENVELOPE_KEYS {
                 map.remove(key);
             }
         }
         ItemEnvelope {
-            item_type: item_type.to_string(),
+            item_type: item_type.clone(),
             item_id,
             details: None,
             market: None,
@@ -223,148 +359,64 @@ pub(crate) fn collect_inventory_items(
         }
     }
 
-    if include("suits", category) {
-        for item in &inventory.suits {
-            push_item(InventoryItemEnvelope::Suits(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
+    let mut items = Vec::new();
+
+    let mut push_item = |envelope: InventoryItemEnvelope| {
+        let info = item_index.lookup(envelope.item_type(), Some(envelope.category().as_ref()));
+        items.push(ItemView {
+            details_name: info.and_then(|item| item.name.as_deref()),
+            details_desc: info.and_then(|item| item.description.as_deref()),
+            envelope,
+        });
+    };
+
+    // One arm per category: inventory field, envelope variant, and how the
+    // item id is derived (`item_id`, `last_added_id`, or absent). The
+    // optional `0` token projects through transparent newtype wrappers.
+    macro_rules! collect {
+        ($cat:ident $(=> $proj:tt)?, $field:ident, |$item:ident| $id:expr) => {
+            if category.is_none_or(|sel| sel == Category::$cat) {
+                for $item in &inventory.$field {
+                    push_item(InventoryItemEnvelope::$cat(envelope(
+                        $item,
+                        &$item $(.$proj)? .item_type,
+                        $id,
+                    )));
+                }
+            }
+        };
     }
 
-    if include("long_guns", category) {
-        for item in &inventory.long_guns {
-            push_item(InventoryItemEnvelope::LongGuns(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include("pistols", category) {
-        for item in &inventory.pistols {
-            push_item(InventoryItemEnvelope::Pistols(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include("melee", category) {
-        for item in &inventory.melee {
-            push_item(InventoryItemEnvelope::Melee(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include("space_suits", category) {
-        for item in &inventory.space_suits {
-            push_item(InventoryItemEnvelope::SpaceSuits(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include("space_guns", category) {
-        for item in &inventory.space_guns {
-            push_item(InventoryItemEnvelope::SpaceGuns(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include("space_melee", category) {
-        for item in &inventory.space_melee {
-            push_item(InventoryItemEnvelope::SpaceMelee(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include("raw_upgrades", category) {
-        for item in &inventory.raw_upgrades {
-            push_item(InventoryItemEnvelope::RawUpgrades(envelope(
-                item,
-                &item.item_type,
-                Some(item.last_added_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include("upgrades", category) {
-        for item in &inventory.upgrades {
-            push_item(InventoryItemEnvelope::Upgrades(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
-
-    if include("recipes", category) {
-        for item in &inventory.recipes {
-            push_item(InventoryItemEnvelope::Recipes(envelope(
-                item,
-                &item.item_type,
-                None,
-            )));
-        }
-    }
-
-    if include("pending_recipes", category) {
-        for item in &inventory.pending_recipes {
-            push_item(InventoryItemEnvelope::PendingRecipes(envelope(
-                item,
-                &item.item_type,
-                Some(item.item_id.oid.clone()),
-            )));
-        }
-    }
+    collect!(Suits, suits, |item| Some(item.item_id.to_string()));
+    collect!(LongGuns => 0, long_guns, |item| Some(
+        item.0.item_id.to_string()
+    ));
+    collect!(Pistols => 0, pistols, |item| Some(item.0.item_id.to_string()));
+    collect!(Melee => 0, melee, |item| Some(item.0.item_id.to_string()));
+    collect!(SpaceSuits => 0, space_suits, |item| Some(
+        item.0.item_id.to_string()
+    ));
+    collect!(SpaceGuns => 0, space_guns, |item| Some(
+        item.0.item_id.to_string()
+    ));
+    collect!(SpaceMelee => 0, space_melee, |item| Some(
+        item.0.item_id.to_string()
+    ));
+    collect!(RawUpgrades, raw_upgrades, |item| Some(
+        item.last_added_id.to_string()
+    ));
+    collect!(Upgrades, upgrades, |item| Some(item.item_id.to_string()));
+    collect!(Recipes, recipes, |item| None);
+    collect!(PendingRecipes, pending_recipes, |item| Some(
+        item.item_id.to_string()
+    ));
 
     items
 }
 
-pub(crate) fn get_or_build_inventory_index(
-    inventory: &Inventory,
-    meta: &storage::InventoryMeta,
-) -> Result<InventorySearchIndex> {
-    // Fast path: reuse cached index if metadata matches last update timestamp
-    if let Ok(guard) = inventory_index_cache().read() {
-        if let Some(cached) = guard.as_ref() {
-            if cached.meta_last_updated == meta.last_updated {
-                return Ok(cached.index.clone());
-            }
-        }
-    }
-
-    // Build fresh index over the entire inventory
-    let items = collect_inventory_items(inventory, None);
-    let index = build_tantivy_index(&items)?;
-
-    // Update cache (best effort; ignore lock poisoning)
-    if let Ok(mut guard) = inventory_index_cache().write() {
-        *guard = Some(CachedInventoryIndex {
-            meta_last_updated: meta.last_updated,
-            index: index.clone(),
-        });
-    }
-
-    Ok(index)
-}
-
-pub(crate) fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchIndex> {
+pub(super) fn build_tantivy_index(
+    items: Vec<ItemView<'_>>,
+) -> Result<InventorySearchIndex, tantivy::TantivyError> {
     let mut schema_builder = SchemaBuilder::default();
 
     let item_type_exact = schema_builder.add_text_field("item_type_exact", STRING | STORED);
@@ -381,34 +433,22 @@ pub(crate) fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchI
     let details_name = schema_builder.add_text_field("details_name", ngram_opts.clone());
     let details_desc = schema_builder.add_text_field("details_desc", ngram_opts);
 
-    let raw_json = schema_builder.add_text_field("raw_json", STORED);
+    let position = schema_builder.add_u64_field("position", STORED);
 
     let schema = schema_builder.build();
     let index = Index::create_in_ram(schema);
     index
         .tokenizers()
-        .register("ngram3", NgramTokenizer::new(2, 6, true).unwrap());
+        .register("ngram3", NgramTokenizer::new(2, 6, true)?);
 
     let mut writer = index.writer(20_000_000)?; // ~20MB buffer, tiny dataset
 
-    for item in items {
-        // One unserializable item must not fail the whole index build
-        let raw = match serde_json::to_string(&item.envelope) {
-            Ok(raw) => raw,
-            Err(e) => {
-                log::warn!(
-                    "Skipping unserializable item {}: {}",
-                    item.envelope.item_type(),
-                    e
-                );
-                continue;
-            }
-        };
+    for (pos, item) in items.iter().enumerate() {
         let mut doc = doc! {
-            item_type_exact => item.envelope.item_type().to_string(),
+            item_type_exact => item.envelope.item_type().to_owned(),
             category => item.envelope.category().to_string(),
-            item_type_text => item.envelope.item_type().to_string(),
-            raw_json => raw,
+            item_type_text => item.envelope.item_type().to_owned(),
+            position => pos as u64,
         };
 
         if let Some(name) = &item.details_name {
@@ -430,24 +470,25 @@ pub(crate) fn build_tantivy_index(items: &[ItemView]) -> Result<InventorySearchI
         details_name,
         details_desc,
         category,
-        raw_json,
+        position,
+        items: items.into_iter().map(|item| item.envelope).collect(),
     })
 }
 
-pub(crate) fn search_inventory(
+pub(super) fn search_inventory(
     search_index: &InventorySearchIndex,
-    clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)>,
-) -> Result<(usize, Vec<InventoryItemEnvelope>)> {
+    clauses: Vec<(Occur, Box<dyn Query>)>,
+) -> Result<(usize, Vec<&InventoryItemEnvelope>), tantivy::TantivyError> {
     let reader = search_index.index.reader()?;
     let searcher = reader.searcher();
 
-    let query: Box<dyn tantivy::query::Query> = if clauses.is_empty() {
+    let query: Box<dyn Query> = if clauses.is_empty() {
         Box::new(AllQuery)
     } else {
         Box::new(BooleanQuery::new(clauses))
     };
 
-    let total_matches = searcher.search(&query, &Count)? as usize;
+    let total_matches = searcher.search(&query, &Count)?;
 
     let top_docs = if total_matches == 0 {
         Vec::new()
@@ -457,15 +498,18 @@ pub(crate) fn search_inventory(
 
     let mut results = Vec::new();
     for (_score, addr) in top_docs {
-        let raw = searcher
+        let pos = searcher
             .doc::<tantivy::TantivyDocument>(addr)?
-            .get_first(search_index.raw_json)
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .unwrap_or_default();
-        match serde_json::from_str::<InventoryItemEnvelope>(&raw) {
-            Ok(envelope) => results.push(envelope),
-            Err(e) => log::warn!("Skipping unparseable indexed item: {}", e),
+            .get_first(search_index.position)
+            .and_then(|v| v.as_u64());
+        // A stored position always resolves: items is built in the same pass
+        // that assigned the positions and the two are immutable afterwards.
+        match pos
+            .and_then(|pos| usize::try_from(pos).ok())
+            .and_then(|pos| search_index.items.get(pos))
+        {
+            Some(envelope) => results.push(envelope),
+            None => log::warn!("Indexed document without a resolvable position"),
         }
     }
 
@@ -474,8 +518,25 @@ pub(crate) fn search_inventory(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::collections::HashSet;
+
     use serde_json::Value;
+
+    use super::*;
+
+    const ALL_CATEGORIES: [(Category, &str); 11] = [
+        (Category::Suits, "suits"),
+        (Category::LongGuns, "long_guns"),
+        (Category::Pistols, "pistols"),
+        (Category::Melee, "melee"),
+        (Category::SpaceSuits, "space_suits"),
+        (Category::SpaceGuns, "space_guns"),
+        (Category::SpaceMelee, "space_melee"),
+        (Category::RawUpgrades, "raw_upgrades"),
+        (Category::Upgrades, "upgrades"),
+        (Category::Recipes, "recipes"),
+        (Category::PendingRecipes, "pending_recipes"),
+    ];
 
     fn sample_inventory() -> Inventory {
         let raw = include_str!(concat!(
@@ -485,31 +546,18 @@ mod tests {
         serde_json::from_str(raw).unwrap()
     }
 
-    const ALL_CATEGORIES: [&str; 11] = [
-        "suits",
-        "long_guns",
-        "pistols",
-        "melee",
-        "space_suits",
-        "space_guns",
-        "space_melee",
-        "raw_upgrades",
-        "upgrades",
-        "recipes",
-        "pending_recipes",
-    ];
-
-    /// The envelope must survive the tantivy raw_json round-trip
-    /// (serialize -> parse -> serialize must be a fixed point), and the
-    /// serialized "category" tag must agree with the category() accessor,
-    /// for every one of the 11 categories.
+    /// The envelope's JSON wire shape must round-trip (serialize -> parse ->
+    /// serialize must be a fixed point), and the serialized "category" tag
+    /// must agree with the category() accessor, for every one of the 11
+    /// categories.
     #[test]
     fn envelope_round_trips_through_json_for_all_categories() {
         let inventory = sample_inventory();
-        let items = collect_inventory_items(&inventory, None);
+        let item_index = ItemIndex::default();
+        let items = collect_inventory_items(&inventory, None, &item_index);
         assert!(!items.is_empty());
 
-        let mut seen = std::collections::HashSet::new();
+        let mut seen = HashSet::new();
         for item in &items {
             seen.insert(item.envelope.category());
             let raw = serde_json::to_string(&item.envelope).unwrap();
@@ -522,10 +570,14 @@ mod tests {
                 item.envelope.category()
             );
             // The serde tag and the hand-written category() must never drift
-            assert_eq!(value["category"], item.envelope.category());
+            assert_eq!(value["category"], item.envelope.category().to_string());
         }
-        for cat in ALL_CATEGORIES {
-            assert!(seen.contains(cat), "fixture missing category {}", cat);
+        for (cat, wire) in ALL_CATEGORIES {
+            assert!(seen.contains(&cat), "fixture missing category {cat}");
+            // Category's Display must byte-match the serde tag wire names
+            assert_eq!(cat.to_string(), wire);
+            // ...and FromStr must round-trip the canonical name
+            assert_eq!(wire.parse::<Category>().unwrap(), cat);
         }
     }
 
@@ -533,32 +585,38 @@ mod tests {
     /// old push_item logic did: to_value(item) + injected
     /// category/item_type/item_id, for every category and every item.
     #[test]
+    #[allow(
+        clippy::cognitive_complexity,
+        reason = "the complexity is the check_category! macro expanded once per category; the branches are eleven identical stamped-out assertions, not intertwined logic"
+    )]
     fn collected_envelopes_match_legacy_injected_shape() {
-        let inventory = sample_inventory();
+        type IdOf<T> = fn(&T) -> Option<&str>;
 
-        fn legacy<T: serde::Serialize>(
-            item: &T,
-            category: &str,
-            item_type: &str,
-            item_id: Option<&str>,
-        ) -> Value {
+        fn legacy<T>(item: &T, category: &str, item_type: &str, item_id: Option<&str>) -> Value
+        where
+            T: serde::Serialize,
+        {
             let mut value = serde_json::to_value(item).unwrap();
             let map = value.as_object_mut().unwrap();
-            map.insert("category".into(), Value::String(category.to_string()));
-            map.insert("item_type".into(), Value::String(item_type.to_string()));
+            map.insert("category".into(), Value::String(category.to_owned()));
+            map.insert("item_type".into(), Value::String(item_type.to_owned()));
             if let Some(id) = item_id {
-                map.insert("item_id".into(), Value::String(id.to_string()));
+                map.insert("item_id".into(), Value::String(id.to_owned()));
             }
             value
         }
 
+        let inventory = sample_inventory();
+        let item_index = ItemIndex::default();
+
         macro_rules! check_category {
-            ($field:ident, $cat:literal, $id:expr) => {
-                let views = collect_inventory_items(&inventory, Some($cat));
+            ($field:ident $(=> $proj:tt)?, $cat:literal, $id:expr) => {
+                let views =
+                    collect_inventory_items(&inventory, Some($cat.parse().unwrap()), &item_index);
                 assert_eq!(views.len(), inventory.$field.len(), $cat);
                 for (view, item) in views.iter().zip(&inventory.$field) {
                     let id: Option<&str> = $id(item);
-                    let expected = legacy(item, $cat, &item.item_type, id);
+                    let expected = legacy(item, $cat, item $(.$proj)? .item_type.as_ref(), id);
                     assert_eq!(
                         serde_json::to_value(&view.envelope).unwrap(),
                         expected,
@@ -569,61 +627,52 @@ mod tests {
             };
         }
 
-        type IdOf<T> = fn(&T) -> Option<&str>;
+        check_category!(suits, "suits", (|i| Some(i.item_id.as_ref())) as IdOf<Suit>);
         check_category!(
-            suits,
-            "suits",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::suit::Suit>
-        );
-        check_category!(
-            long_guns,
+            long_guns => 0,
             "long_guns",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::long_gun::LongGun>
+            (|i| Some(i.0.item_id.as_ref())) as IdOf<LongGun>
         );
         check_category!(
-            pistols,
+            pistols => 0,
             "pistols",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::pistol::Pistol>
+            (|i| Some(i.0.item_id.as_ref())) as IdOf<Pistol>
         );
         check_category!(
-            melee,
+            melee => 0,
             "melee",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::melee::Melee>
+            (|i| Some(i.0.item_id.as_ref())) as IdOf<Melee>
         );
         check_category!(
-            space_suits,
+            space_suits => 0,
             "space_suits",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::space_suit::SpaceSuit>
+            (|i| Some(i.0.item_id.as_ref())) as IdOf<SpaceSuit>
         );
         check_category!(
-            space_guns,
+            space_guns => 0,
             "space_guns",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::space_gun::SpaceGun>
+            (|i| Some(i.0.item_id.as_ref())) as IdOf<SpaceGun>
         );
         check_category!(
-            space_melee,
+            space_melee => 0,
             "space_melee",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::space_melee::SpaceMelee>
+            (|i| Some(i.0.item_id.as_ref())) as IdOf<SpaceMelee>
         );
         check_category!(
             raw_upgrades,
             "raw_upgrades",
-            (|i| Some(i.last_added_id.oid.as_str())) as IdOf<wf_inventory::upgrades::RawUpgrade>
+            (|i| Some(i.last_added_id.as_ref())) as IdOf<RawUpgrade>
         );
         check_category!(
             upgrades,
             "upgrades",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::upgrades::Upgrade>
+            (|i| Some(i.item_id.as_ref())) as IdOf<Upgrade>
         );
-        check_category!(
-            recipes,
-            "recipes",
-            (|_| None) as IdOf<wf_inventory::recipe::Recipe>
-        );
+        check_category!(recipes, "recipes", (|_| None) as IdOf<Recipe>);
         check_category!(
             pending_recipes,
             "pending_recipes",
-            (|i| Some(i.item_id.oid.as_str())) as IdOf<wf_inventory::recipe::PendingRecipe>
+            (|i| Some(i.item_id.as_ref())) as IdOf<PendingRecipe>
         );
     }
 
@@ -639,11 +688,12 @@ mod tests {
         extra.insert("market".into(), Value::String("evil".into()));
         extra.insert("details".into(), Value::String("evil".into()));
         extra.insert("KeptKey".into(), Value::String("kept".into()));
-        suit.other = Some(Value::Object(extra));
+        suit.other = Some(extra);
 
         let mut poisoned = inventory.clone();
         poisoned.suits = vec![suit];
-        let items = collect_inventory_items(&poisoned, Some("suits"));
+        let item_index = ItemIndex::default();
+        let items = collect_inventory_items(&poisoned, Some(Category::Suits), &item_index);
         assert_eq!(items.len(), 1);
 
         let raw = serde_json::to_string(&items[0].envelope).unwrap();
@@ -672,7 +722,7 @@ mod tests {
         let suit = &inventory.suits[0];
         let envelope = InventoryItemEnvelope::Suits(ItemEnvelope {
             item_type: suit.item_type.clone(),
-            item_id: Some(suit.item_id.oid.clone()),
+            item_id: Some(suit.item_id.to_string()),
             details: None,
             market: None,
             item: suit.clone(),

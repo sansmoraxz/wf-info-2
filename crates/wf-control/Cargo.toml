@@ -3,14 +3,21 @@ name = "wf-control"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
-anyhow.workspace = true
+arc-swap.workspace = true
 base64.workspace = true
 chrono.workspace = true
+clap = { workspace = true, optional = true }
 dirs.workspace = true
+enum_dispatch.workspace = true
+derive_more.workspace = true
 futures-util.workspace = true
 image.workspace = true
 log.workspace = true
+monostate.workspace = true
 notify.workspace = true
 notify-debouncer-mini.workspace = true
 rand.workspace = true
@@ -18,7 +25,9 @@ reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
+strum.workspace = true
 tantivy.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tokio-tungstenite.workspace = true
 uuid.workspace = true
@@ -26,9 +35,9 @@ wf-core = { path = "../wf-core" }
 wf-inventory = { path = "../wf-inventory" }
 wf-itemdata = { path = "../wf-itemdata" }
 wf-ocr = { path = "../wf-ocr" }
-
 [features]
 default = []
+cli = ["dep:clap"]
 memory = ["wf-core/memory"]
 vulkan = ["wf-ocr/vulkan"]
 cuda = ["wf-ocr/cuda"]
@@ -45,7 +54,7 @@ native-wayland-screenshot = [
 scopeguard.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-ashpd = { version = "0.13", features = ["tokio"], optional = true }
+ashpd = { version = "0.13", features = ["tokio", "screencast"], optional = true }
 gstreamer = { version = "0.25", optional = true }
 gstreamer-app = { version = "0.25", optional = true }
 gstreamer-video = { version = "0.25", optional = true }

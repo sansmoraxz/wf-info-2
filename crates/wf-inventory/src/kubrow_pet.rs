@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::ObjectId;
+use crate::{ItemType, ObjectId};
 
 /// Represents a Kubrow/Kavat/pet in the inventory.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KubrowPet {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,
@@ -28,7 +28,7 @@ pub struct KubrowPet {
     pub details: Option<Value>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 #[cfg(test)]
@@ -49,6 +49,6 @@ mod tests {
             item.item_type,
             "/Lotus/Types/Game/KubrowPet/AdventurerKubrowPetPowerSuit"
         );
-        assert_eq!(item.xp.unwrap(), 1152188);
+        assert_eq!(item.xp.unwrap(), 1_152_188);
     }
 }

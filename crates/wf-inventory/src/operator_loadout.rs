@@ -4,7 +4,7 @@ use serde_json::Value;
 use crate::ObjectId;
 
 /// Represents an Operator loadout configuration.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OperatorLoadOut {
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,
@@ -22,11 +22,11 @@ pub struct OperatorLoadOut {
     pub ability_override: Option<Value>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 /// Represents an Adult Operator (Drifter) loadout configuration.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AdultOperatorLoadOut {
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,
@@ -38,7 +38,7 @@ pub struct AdultOperatorLoadOut {
     pub upgrades: Option<Vec<String>>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 #[cfg(test)]
@@ -54,7 +54,7 @@ mod tests {
         ));
 
         let item: OperatorLoadOut = from_str(json_data).unwrap();
-        assert_eq!(item.item_id.oid, "000000000000000000000000");
+        assert_eq!(item.item_id.as_ref(), "000000000000000000000000");
     }
 
     #[test]
@@ -65,6 +65,6 @@ mod tests {
         ));
 
         let item: AdultOperatorLoadOut = from_str(json_data).unwrap();
-        assert_eq!(item.item_id.oid, "618d769e3348adda0fc130ae");
+        assert_eq!(item.item_id.as_ref(), "618d769e3348adda0fc130ae");
     }
 }

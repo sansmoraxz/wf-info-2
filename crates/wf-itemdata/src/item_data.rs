@@ -1,15 +1,20 @@
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::fs;
-use std::sync::OnceLock;
+use std::sync::Arc;
 
 use serde::Serialize;
 
+use crate::common::Patchlog;
+use crate::item_data_fetch::cached_path;
 use crate::traits::Item;
 use crate::{
-    ProductCategory, arch_gun, arch_melee, archwing, melee, mods, primary, secondary, warframe,
+    ProductCategory as _, arch_gun, arch_melee, archwing, melee, mods, primary, secondary, warframe,
 };
 
-/// Typed detail payload for an indexed item.
+/// Typed detail payload for an indexed item. Implements [`Item`] by
+/// delegating to the variant's payload via `enum_dispatch`.
+#[enum_dispatch::enum_dispatch(Item)]
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 pub enum ItemDetails {
@@ -23,73 +28,75 @@ pub enum ItemDetails {
     Mod(mods::ModEntry),
 }
 
-impl ItemDetails {
-    fn as_item(&self) -> &dyn Item {
-        match self {
-            Self::Warframe(x) => x,
-            Self::Primary(x) => x,
-            Self::Secondary(x) => x,
-            Self::Melee(x) => x,
-            Self::Archwing(x) => x,
-            Self::ArchGun(x) => x,
-            Self::ArchMelee(x) => x,
-            Self::Mod(x) => x,
-        }
-    }
+/// An item's canonical `uniqueName` type path, e.g. `/Lotus/Powersuits/...`.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::AsRef,
+)]
+#[display("{_0}")]
+#[as_ref(str)]
+pub struct UniqueName(String);
 
-    pub fn unique_name(&self) -> &str {
-        self.as_item().unique_name()
-    }
-
-    pub fn name(&self) -> &str {
-        self.as_item().name()
-    }
-
-    pub fn tradable(&self) -> bool {
-        self.as_item().tradable()
-    }
-
-    pub fn description(&self) -> Option<&str> {
-        self.as_item().description()
+impl Borrow<str> for UniqueName {
+    fn borrow(&self) -> &str {
+        &self.0
     }
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ItemInfo {
     pub name: Option<String>,
-    pub unique_name: String,
+    pub unique_name: UniqueName,
     pub product_category: Option<String>,
     pub description: Option<String>,
-    pub details: ItemDetails,
+    /// Shared: the same payload appears under multiple product categories,
+    /// and consumers attach it to response envelopes without deep-cloning.
+    pub details: Arc<ItemDetails>,
 }
 
 impl ItemInfo {
-    fn new(details: ItemDetails, product_category: Option<String>) -> Self {
+    fn new(details: Arc<ItemDetails>, product_category: Option<String>) -> Self {
         Self {
-            name: Some(details.name().to_string()),
-            unique_name: details.unique_name().to_string(),
+            name: Some(details.name().to_owned()),
+            unique_name: UniqueName(details.unique_name().to_owned()),
             product_category,
-            description: details.description().map(|s| s.to_string()),
+            description: details.description().map(str::to_owned),
             details,
         }
     }
 }
 
-// Maps uniqueName/item_type -> all matching ItemInfo variants (multiple productCategory variants may exist)
-static ITEM_INDEX: OnceLock<HashMap<String, Vec<ItemInfo>>> = OnceLock::new();
+/// Index of all known items, keyed by uniqueName/item_type. Multiple
+/// productCategory variants may exist per key. Built once from the cached
+/// item-data files; own it at the composition root and share by reference.
+pub struct ItemIndex(HashMap<UniqueName, Vec<ItemInfo>>);
 
-pub fn lookup_item_info(item_type: &str, category: Option<&str>) -> Option<ItemInfo> {
-    let index = ITEM_INDEX.get_or_init(build_item_index);
-    let entries = index.get(item_type)?;
-    if let Some(cat) = category.and_then(category_to_product_category)
-        && let Some(found) = entries
-            .iter()
-            .find(|info| info.product_category.as_deref() == Some(cat))
-    {
-        return Some(found.clone());
+impl Default for ItemIndex {
+    fn default() -> Self {
+        Self(build_item_index())
     }
-    // fallback: first entry
-    entries.first().cloned()
+}
+
+impl ItemIndex {
+    pub fn lookup(&self, item_type: &str, category: Option<&str>) -> Option<&ItemInfo> {
+        let entries = self.0.get(item_type)?;
+        if let Some(cat) = category.and_then(category_to_product_category)
+            && let Some(found) = entries
+                .iter()
+                .find(|info| info.product_category.as_deref() == Some(cat))
+        {
+            return Some(found);
+        }
+        // fallback: first entry
+        entries.first()
+    }
 }
 
 fn category_to_product_category(cat: &str) -> Option<&'static str> {
@@ -108,16 +115,16 @@ fn category_to_product_category(cat: &str) -> Option<&'static str> {
     }
 }
 
-fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
-    let mut index: HashMap<String, Vec<ItemInfo>> = HashMap::new();
+fn build_item_index() -> HashMap<UniqueName, Vec<ItemInfo>> {
+    let mut index: HashMap<UniqueName, Vec<ItemInfo>> = HashMap::new();
 
     let read_cached = |file: &str| -> Option<String> {
-        crate::item_data_fetch::cached_path(file)
+        cached_path(file)
             .ok()
             .and_then(|p| fs::read_to_string(p).ok())
     };
 
-    let mut push_info = |details: ItemDetails, product_category: Option<String>| {
+    let mut push_info = |details: Arc<ItemDetails>, product_category: Option<String>| {
         let info = ItemInfo::new(details, product_category);
         index
             .entry(info.unique_name.clone())
@@ -130,7 +137,10 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<warframe::Root>(&raw)
     {
         for item in arr {
-            push_info(ItemDetails::Warframe(item), Some("Suits".to_string()));
+            push_info(
+                Arc::new(ItemDetails::Warframe(item)),
+                Some("Suits".to_owned()),
+            );
         }
     }
     // Primary
@@ -138,8 +148,8 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<primary::Root>(&raw)
     {
         for item in arr {
-            let pc = Some(item.product_category.as_str().to_string());
-            push_info(ItemDetails::Primary(item), pc);
+            let pc = Some(item.product_category.as_ref().to_owned());
+            push_info(Arc::new(ItemDetails::Primary(item)), pc);
         }
     }
     // Secondary
@@ -147,8 +157,8 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<secondary::Root>(&raw)
     {
         for item in arr {
-            let pc = Some(item.product_category.as_str().to_string());
-            push_info(ItemDetails::Secondary(item), pc);
+            let pc = Some(item.product_category.as_ref().to_owned());
+            push_info(Arc::new(ItemDetails::Secondary(item)), pc);
         }
     }
     // Melee
@@ -156,8 +166,8 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<melee::Root>(&raw)
     {
         for item in arr {
-            let pc = Some(item.product_category.as_str().to_string());
-            push_info(ItemDetails::Melee(item), pc);
+            let pc = Some(item.product_category.as_ref().to_owned());
+            push_info(Arc::new(ItemDetails::Melee(item)), pc);
         }
     }
     // Archwing suits
@@ -165,8 +175,8 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<archwing::Root>(&raw)
     {
         for item in arr {
-            let pc = Some(item.product_category.as_str().to_string());
-            push_info(ItemDetails::Archwing(item), pc);
+            let pc = Some(item.product_category.as_ref().to_owned());
+            push_info(Arc::new(ItemDetails::Archwing(item)), pc);
         }
     }
     // Arch-guns
@@ -174,8 +184,8 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<arch_gun::Root>(&raw)
     {
         for item in arr {
-            let pc = Some(item.product_category.as_str().to_string());
-            push_info(ItemDetails::ArchGun(item), pc);
+            let pc = Some(item.product_category.as_ref().to_owned());
+            push_info(Arc::new(ItemDetails::ArchGun(item)), pc);
         }
     }
     // Arch-melee
@@ -183,8 +193,8 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<arch_melee::Root>(&raw)
     {
         for item in arr {
-            let pc = Some(item.product_category.as_str().to_string());
-            push_info(ItemDetails::ArchMelee(item), pc);
+            let pc = Some(item.product_category.as_ref().to_owned());
+            push_info(Arc::new(ItemDetails::ArchMelee(item)), pc);
         }
     }
     // Mods (covers Upgrades/RawUpgrades)
@@ -192,8 +202,11 @@ fn build_item_index() -> HashMap<String, Vec<ItemInfo>> {
         && let Ok(arr) = serde_json::from_str::<mods::Root>(&raw)
     {
         for item in arr {
-            for pc in item.get_product_categories() {
-                push_info(ItemDetails::Mod(item.clone()), Some(pc));
+            // One shared payload regardless of how many categories list it
+            let categories = item.get_product_categories();
+            let details = Arc::new(ItemDetails::Mod(item));
+            for pc in categories {
+                push_info(Arc::clone(&details), Some(pc));
             }
         }
     }
@@ -207,7 +220,7 @@ mod tests {
     use serde_json::Value;
 
     fn fixture(name: &str) -> String {
-        std::fs::read_to_string(format!(
+        fs::read_to_string(format!(
             "{}/testdata/itemdata/{}",
             env!("CARGO_MANIFEST_DIR"),
             name
@@ -260,8 +273,14 @@ mod tests {
     fn item_info_extracts_fields_from_details() {
         let item: warframe::WarframeEntry =
             serde_json::from_str(&fixture("warframe_test.json")).unwrap();
-        let info = ItemInfo::new(ItemDetails::Warframe(item), Some("Suits".to_string()));
-        assert_eq!(info.unique_name, "/Lotus/Powersuits/Priest/HarrowPrime");
+        let info = ItemInfo::new(
+            Arc::new(ItemDetails::Warframe(item)),
+            Some("Suits".to_owned()),
+        );
+        assert_eq!(
+            info.unique_name.as_ref(),
+            "/Lotus/Powersuits/Priest/HarrowPrime"
+        );
         assert_eq!(info.name.as_deref(), Some("Harrow Prime"));
         assert!(info.description.is_some());
     }

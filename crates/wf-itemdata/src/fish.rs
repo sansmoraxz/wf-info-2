@@ -31,7 +31,7 @@ pub struct Fish {
 
 impl ProductCategory for Fish {
     fn get_product_categories(&self) -> Vec<String> {
-        vec!["MiscItems".to_string()]
+        vec!["MiscItems".to_owned()]
     }
 }
 
@@ -46,7 +46,7 @@ impl Item for Fish {
         &self.identity.category
     }
     fn type_field(&self) -> &str {
-        self.type_field.as_str()
+        self.type_field.as_ref()
     }
     fn image_name(&self) -> Option<&str> {
         self.detail.image_name.as_deref()

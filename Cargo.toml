@@ -14,32 +14,162 @@ resolver = "3"
 edition = "2024"
 version = "0.1.0"
 
+[workspace.lints.clippy]
+# ── Panics: not acceptable failure handling in the daemon/CLI at runtime;
+# tests are exempt via clippy.toml (allow-*-in-tests).
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unreachable = "deny"
+todo = "deny"
+unimplemented = "deny"
+get_unwrap = "warn"
+indexing_slicing = "warn"
+assertions_on_result_states = "warn"
+
+# ── Performance
+perf = { level = "warn", priority = -1 }
+large_types_passed_by_value = "warn"
+trivially_copy_pass_by_ref = "warn"
+needless_pass_by_value = "warn"
+rc_buffer = "warn"
+iter_with_drain = "warn"
+large_futures = "warn"
+large_stack_arrays = "warn"
+ref_option = "warn"
+ref_option_ref = "warn"
+stable_sort_primitive = "warn"
+unnecessary_box_returns = "warn"
+cognitive_complexity = "warn" # threshold in clippy.toml
+
+# ── Casts & numbers
+cast_possible_truncation = "warn"
+cast_possible_wrap = "warn"
+cast_sign_loss = "warn"
+cast_lossless = "warn"
+cast_precision_loss = "warn"
+as_pointer_underscore = "warn"
+as_underscore = "warn"
+fn_to_numeric_cast_any = "warn"
+default_numeric_fallback = "warn"
+unseparated_literal_suffix = "warn"
+unreadable_literal = "warn"
+ptr_as_ptr = "warn"
+borrow_as_ptr = "warn"
+
+# ── Correctness-adjacent
+semicolon_if_nothing_returned = "warn"
+match_wildcard_for_single_variants = "warn"
+match_same_arms = "warn"
+float_cmp = "warn"
+maybe_infinite_iter = "warn"
+mixed_read_write_in_expression = "warn"
+mem_forget = "warn"
+mutex_integer = "warn"
+let_underscore_must_use = "warn"
+let_underscore_untyped = "warn"
+else_if_without_else = "warn"
+if_not_else = "warn"
+
+# ── API design
+must_use_candidate = "warn"
+return_self_not_must_use = "warn"
+impl_trait_in_params = "warn"
+inline_trait_bounds = "warn"
+error_impl_error = "warn"
+unnecessary_wraps = "warn"
+option_option = "warn"
+unused_async = "warn"
+unsafe_derive_deserialize = "warn"
+used_underscore_items = "warn"
+zero_sized_map_values = "warn"
+
+# ── Module & item organization
+arbitrary_source_item_ordering = "warn" # ordering scope in clippy.toml
+self_named_module_files = "warn"
+items_after_statements = "warn"
+cfg_not_test = "warn"
+absolute_paths = "warn" # max segments in clippy.toml
+unused_trait_names = "warn"
+struct_excessive_bools = "warn"
+too_many_lines = "warn" # threshold in clippy.toml
+
+# ── Idiom & readability
+use_self = "warn"
+uninlined_format_args = "warn"
+map_unwrap_or = "warn"
+manual_let_else = "warn"
+redundant_closure_for_method_calls = "warn"
+redundant_else = "warn"
+option_if_let_else = "warn"
+redundant_type_annotations = "warn"
+explicit_iter_loop = "warn"
+explicit_into_iter_loop = "warn"
+implicit_clone = "warn"
+clone_on_ref_ptr = "warn"
+cloned_instead_of_copied = "warn"
+flat_map_option = "warn"
+filter_map_next = "warn"
+map_with_unused_argument_over_ranges = "warn"
+if_then_some_else_none = "warn"
+single_match_else = "warn"
+unnested_or_patterns = "warn"
+manual_string_new = "warn"
+inefficient_to_string = "warn"
+str_to_string = "warn"
+string_add = "warn"
+needless_raw_strings = "warn"
+allow_attributes_without_reason = "warn"
+inconsistent_struct_constructor = "warn"
+needless_continue = "warn"
+needless_for_each = "warn"
+needless_raw_string_hashes = "warn"
+overly_complex_bool_expr = "warn"
+range_minus_one = "warn"
+range_plus_one = "warn"
+same_functions_in_if_condition = "warn"
+same_length_and_capacity = "warn"
+single_char_pattern = "warn"
+unnecessary_join = "warn"
+unused_self = "warn"
+
+# ── Test hygiene
+missing_assert_message = "warn"
+missing_asserts_for_indexing = "warn"
+
 [workspace.dependencies]
 aes = "0.8"
 aes-gcm = "0.10"
 anyhow = "1.0.100"
+arc-swap = "1.9"
 base64 = "0.22"
 cbc = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive", "env"] }
+derive_more = { version = "2", features = ["display", "error", "is_variant", "from", "as_ref"] }
 dirs = "6.0"
+enum_dispatch = "0.3"
 env_logger = "0.11.8"
 futures-util = "0.3"
 image = "0.25"
 log = "0.4.29"
 memchr = "2"
+monostate = "1.0.3"
 notify = "8.2"
 notify-debouncer-mini = "0.7"
 rand = "0.9"
 reqwest = { version = "0.13", features = ["json", "query"] }
 scopeguard = "1.2"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_json = { version = "1.0", features = ["raw_value"] }
+serde_transcode = { package = "serde-transcode", version = "1.1" }
 serde_repr = "0.1.20"
-serde_with = { version = "3.16.1", features = ["chrono"] }
+serde_with = { version = "3.16.1", features = ["chrono", "json"] }
+strum = { version = "0.27", features = ["derive"] }
 sha2 = "0.10"
 sysinfo = "0.38"
 tantivy = { version = "0.25", default-features = false, features = ["mmap"] }
+thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
 uuid = { version = "1", features = ["v4"] }

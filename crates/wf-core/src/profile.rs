@@ -32,10 +32,23 @@ pub struct ResultItem {
     // Adding basics for now
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    derive_more::Display,
+    derive_more::From,
+    derive_more::AsRef,
+)]
+#[display("{oid}")]
+#[as_ref(str)]
 pub struct AccountId {
     #[serde(rename = "$oid")]
-    pub oid: String,
+    oid: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

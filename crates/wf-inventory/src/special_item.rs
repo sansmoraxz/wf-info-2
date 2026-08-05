@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::ObjectId;
+use crate::{ItemType, ObjectId};
 
 /// Represents a special item (exalted weapons, etc.) in the inventory.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpecialItem {
     #[serde(rename = "ItemType")]
-    pub item_type: String,
+    pub item_type: ItemType,
 
     #[serde(rename = "ItemId")]
     pub item_id: ObjectId,
@@ -25,7 +25,7 @@ pub struct SpecialItem {
     pub configs: Option<Vec<Value>>,
 
     #[serde(flatten)]
-    pub other: Option<Value>,
+    pub other: Option<serde_json::Map<String, Value>>,
 }
 
 #[cfg(test)]
@@ -43,6 +43,6 @@ mod tests {
         let item: SpecialItem = from_str(json_data).unwrap();
 
         assert_eq!(item.item_type, "/Lotus/Powersuits/Excalibur/DoomSword");
-        assert_eq!(item.xp.unwrap(), 2212912);
+        assert_eq!(item.xp.unwrap(), 2_212_912);
     }
 }

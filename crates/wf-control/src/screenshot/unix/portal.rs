@@ -1,11 +1,11 @@
 use std::fs;
+use std::num::NonZeroI32;
 use std::os::fd::{AsRawFd, OwnedFd};
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result, anyhow, bail};
 use ashpd::desktop::{
     PersistMode,
-    screencast::{CursorMode, Screencast, SourceType, Stream},
+    screencast::{CursorMode, Screencast, SelectSourcesOptions, SourceType, Stream},
 };
 use gstreamer as gst;
 use gstreamer::prelude::*;
@@ -14,7 +14,63 @@ use serde::{Deserialize, Serialize};
 
 use wf_core::storage;
 
-use super::common::{ensure_bmp_bytes, new_bmp_rgb24};
+use super::common::{BmpError, BmpRgb24};
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum PortalError {
+    #[error("Failed to connect to xdg-desktop-portal ScreenCast interface")]
+    Connect(#[source] ashpd::Error),
+    #[error("Failed to create Wayland ScreenCast portal session")]
+    CreateSession(#[source] ashpd::Error),
+    #[error(
+        "Failed to select Wayland ScreenCast portal window source; ensure your xdg-desktop-portal backend supports WINDOW capture"
+    )]
+    SelectSources(#[source] ashpd::Error),
+    #[error("Failed to start Wayland ScreenCast portal session")]
+    Start(#[source] ashpd::Error),
+    #[error("Wayland ScreenCast portal did not grant window capture access")]
+    AccessDenied(#[source] ashpd::Error),
+    #[error(
+        "Wayland ScreenCast portal returned no PipeWire stream; your portal backend may not support window capture"
+    )]
+    NoStream,
+    #[error("Failed to open Wayland ScreenCast PipeWire remote")]
+    OpenRemote(#[source] ashpd::Error),
+    #[error("Wayland ScreenCast frame capture task failed")]
+    CaptureTask(#[source] tokio::task::JoinError),
+    #[error("Failed to initialize GStreamer")]
+    GstInit(#[source] gst::glib::Error),
+    #[error(
+        "Failed to create GStreamer pipewiresrc element; install the PipeWire GStreamer plugin"
+    )]
+    PipewireSrc(#[source] gst::glib::BoolError),
+    #[error("Failed to create GStreamer videoconvert element")]
+    VideoConvert(#[source] gst::glib::BoolError),
+    #[error("Failed to build Wayland ScreenCast GStreamer pipeline")]
+    BuildPipeline(#[source] gst::glib::BoolError),
+    #[error("Failed to link Wayland ScreenCast GStreamer pipeline")]
+    LinkPipeline(#[source] gst::glib::BoolError),
+    #[error("Failed to start Wayland ScreenCast GStreamer pipeline")]
+    StartPipeline(#[source] gst::StateChangeError),
+    #[error("Timed out waiting for a Wayland ScreenCast frame")]
+    FrameTimeout,
+    #[error("Wayland ScreenCast frame missing caps")]
+    MissingCaps,
+    #[error("Failed to read Wayland ScreenCast frame video info")]
+    VideoInfo(#[source] gst::glib::BoolError),
+    #[error("Wayland ScreenCast sample missing buffer")]
+    MissingBuffer,
+    #[error("Failed to map Wayland ScreenCast frame buffer")]
+    MapBuffer(#[source] gst::glib::BoolError),
+    #[error("Wayland ScreenCast returned an invalid frame size {width}x{height}")]
+    InvalidFrameSize { width: u32, height: u32 },
+    #[error("Wayland ScreenCast frame buffer is smaller than expected")]
+    BufferTooSmall,
+    #[error("Wayland ScreenCast frame dimensions overflow")]
+    FrameOverflow,
+    #[error(transparent)]
+    Bmp(#[from] BmpError),
+}
 
 const RESTORE_TOKEN_FILE: &str = "unix_screencast_token.json";
 const FRAME_TIMEOUT: Duration = Duration::from_secs(5);
@@ -29,15 +85,14 @@ struct PortalStream {
     fd: OwnedFd,
 }
 
-pub(super) async fn capture_window() -> Result<Vec<u8>> {
+pub(super) async fn capture_window() -> Result<Vec<u8>, PortalError> {
     let start = Instant::now();
     let stored_token = read_restore_token();
     let result = match open_portal_stream(stored_token.as_deref()).await {
         Ok(stream) => capture_portal_stream(stream).await,
         Err(err) if stored_token.is_some() => {
             log::warn!(
-                "Wayland ScreenCast portal restore token failed; retrying without token: {}",
-                err
+                "Wayland ScreenCast portal restore token failed; retrying without token: {err}"
             );
             delete_restore_token();
             let stream = open_portal_stream(None).await?;
@@ -52,33 +107,32 @@ pub(super) async fn capture_window() -> Result<Vec<u8>> {
     result
 }
 
-async fn open_portal_stream(restore_token: Option<&str>) -> Result<PortalStream> {
-    let proxy = Screencast::new()
-        .await
-        .context("Failed to connect to xdg-desktop-portal ScreenCast interface")?;
+async fn open_portal_stream(restore_token: Option<&str>) -> Result<PortalStream, PortalError> {
+    let proxy = Screencast::new().await.map_err(PortalError::Connect)?;
     let session = proxy
-        .create_session()
+        .create_session(Default::default())
         .await
-        .context("Failed to create Wayland ScreenCast portal session")?;
+        .map_err(PortalError::CreateSession)?;
 
     proxy
         .select_sources(
             &session,
-            CursorMode::Hidden,
-            SourceType::Window.into(),
-            false,
-            restore_token,
-            PersistMode::ExplicitlyRevoked,
+            SelectSourcesOptions::default()
+                .set_cursor_mode(CursorMode::Hidden)
+                .set_sources(ashpd::enumflags2::BitFlags::from(SourceType::Window))
+                .set_multiple(false)
+                .set_restore_token(restore_token)
+                .set_persist_mode(PersistMode::ExplicitlyRevoked),
         )
         .await
-        .context("Failed to select Wayland ScreenCast portal window source; ensure your xdg-desktop-portal backend supports WINDOW capture")?;
+        .map_err(PortalError::SelectSources)?;
 
     let response = proxy
-        .start(&session, None)
+        .start(&session, None, Default::default())
         .await
-        .context("Failed to start Wayland ScreenCast portal session")?
+        .map_err(PortalError::Start)?
         .response()
-        .context("Wayland ScreenCast portal did not grant window capture access")?;
+        .map_err(PortalError::AccessDenied)?;
 
     if let Some(token) = response.restore_token() {
         write_restore_token(token);
@@ -88,39 +142,39 @@ async fn open_portal_stream(restore_token: Option<&str>) -> Result<PortalStream>
         .streams()
         .first()
         .cloned()
-        .ok_or_else(|| anyhow!("Wayland ScreenCast portal returned no PipeWire stream; your portal backend may not support window capture"))?;
+        .ok_or(PortalError::NoStream)?;
     let fd = proxy
-        .open_pipe_wire_remote(&session)
+        .open_pipe_wire_remote(&session, Default::default())
         .await
-        .context("Failed to open Wayland ScreenCast PipeWire remote")?;
+        .map_err(PortalError::OpenRemote)?;
 
     Ok(PortalStream { stream, fd })
 }
 
-async fn capture_portal_stream(portal_stream: PortalStream) -> Result<Vec<u8>> {
+async fn capture_portal_stream(portal_stream: PortalStream) -> Result<Vec<u8>, PortalError> {
     tokio::task::spawn_blocking(move || capture_pipewire_frame(portal_stream))
         .await
-        .context("Wayland ScreenCast frame capture task failed")?
+        .map_err(PortalError::CaptureTask)?
 }
 
-fn capture_pipewire_frame(portal_stream: PortalStream) -> Result<Vec<u8>> {
+fn capture_pipewire_frame(portal_stream: PortalStream) -> Result<Vec<u8>, PortalError> {
     let total_start = Instant::now();
-    gst::init().context("Failed to initialize GStreamer")?;
+    gst::init().map_err(PortalError::GstInit)?;
 
     let pipewire_src = gst::ElementFactory::make("pipewiresrc")
         .property("fd", portal_stream.fd.as_raw_fd())
         .property("path", portal_stream.stream.pipe_wire_node_id().to_string())
         .build()
-        .context(
-            "Failed to create GStreamer pipewiresrc element; install the PipeWire GStreamer plugin",
-        )?;
+        .map_err(PortalError::PipewireSrc)?;
     let convert = gst::ElementFactory::make("videoconvert")
         .build()
-        .context("Failed to create GStreamer videoconvert element")?;
+        .map_err(PortalError::VideoConvert)?;
     let appsink = gst_app::AppSink::builder()
         .caps(
             &gst::Caps::builder("video/x-raw")
-                .field("format", "RGBA")
+                // BGRA matches BMP's byte order, so rows copy straight
+                // through; videoconvert does any swizzling upstream.
+                .field("format", "BGRA")
                 .build(),
         )
         .max_buffers(1)
@@ -135,30 +189,29 @@ fn capture_pipewire_frame(portal_stream: PortalStream) -> Result<Vec<u8>> {
             &convert,
             appsink.upcast_ref::<gst::Element>(),
         ])
-        .context("Failed to build Wayland ScreenCast GStreamer pipeline")?;
+        .map_err(PortalError::BuildPipeline)?;
     gst::Element::link_many([
         &pipewire_src,
         &convert,
         appsink.upcast_ref::<gst::Element>(),
     ])
-    .context("Failed to link Wayland ScreenCast GStreamer pipeline")?;
+    .map_err(PortalError::LinkPipeline)?;
 
     pipeline
         .set_state(gst::State::Playing)
-        .context("Failed to start Wayland ScreenCast GStreamer pipeline")?;
+        .map_err(PortalError::StartPipeline)?;
 
     let sample_start = Instant::now();
     let sample_result = appsink
         .try_pull_sample(gst::ClockTime::from_nseconds(
-            FRAME_TIMEOUT.as_nanos().min(u64::MAX as u128) as u64,
+            u64::try_from(FRAME_TIMEOUT.as_nanos()).unwrap_or(u64::MAX),
         ))
-        .ok_or_else(|| anyhow!("Timed out waiting for a Wayland ScreenCast frame"))
-        .map(|sample| {
+        .ok_or(PortalError::FrameTimeout)
+        .inspect(|_| {
             log::trace!(
                 "Screenshot Wayland portal frame sample pulled in {:?}",
                 sample_start.elapsed()
             );
-            sample
         })
         .and_then(sample_to_bmp);
 
@@ -170,65 +223,52 @@ fn capture_pipewire_frame(portal_stream: PortalStream) -> Result<Vec<u8>> {
     sample_result
 }
 
-fn sample_to_bmp(sample: gst::Sample) -> Result<Vec<u8>> {
+fn sample_to_bmp(sample: gst::Sample) -> Result<Vec<u8>, PortalError> {
     let total_start = Instant::now();
-    let caps = sample
-        .caps()
-        .ok_or_else(|| anyhow!("Wayland ScreenCast frame missing caps"))?;
-    let info = gstreamer_video::VideoInfo::from_caps(caps)
-        .context("Failed to read Wayland ScreenCast frame video info")?;
-    let buffer = sample
-        .buffer()
-        .ok_or_else(|| anyhow!("Wayland ScreenCast sample missing buffer"))?;
-    let map = buffer
-        .map_readable()
-        .context("Failed to map Wayland ScreenCast frame buffer")?;
+    let caps = sample.caps().ok_or(PortalError::MissingCaps)?;
+    let info = gstreamer_video::VideoInfo::from_caps(caps).map_err(PortalError::VideoInfo)?;
+    let buffer = sample.buffer().ok_or(PortalError::MissingBuffer)?;
+    let map = buffer.map_readable().map_err(PortalError::MapBuffer)?;
 
     let width = info.width();
     let height = info.height();
-    if width == 0 || height == 0 {
-        bail!("Wayland ScreenCast returned an invalid frame size: {width}x{height}");
-    }
+    let frame_dim = |dim: u32| {
+        i32::try_from(dim)
+            .ok()
+            .and_then(NonZeroI32::new)
+            .ok_or(PortalError::InvalidFrameSize { width, height })
+    };
 
     let source_row_len = width as usize * 4;
-    let stride = info.stride()[0] as usize;
-    let (mut bmp, bmp_stride) = new_bmp_rgb24(width, height)?;
-    let pixel_offset = 54usize;
+    let stride = usize::try_from(info.stride()[0])
+        .map_err(|_| PortalError::InvalidFrameSize { width, height })?;
+    let mut bmp = BmpRgb24::new(frame_dim(width)?, frame_dim(height)?)?;
 
     let convert_start = Instant::now();
     for row in 0..height as usize {
-        let start = row
-            .checked_mul(stride)
-            .ok_or_else(|| anyhow!("Wayland ScreenCast frame stride overflow"))?;
+        let start = row.checked_mul(stride).ok_or(PortalError::FrameOverflow)?;
         let end = start
             .checked_add(source_row_len)
-            .ok_or_else(|| anyhow!("Wayland ScreenCast frame row overflow"))?;
+            .ok_or(PortalError::FrameOverflow)?;
         let row_bytes = map
             .as_slice()
             .get(start..end)
-            .ok_or_else(|| anyhow!("Wayland ScreenCast frame buffer is smaller than expected"))?;
-        for (column, pixel) in row_bytes.chunks_exact(4).enumerate() {
-            let bmp_offset = pixel_offset + row * bmp_stride + column * 3;
-            bmp[bmp_offset] = pixel[2];
-            bmp[bmp_offset + 1] = pixel[1];
-            bmp[bmp_offset + 2] = pixel[0];
-        }
+            .ok_or(PortalError::BufferTooSmall)?;
+        bmp.copy_bgrx_row(row, row_bytes);
     }
     log::trace!(
-        "Screenshot Wayland portal RGBA-to-BMP pixel conversion completed in {:?}",
+        "Screenshot Wayland portal BGRA-to-BMP pixel conversion completed in {:?}",
         convert_start.elapsed()
     );
-
-    ensure_bmp_bytes(&bmp, "Wayland ScreenCast portal capture")?;
     log::trace!(
         "Screenshot Wayland portal sample_to_bmp completed in {:?}",
         total_start.elapsed()
     );
 
-    Ok(bmp)
+    Ok(bmp.into_bytes())
 }
 
-fn restore_token_path() -> Result<std::path::PathBuf> {
+fn restore_token_path() -> Result<std::path::PathBuf, storage::StorageError> {
     Ok(storage::app_cache_dir()?.join(RESTORE_TOKEN_FILE))
 }
 
@@ -236,7 +276,7 @@ fn read_restore_token() -> Option<String> {
     read_restore_token_from_path(restore_token_path().ok()?)
 }
 
-fn read_restore_token_from_path(path: std::path::PathBuf) -> Option<String> {
+fn read_restore_token_from_path(path: impl AsRef<std::path::Path>) -> Option<String> {
     let raw = fs::read_to_string(path).ok()?;
     let stored: StoredPortalToken = serde_json::from_str(&raw).ok()?;
     if stored.restore_token.is_empty() {
@@ -247,25 +287,17 @@ fn read_restore_token_from_path(path: std::path::PathBuf) -> Option<String> {
 }
 
 fn write_restore_token(token: &str) {
-    let result = (|| -> Result<()> {
+    let result = (|| -> Result<(), Box<dyn std::error::Error>> {
         let path = restore_token_path()?;
         let raw = serde_json::to_string_pretty(&StoredPortalToken {
             restore_token: token.to_string(),
         })?;
-        fs::write(&path, raw).with_context(|| {
-            format!(
-                "Failed to write Wayland ScreenCast restore token to {}",
-                path.display()
-            )
-        })?;
+        fs::write(&path, raw)?;
         Ok(())
     })();
 
     if let Err(err) = result {
-        log::warn!(
-            "Failed to persist Wayland ScreenCast restore token: {}",
-            err
-        );
+        log::warn!("Failed to persist Wayland ScreenCast restore token: {err}");
     }
 }
 

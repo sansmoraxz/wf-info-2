@@ -3,14 +3,17 @@ name = "wf-ocr"
 version.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
-anyhow.workspace = true
 log.workspace = true
+thiserror.workspace = true
 serde.workspace = true
 rust-embed.workspace = true
-ocr-rs = "2.2.2"
+ocr-rs = "2.4.0"
 image = "0.25"
-imageproc = "0.25"
+imageproc = "0.27"
 itertools.workspace = true
 
 [features]
