@@ -1,0 +1,10 @@
+[package]
+name = "wf-dbwin-bridge"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+wf-dbwin = { path = "../../crates/wf-dbwin" }

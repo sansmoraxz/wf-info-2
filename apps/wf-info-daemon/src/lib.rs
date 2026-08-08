@@ -3,15 +3,11 @@
 use clap::{Args, Parser};
 use std::collections::HashSet;
 use std::env;
-#[cfg(unix)]
-use std::ffi::OsString;
 use std::io;
 #[cfg(unix)]
 use std::path::PathBuf;
 #[cfg(windows)]
 use std::pin::Pin;
-#[cfg(unix)]
-use std::process::Stdio;
 use std::process::{ExitStatus, exit};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -33,7 +29,7 @@ use wf_control::{
 #[cfg(windows)]
 use wf_core::logs::DbwinLogSource;
 #[cfg(unix)]
-use wf_core::logs::WineDebugLogSource;
+use wf_core::logs::WineDbwinBridgeSource;
 use wf_core::process;
 use wf_itemdata::item_data_fetch;
 
@@ -186,18 +182,6 @@ async fn wait_for_game_start_or_launcher_exit(
     }
 }
 
-#[cfg(unix)]
-fn merged_winedebug_value(existing: Option<OsString>) -> OsString {
-    match existing {
-        Some(current) if !current.is_empty() => {
-            let mut merged = current;
-            merged.push(",warn+debugstr");
-            merged
-        }
-        _ => OsString::from("warn+debugstr"),
-    }
-}
-
 #[cfg(windows)]
 async fn wait_for_game_start_or_launcher_exit(
     launcher: process::Launcher,
@@ -264,24 +248,11 @@ fn launch_warframe(warframe_cmd: &[String]) -> Child {
     };
     let mut command = Command::new(program);
     command.args(program_args);
-    configure_wine_logging(&mut command);
     command.spawn().unwrap_or_else(|e| {
         eprintln!("Error: Failed to launch Warframe: {e}");
         exit(1);
     })
 }
-
-#[cfg(unix)]
-fn configure_wine_logging(command: &mut Command) {
-    command.stderr(Stdio::piped());
-    command.env(
-        "WINEDEBUG",
-        merged_winedebug_value(env::var_os("WINEDEBUG")),
-    );
-}
-
-#[cfg(not(unix))]
-fn configure_wine_logging(_command: &mut Command) {}
 
 fn spawn_wfm_auto_status(cx: &Handles) {
     let mut rx = cx.events.subscribe();
@@ -373,12 +344,6 @@ pub async fn run() {
 
     let mut child = launch_warframe(&cli.warframe_cmd);
 
-    #[cfg(unix)]
-    let log_source = WineDebugLogSource::new(child.stderr.take().unwrap_or_else(|| {
-        eprintln!("Error: Failed to capture Wine debug stderr.");
-        exit(1);
-    }));
-
     let launcher_pid = child.id().unwrap_or_else(|| {
         eprintln!("Error: Warframe launched without a PID.");
         exit(1);
@@ -400,10 +365,14 @@ pub async fn run() {
     }
 
     #[cfg(unix)]
-    log::info!(
-        "Using Wine debugstr stderr transport with Warframe game PID: {}",
-        game.pid()
-    );
+    let log_source = WineDbwinBridgeSource::spawn_for_game(
+        game.pid(),
+        include_bytes!(env!("WF_DBWIN_BRIDGE_EXE")),
+    )
+    .unwrap_or_else(|e| {
+        eprintln!("Error: Failed to launch DBWIN bridge in the game's wine prefix: {e}");
+        exit(1);
+    });
 
     emit_game_start(&cx.events);
 
@@ -492,16 +461,4 @@ mod tests {
         ));
     }
 
-    #[cfg(unix)]
-    #[test]
-    fn merged_winedebug_value_adds_debugstr_channel() {
-        assert_eq!(
-            merged_winedebug_value(None),
-            OsString::from("warn+debugstr")
-        );
-        assert_eq!(
-            merged_winedebug_value(Some(OsString::from("fixme-all"))),
-            OsString::from("fixme-all,warn+debugstr")
-        );
-    }
 }

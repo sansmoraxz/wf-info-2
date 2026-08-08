@@ -1,0 +1,10 @@
+[package]
+name = "wf-dbwin"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winapi = { workspace = true }

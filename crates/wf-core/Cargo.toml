@@ -24,6 +24,7 @@ sha2.workspace = true
 sysinfo.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+wf-dbwin = { path = "../wf-dbwin" }
 wf-inventory = { path = "../wf-inventory" }
 
 [features]

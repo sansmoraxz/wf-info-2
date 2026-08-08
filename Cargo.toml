@@ -1,9 +1,11 @@
 [workspace]
 members = [
+    "apps/wf-dbwin-bridge",
     "apps/wf-info-cli",
     "apps/wf-info-daemon",
     "crates/wf-control",
     "crates/wf-core",
+    "crates/wf-dbwin",
     "crates/wf-inventory",
     "crates/wf-itemdata",
     "crates/wf-ocr",
