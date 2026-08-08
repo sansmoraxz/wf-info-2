@@ -53,7 +53,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             return Err(
                 "The mingw-w64 cross linker is missing. Install your distro's \
                  mingw-w64 gcc package (e.g. `mingw-w64-gcc` on Arch, \
-                 `gcc-mingw-w64-x86-64` on Debian/Ubuntu)."
+                 `gcc-mingw-w64-x86-64` on Debian/Ubuntu, `mingw64-gcc` on \
+                 Fedora/RHEL)."
                     .into(),
             );
         }
