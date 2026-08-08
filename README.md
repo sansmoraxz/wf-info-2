@@ -16,6 +16,8 @@ This app is designed to run as a background daemon that monitors Warframe and pr
 
 ## Building
 
+On Linux, building the daemon requires the `x86_64-pc-windows-gnu` rust target (installed automatically via `rust-toolchain.toml`) and the mingw-w64 gcc cross linker (e.g. `mingw-w64-gcc` on Arch, `gcc-mingw-w64-x86-64` on Debian/Ubuntu, `mingw64-gcc` on Fedora/RHEL), used to cross-compile the embedded `wf-dbwin-bridge.exe` log-capture helper.
+
 ```bash
 WF_PROFILE_KEY=change-me cargo build --release --workspace
 ```
@@ -23,12 +25,6 @@ WF_PROFILE_KEY=change-me cargo build --release --workspace
 The build produces two user-facing binaries:
 - `wf-info-daemon` - The main daemon that monitors Warframe
 - `wf-info-cli` - CLI client to interact with the daemon
-
-To build only the binaries:
-
-```bash
-WF_PROFILE_KEY=change-me cargo build --release -p wf-info-daemon -p wf-info-cli
-```
 
 Or with memory features enabled (needed for live inventory and profile refresh)
 
@@ -53,9 +49,7 @@ The daemon will automatically exit when Warframe closes.
 
 ### Linux Log Transport
 
-On Linux/Wine/Proton, the daemon captures live Warframe log lines from Wine's `OutputDebugString` debug channel (`warn+debugstr`). This avoids the multi-second `EE.log` flush delay and gives near-live event detection without requiring a separate helper process.
-
-The daemon sets `WINEDEBUG=warn+debugstr` for the launched process automatically. So no need to set this value externally.
+On Linux/Wine/Proton, the daemon captures live Warframe log lines through the standard DBWIN / `OutputDebugString` monitor protocol, via a small embedded Windows helper (`wf-dbwin-bridge.exe`) that the daemon automatically launches inside the game's wine prefix. This avoids the multi-second `EE.log` flush delay and gives near-live event detection.
 
 ### Linux Memory Feature Notes
 

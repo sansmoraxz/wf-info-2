@@ -8,7 +8,7 @@ use crate::account::{AccountInfo, Platform, Username};
 #[cfg(windows)]
 pub use source::DbwinLogSource;
 #[cfg(unix)]
-pub use source::WineDebugLogSource;
+pub use source::WineDbwinBridgeSource;
 pub use source::{LineAssembler, LogSource};
 
 #[derive(Debug)]

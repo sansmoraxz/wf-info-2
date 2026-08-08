@@ -6,3 +6,5 @@ pub mod logs;
 pub mod process;
 pub mod profile;
 pub mod storage;
+#[cfg(unix)]
+pub mod wine;

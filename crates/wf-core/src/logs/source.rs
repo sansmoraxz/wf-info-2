@@ -1,125 +1,3 @@
-#[cfg(windows)]
-mod platform {
-    use super::{DBWIN_BUFFER_SIZE, DbwinFrame, decode_dbwin_frame};
-    use std::io;
-    use std::ptr::null_mut;
-    use std::slice;
-    use std::time::Duration;
-
-    use winapi::ctypes::c_void;
-    use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
-    use winapi::um::memoryapi::{FILE_MAP_READ, MapViewOfFile, UnmapViewOfFile};
-    use winapi::um::synchapi::{CreateEventA, SetEvent, WaitForSingleObject};
-    use winapi::um::winbase::{CreateFileMappingA, WAIT_OBJECT_0};
-    use winapi::um::winnt::{HANDLE, PAGE_READWRITE};
-
-    const DBWIN_BUFFER_NAME: &[u8] = b"DBWIN_BUFFER\0";
-    const DBWIN_BUFFER_READY_NAME: &[u8] = b"DBWIN_BUFFER_READY\0";
-    const DBWIN_DATA_READY_NAME: &[u8] = b"DBWIN_DATA_READY\0";
-    const WAIT_TIMEOUT: u32 = 258;
-
-    pub(super) struct DbwinMonitor {
-        mapping: HANDLE,
-        view: *mut u8,
-        buffer_ready: HANDLE,
-        data_ready: HANDLE,
-    }
-
-    unsafe impl Send for DbwinMonitor {}
-
-    impl DbwinMonitor {
-        pub(super) fn new() -> io::Result<Self> {
-            let buffer_size = u32::try_from(DBWIN_BUFFER_SIZE)
-                .map_err(|_| io::Error::other("DBWIN buffer size exceeds u32 range"))?;
-
-            unsafe {
-                let mapping = CreateFileMappingA(
-                    INVALID_HANDLE_VALUE,
-                    null_mut(),
-                    PAGE_READWRITE,
-                    0,
-                    buffer_size,
-                    DBWIN_BUFFER_NAME.as_ptr().cast(),
-                );
-                if mapping.is_null() {
-                    return Err(io::Error::last_os_error());
-                }
-
-                let view = MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, DBWIN_BUFFER_SIZE);
-                if view.is_null() {
-                    CloseHandle(mapping);
-                    return Err(io::Error::last_os_error());
-                }
-
-                let buffer_ready =
-                    CreateEventA(null_mut(), 0, 0, DBWIN_BUFFER_READY_NAME.as_ptr().cast());
-                if buffer_ready.is_null() {
-                    UnmapViewOfFile(view);
-                    CloseHandle(mapping);
-                    return Err(io::Error::last_os_error());
-                }
-
-                let data_ready =
-                    CreateEventA(null_mut(), 0, 0, DBWIN_DATA_READY_NAME.as_ptr().cast());
-                if data_ready.is_null() {
-                    CloseHandle(buffer_ready);
-                    UnmapViewOfFile(view);
-                    CloseHandle(mapping);
-                    return Err(io::Error::last_os_error());
-                }
-
-                if SetEvent(buffer_ready) == 0 {
-                    CloseHandle(data_ready);
-                    CloseHandle(buffer_ready);
-                    UnmapViewOfFile(view);
-                    CloseHandle(mapping);
-                    return Err(io::Error::last_os_error());
-                }
-
-                Ok(Self {
-                    mapping,
-                    view: view.cast(),
-                    buffer_ready,
-                    data_ready,
-                })
-            }
-        }
-
-        pub(super) fn wait_for_message(
-            &mut self,
-            timeout: Duration,
-        ) -> io::Result<Option<DbwinFrame>> {
-            let millis = u32::try_from(timeout.as_millis()).unwrap_or(u32::MAX);
-
-            unsafe {
-                match WaitForSingleObject(self.data_ready, millis) {
-                    WAIT_OBJECT_0 => {
-                        let raw = slice::from_raw_parts(self.view.cast::<u8>(), DBWIN_BUFFER_SIZE);
-                        let frame = decode_dbwin_frame(raw);
-                        if SetEvent(self.buffer_ready) == 0 {
-                            return Err(io::Error::last_os_error());
-                        }
-                        Ok(frame)
-                    }
-                    WAIT_TIMEOUT => Ok(None),
-                    _ => Err(io::Error::last_os_error()),
-                }
-            }
-        }
-    }
-
-    impl Drop for DbwinMonitor {
-        fn drop(&mut self) {
-            unsafe {
-                CloseHandle(self.data_ready);
-                CloseHandle(self.buffer_ready);
-                UnmapViewOfFile(self.view.cast::<c_void>());
-                CloseHandle(self.mapping);
-            }
-        }
-    }
-}
-
 use std::future::Future;
 use std::io;
 use std::mem;
@@ -135,12 +13,28 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 #[cfg(unix)]
-use tokio::io::{AsyncBufReadExt as _, AsyncRead, BufReader, Lines};
+use std::env;
+#[cfg(unix)]
+use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt as _;
+#[cfg(unix)]
+use std::path::PathBuf;
+#[cfg(unix)]
+use std::process::{self, Stdio};
+
+#[cfg(unix)]
+use tokio::io::{AsyncBufReadExt as _, AsyncReadExt as _, BufReader};
+#[cfg(unix)]
+use tokio::process::{Child, Command};
 #[cfg(windows)]
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
-
 #[cfg(windows)]
-const DBWIN_BUFFER_SIZE: usize = 4096;
+use wf_dbwin::{DbwinFrame, DbwinMonitor};
+
+#[cfg(unix)]
+use crate::wine::WineContext;
+
 #[cfg(windows)]
 const DBWIN_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
@@ -176,45 +70,119 @@ impl LineAssembler {
     }
 }
 
+/// Reads game logs by running the `wf-dbwin-bridge.exe` helper inside the
+/// game's wine prefix and streaming its stdout. The bridge relays
+/// `OutputDebugString` frames verbatim, so long lines arrive untruncated.
 #[cfg(unix)]
-pub struct WineDebugLogSource<R> {
-    lines: Lines<BufReader<R>>,
+pub struct WineDbwinBridgeSource {
+    child: Child,
+    buffer: Vec<u8>,
 }
 
 #[cfg(unix)]
-impl<R> WineDebugLogSource<R>
-where
-    R: AsyncRead + Unpin + Send,
-{
-    pub fn new(reader: R) -> Self {
-        Self {
-            lines: BufReader::new(reader).lines(),
+impl WineDbwinBridgeSource {
+    /// Launches the bridge helper in the same wine prefix as `game_pid`.
+    ///
+    /// `bridge_exe` is the embedded `wf-dbwin-bridge.exe` image, extracted to
+    /// a runtime directory before launch. The `WF_DBWIN_BRIDGE` environment
+    /// variable overrides it with an on-disk helper.
+    pub fn spawn_for_game(game_pid: u32, bridge_exe: &[u8]) -> io::Result<Self> {
+        let context = WineContext::for_pid(game_pid).map_err(io::Error::other)?;
+        let bridge = bridge_exe_path(bridge_exe)?;
+
+        log::info!(
+            "Launching DBWIN bridge {} via {}",
+            bridge.display(),
+            context.wine_binary.display()
+        );
+        log::debug!("DBWIN bridge env: {:?}", context.env);
+
+        let mut command = Command::new(&context.wine_binary);
+        command
+            .arg(&bridge)
+            .envs(context.env)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+
+        let mut child = command.spawn()?;
+
+        if let Some(stderr) = child.stderr.take() {
+            tokio::spawn(async move {
+                let mut lines = BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    log::debug!("DBWIN bridge stderr: {line}");
+                }
+            });
         }
+
+        Ok(Self {
+            child,
+            buffer: vec![0; wf_dbwin::DBWIN_BUFFER_SIZE],
+        })
     }
 }
 
 #[cfg(unix)]
-impl<R> LogSource for WineDebugLogSource<R>
-where
-    R: AsyncRead + Unpin + Send,
-{
+impl LogSource for WineDbwinBridgeSource {
     fn recv_chunk(
         &mut self,
     ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + '_>> {
         Box::pin(async move {
-            while let Some(line) = self.lines.next_line().await? {
-                log::trace!("wine debug stderr raw line: {line:?}");
-                if let Some(message) = decode_wine_debug_line(&line) {
-                    log::debug!("wine debugstr accepted payload: {message:?}");
-                    return Ok(Some(message));
-                }
-                log::trace!("wine debug stderr ignored line");
-            }
+            let Some(stdout) = self.child.stdout.as_mut() else {
+                return Err(io::Error::other("DBWIN bridge stdout not captured"));
+            };
 
-            log::debug!("wine debug stderr source reached EOF");
-            Ok(None)
+            loop {
+                let read = stdout.read(&mut self.buffer).await?;
+                if read == 0 {
+                    let status = self.child.wait().await?;
+                    log::info!("DBWIN bridge exited: {status}");
+                    return Ok(None);
+                }
+                let chunk = String::from_utf8_lossy(self.buffer.get(..read).unwrap_or_default())
+                    .into_owned();
+                if chunk.is_empty() {
+                    continue;
+                }
+                log::trace!("DBWIN bridge chunk: {chunk:?}");
+                return Ok(Some(chunk));
+            }
         })
     }
+}
+
+/// Extracts the embedded bridge image to a runtime directory, skipping the
+/// write when an identical file is already present from a previous run.
+#[cfg(unix)]
+fn bridge_exe_path(bridge_exe: &[u8]) -> io::Result<PathBuf> {
+    if let Some(path) = env::var_os("WF_DBWIN_BRIDGE") {
+        return Ok(PathBuf::from(path));
+    }
+
+    // XDG_RUNTIME_DIR is typically mounted noexec, and wine cannot map a PE
+    // from a noexec filesystem — use the cache dir instead.
+    let dir = env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
+        .unwrap_or_else(env::temp_dir)
+        .join("wf-info");
+    fs::create_dir_all(&dir)?;
+    let bridge = dir.join("wf-dbwin-bridge.exe");
+
+    let up_to_date = fs::read(&bridge).is_ok_and(|existing| existing == bridge_exe);
+    if !up_to_date {
+        // Write-then-rename so a concurrent daemon (or a wine process still
+        // mapping the old PE) never observes a partially written file.
+        let staging = dir.join(format!("wf-dbwin-bridge.exe.{}", process::id()));
+        fs::write(&staging, bridge_exe)?;
+        // Wine maps unix permissions to NT execute access; without +x it
+        // refuses to launch the PE and falls back to a failing ShellExecute.
+        fs::set_permissions(&staging, fs::Permissions::from_mode(0o755))?;
+        fs::rename(&staging, &bridge)?;
+    }
+    Ok(bridge)
 }
 
 #[cfg(windows)]
@@ -228,7 +196,7 @@ pub struct DbwinLogSource {
 #[cfg(windows)]
 impl DbwinLogSource {
     pub fn new() -> io::Result<Self> {
-        let mut monitor = platform::DbwinMonitor::new()?;
+        let mut monitor = DbwinMonitor::new()?;
         let (sender, receiver) = unbounded_channel();
         let shutdown = Arc::new(AtomicBool::new(false));
         let worker_shutdown = Arc::clone(&shutdown);
@@ -305,152 +273,9 @@ impl LogSource for DbwinLogSource {
     }
 }
 
-#[cfg(windows)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct DbwinFrame {
-    pid: u32,
-    text: String,
-}
-
-#[cfg(windows)]
-fn decode_dbwin_frame(buffer: &[u8]) -> Option<DbwinFrame> {
-    let (pid_bytes, payload) = buffer.split_at_checked(size_of::<u32>())?;
-    let pid = u32::from_le_bytes(pid_bytes.try_into().ok()?);
-    let end = payload
-        .iter()
-        .position(|byte| *byte == 0)
-        .unwrap_or(payload.len());
-
-    let text = String::from_utf8_lossy(payload.get(..end)?).into_owned();
-    if text.is_empty() {
-        return None;
-    }
-
-    Some(DbwinFrame { pid, text })
-}
-
-#[cfg(unix)]
-fn decode_wine_debug_line(line: &str) -> Option<String> {
-    const ANSI_MARKER: &str = "warn:debugstr:OutputDebugStringA ";
-    const WIDE_MARKER: &str = "warn:debugstr:OutputDebugStringW ";
-
-    if let Some((_, payload)) = line.split_once(ANSI_MARKER) {
-        log::trace!("matched OutputDebugStringA line");
-        return decode_wine_debug_payload(payload);
-    }
-
-    if let Some((_, payload)) = line.split_once(WIDE_MARKER) {
-        log::trace!("matched OutputDebugStringW line");
-        return decode_wine_debug_payload(payload);
-    }
-
-    None
-}
-
-#[cfg(unix)]
-fn decode_wine_debug_payload(payload: &str) -> Option<String> {
-    let payload = payload.strip_prefix('L').unwrap_or(payload);
-    let payload = payload.strip_prefix('"')?;
-
-    let mut decoded = Vec::new();
-    let mut chars = payload.chars();
-
-    while let Some(ch) = chars.next() {
-        match ch {
-            '"' => return Some(String::from_utf8_lossy(&decoded).into_owned()),
-            '\\' => {
-                let escaped = chars.next()?;
-                match escaped {
-                    '\\' => decoded.push(b'\\'),
-                    '"' => decoded.push(b'"'),
-                    '\'' => decoded.push(b'\''),
-                    'a' => decoded.push(0x07),
-                    'b' => decoded.push(0x08),
-                    'f' => decoded.push(0x0c),
-                    'n' => decoded.push(b'\n'),
-                    'r' => decoded.push(b'\r'),
-                    't' => decoded.push(b'\t'),
-                    'v' => decoded.push(0x0b),
-                    'x' => {
-                        let hi = chars.next()?;
-                        let lo = chars.next()?;
-                        let value = u8::from_str_radix(&format!("{hi}{lo}"), 16).ok()?;
-                        decoded.push(value);
-                    }
-                    other => {
-                        let mut buf = [0_u8; 4];
-                        decoded.extend_from_slice(other.encode_utf8(&mut buf).as_bytes());
-                    }
-                }
-            }
-            other => {
-                let mut buf = [0_u8; 4];
-                decoded.extend_from_slice(other.encode_utf8(&mut buf).as_bytes());
-            }
-        }
-    }
-
-    log::debug!("failed to decode wine debug payload: {payload:?}");
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::LineAssembler;
-    #[cfg(windows)]
-    use super::decode_dbwin_frame;
-    #[cfg(unix)]
-    use super::decode_wine_debug_line;
-
-    #[cfg(windows)]
-    #[test]
-    fn decode_dbwin_frame_reads_pid_and_message() {
-        let mut frame = Vec::new();
-        frame.extend_from_slice(&1234_u32.to_le_bytes());
-        frame.extend_from_slice(b"72.458 Sys [Info]: Logged in sample_account\0ignored");
-
-        let decoded = decode_dbwin_frame(&frame).unwrap();
-        assert_eq!(decoded.pid, 1234);
-        assert_eq!(decoded.text, "72.458 Sys [Info]: Logged in sample_account");
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn decode_dbwin_frame_rejects_empty_or_truncated_payloads() {
-        assert!(decode_dbwin_frame(&[]).is_none());
-        assert!(decode_dbwin_frame(&[1, 2, 3]).is_none());
-
-        let mut frame = Vec::new();
-        frame.extend_from_slice(&77_u32.to_le_bytes());
-        frame.push(0);
-        assert!(decode_dbwin_frame(&frame).is_none());
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn decode_wine_debug_line_reads_outputdebugstring_payload() {
-        let line = r#"34924.788:00c4:00c8:warn:debugstr:OutputDebugStringA "72.458 Sys [Info]: Logged in Jasper123\r\n""#;
-        assert_eq!(
-            decode_wine_debug_line(line).unwrap(),
-            "72.458 Sys [Info]: Logged in Jasper123\r\n"
-        );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn decode_wine_debug_line_handles_wide_prefix_and_hex_escapes() {
-        let line = r#"0024:warn:debugstr:OutputDebugStringW L"Player name changed to Jasper123\xee\x80\x80 Clan: TestC#963\r\n""#;
-        let decoded = decode_wine_debug_line(line).unwrap();
-        assert!(decoded.contains("Player name changed to Jasper123"));
-        assert!(decoded.ends_with("Clan: TestC#963\r\n"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn decode_wine_debug_line_ignores_non_debugstr_noise() {
-        assert!(decode_wine_debug_line("ntsync: up and running.").is_none());
-        assert!(decode_wine_debug_line("fixme:heap:RtlSetHeapInformation stub").is_none());
-    }
 
     #[test]
     fn line_assembler_returns_complete_line() {

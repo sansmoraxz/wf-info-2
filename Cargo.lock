@@ -5010,8 +5010,23 @@ dependencies = [
  "sysinfo",
  "thiserror 2.0.18",
  "tokio",
+ "wf-dbwin",
  "wf-inventory",
  "winapi",
+]
+
+[[package]]
+name = "wf-dbwin"
+version = "0.1.0"
+dependencies = [
+ "winapi",
+]
+
+[[package]]
+name = "wf-dbwin-bridge"
+version = "0.1.0"
+dependencies = [
+ "wf-dbwin",
 ]
 
 [[package]]
