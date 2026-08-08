@@ -141,9 +141,8 @@ impl LogSource for WineDbwinBridgeSource {
                     log::info!("DBWIN bridge exited: {status}");
                     return Ok(None);
                 }
-                let chunk =
-                    String::from_utf8_lossy(self.buffer.get(..read).unwrap_or_default())
-                        .into_owned();
+                let chunk = String::from_utf8_lossy(self.buffer.get(..read).unwrap_or_default())
+                    .into_owned();
                 if chunk.is_empty() {
                     continue;
                 }

@@ -50,15 +50,17 @@ fn main() -> Result<(), Box<dyn Error>> {
             .into());
         }
         if stderr.contains("linker `x86_64-w64-mingw32-gcc` not found") {
-            return Err("The mingw-w64 cross linker is missing. Install your distro's \
+            return Err(
+                "The mingw-w64 cross linker is missing. Install your distro's \
                  mingw-w64 gcc package (e.g. `mingw-w64-gcc` on Arch, \
                  `gcc-mingw-w64-x86-64` on Debian/Ubuntu)."
-                .into());
+                    .into(),
+            );
         }
-        return Err(
-            format!("cross-building wf-dbwin-bridge for {BRIDGE_TARGET} failed (see above)")
-                .into(),
-        );
+        return Err(format!(
+            "cross-building wf-dbwin-bridge for {BRIDGE_TARGET} failed (see above)"
+        )
+        .into());
     }
 
     let exe = bridge_target_dir

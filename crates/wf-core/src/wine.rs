@@ -38,11 +38,10 @@ impl WineContext {
     /// prefix-selecting environment.
     pub fn for_pid(pid: u32) -> Result<Self, WineDiscoveryError> {
         let environ_path = format!("/proc/{pid}/environ");
-        let environ =
-            fs::read(&environ_path).map_err(|source| WineDiscoveryError::Proc {
-                path: environ_path,
-                source,
-            })?;
+        let environ = fs::read(&environ_path).map_err(|source| WineDiscoveryError::Proc {
+            path: environ_path,
+            source,
+        })?;
 
         let exe_path = format!("/proc/{pid}/exe");
         let exe = fs::read_link(&exe_path).map_err(|source| WineDiscoveryError::Proc {
@@ -166,11 +165,7 @@ mod tests {
                         PROTON_NO_FSYNC=1\0PATH=/usr/bin\0LANG=C\0";
         let env = prefix_env_from_environ(environ);
 
-        let get = |key: &str| {
-            env.iter()
-                .find(|(k, _)| k == key)
-                .map(|(_, v)| v.clone())
-        };
+        let get = |key: &str| env.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone());
         assert_eq!(
             get("WINEPREFIX"),
             Some(OsString::from("/games/pfx")),
