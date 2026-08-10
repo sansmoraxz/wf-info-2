@@ -451,21 +451,24 @@ async fn fetch_orders(
 }
 
 fn summarize_orders(orders: &[WfmOrder]) -> OrderSummary {
-    let active_prices = |order_type: OrderType| -> Vec<f64> {
-        orders
-            .iter()
-            .filter(|o| {
-                o.order_type == order_type
-                    && o.visible.unwrap_or(true)
-                    && o.user.status == Some(UserStatus::Ingame)
-            })
-            .map(|o| o.platinum)
-            .collect()
-    };
+    let mut sell_prices = Vec::new();
+    let mut buy_prices = Vec::new();
+
+    for order in orders {
+        if !order.visible.unwrap_or(true) || order.user.status != Some(UserStatus::Ingame) {
+            continue;
+        }
+
+        match order.order_type {
+            OrderType::Sell => sell_prices.push(order.platinum),
+            OrderType::Buy => buy_prices.push(order.platinum),
+            OrderType::Other => {}
+        }
+    }
 
     OrderSummary {
-        sell: price_stats(&active_prices(OrderType::Sell)),
-        buy: price_stats(&active_prices(OrderType::Buy)),
+        sell: price_stats(&sell_prices),
+        buy: price_stats(&buy_prices),
         total_listings: orders.len(),
     }
 }
