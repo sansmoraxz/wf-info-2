@@ -35,7 +35,7 @@ pub struct Handles {
     pub wfm: WfmHandle,
     /// Process-wide HTTP client; clones share the same connection pool.
     pub http: reqwest::Client,
-    pub(crate) market: Arc<MarketCache>,
+    pub market: Arc<MarketCache>,
     pub(crate) inventory_index: Arc<InventoryIndexCache>,
     pub(crate) item_index: Arc<ItemIndex>,
     pub screenshot: Arc<ScreenshotState>,
