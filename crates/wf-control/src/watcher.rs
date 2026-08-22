@@ -12,7 +12,10 @@ use wf_core::logs::pattern::LogProcessingEngine;
 use wf_core::logs::{self, LineAssembler, LogEvent, LogSource};
 use wf_ocr::{RelicRecognizer, load_image};
 
-use crate::events::{EventBus, RelicSelectionPopup, TradeFailedEvent, TradeSuccessEvent};
+use futures_util::future::join_all;
+
+use crate::events::{EventBus, RelicItem, RelicSelectionPopup, TradeFailedEvent, TradeSuccessEvent};
+use crate::market::{MarketCache, fetch_market_summary_by_name};
 use crate::screenshot::{ScreenshotState, capture_screen};
 use crate::{
     AccountLoginEvent, AccountLogoutEvent, DaemonEvent, DmTabOpenedEvent, SystemQuitReason,
@@ -164,6 +167,7 @@ struct WatchState {
     relic: RelicState,
     /// `None` when the OCR engine failed to initialize; relic OCR is skipped.
     relic_recognizer: Option<Arc<RelicRecognizer>>,
+    market: Arc<MarketCache>,
 }
 
 impl WatchState {
@@ -173,6 +177,7 @@ impl WatchState {
         screenshot: Arc<ScreenshotState>,
         warframe_pid: Option<u32>,
         auto_callbacks: AutoCallbacks,
+        market: Arc<MarketCache>,
     ) -> Self {
         let relic_recognizer = match wf_ocr::new_default_ocr_engine() {
             Ok(engine) => Some(Arc::new(RelicRecognizer::from(engine))),
@@ -192,6 +197,7 @@ impl WatchState {
             trade: TradeState::default(),
             relic: RelicState::default(),
             relic_recognizer,
+            market,
         }
     }
 
@@ -293,6 +299,7 @@ fn event_emitter_fn(
                     state.events.clone(),
                     Arc::clone(&state.screenshot),
                     Arc::clone(recognizer),
+                    Arc::clone(&state.market),
                 ));
             }
             LogEvent::RelicClose => {
@@ -432,6 +439,7 @@ async fn handle_relic_selection_popup(
     events: EventBus,
     shots: Arc<ScreenshotState>,
     recognizer: Arc<RelicRecognizer>,
+    market: Arc<MarketCache>,
 ) {
     sleep(Duration::from_millis(500)).await;
 
@@ -441,8 +449,19 @@ async fn handle_relic_selection_popup(
             Ok(img) => match recognizer.recognize_and_list(&img) {
                 Ok(v) => {
                     log::info!("Got relic items: {v:?}");
-                    let filtered: Vec<String> = v.into_iter().map(|e| e.text).collect();
-                    let popup = RelicSelectionPopup { items: filtered };
+                    let names: Vec<String> = v.into_iter().map(|e| e.text).collect();
+                    let items = join_all(names.into_iter().map(|name| {
+                        let market = &market;
+                        async move {
+                            let summary = fetch_market_summary_by_name(market, &name).await;
+                            RelicItem {
+                                name,
+                                market: summary,
+                            }
+                        }
+                    }))
+                    .await;
+                    let popup = RelicSelectionPopup { items };
                     events.emit(DaemonEvent::RelicSelectionOpen(popup));
                 }
                 Err(e) => log::error!("OCR failed on screenshot image {e}"),
@@ -453,6 +472,7 @@ async fn handle_relic_selection_popup(
     }
 }
 
+#[allow(clippy::too_many_arguments, reason = "watcher entry point threading all deps from composition root")]
 pub async fn observe_warframe_activity_with_lifecycle<S>(
     events: EventBus,
     http: reqwest::Client,
@@ -461,13 +481,14 @@ pub async fn observe_warframe_activity_with_lifecycle<S>(
     warframe_pid: Option<u32>,
     auto_callbacks: AutoCallbacks,
     lifecycle: GameLifecycleTracker,
+    market: Arc<MarketCache>,
 ) -> Result<(), Box<dyn Error>>
 where
     S: LogSource,
 {
     log::info!("Watching for Warframe activity...");
     let log_processor = LogProcessingEngine::new()?;
-    let mut state = WatchState::new(events, http, screenshot, warframe_pid, auto_callbacks);
+    let mut state = WatchState::new(events, http, screenshot, warframe_pid, auto_callbacks, market);
     let mut assembler = LineAssembler::default();
 
     loop {
@@ -546,12 +567,13 @@ mod tests {
     {
         observe_warframe_activity_with_lifecycle(
             events,
-            http,
+            http.clone(),
             screenshot,
             source,
             warframe_pid,
             auto_callbacks,
             GameLifecycleTracker::default(),
+            Arc::new(MarketCache::from(http)),
         )
         .await
     }
@@ -674,13 +696,15 @@ mod tests {
         let lifecycle = GameLifecycleTracker::default();
         assert_eq!(lifecycle.exit_reason(), SystemQuitReason::Unexpected);
 
+        let http = reqwest::Client::new();
         event_emitter_fn(
             WatchState::new(
                 EventBus::new(),
-                reqwest::Client::new(),
+                http.clone(),
                 Arc::new(ScreenshotState::default()),
                 None,
                 AutoCallbacks::Skip,
+                Arc::new(MarketCache::from(http)),
             ),
             vec![LogEvent::QuitRequested],
             &lifecycle,

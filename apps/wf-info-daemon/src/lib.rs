@@ -387,6 +387,7 @@ pub async fn run() {
     let watcher_events = cx.events.clone();
     let watcher_http = cx.http.clone();
     let watcher_screenshot = Arc::clone(&cx.screenshot);
+    let watcher_market = Arc::clone(&cx.market);
     let game_pid = game.pid();
     let log_watcher = tokio::spawn(async move {
         if let Err(e) = watcher::observe_warframe_activity_with_lifecycle(
@@ -397,6 +398,7 @@ pub async fn run() {
             Some(game_pid),
             auto_callbacks,
             watcher_lifecycle,
+            watcher_market,
         )
         .await
         {

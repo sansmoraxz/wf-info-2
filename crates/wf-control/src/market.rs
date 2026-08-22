@@ -81,7 +81,7 @@ pub(super) struct WfmId(String);
 #[serde(transparent)]
 #[from(forward)]
 #[as_ref(str)]
-pub(super) struct Slug(String);
+pub struct Slug(String);
 
 impl Slug {
     fn contains(&self, needle: &str) -> bool {
@@ -250,7 +250,7 @@ impl WfmCache {
 /// Shared, lazily refreshed handle to the WFM item cache. Owned by the
 /// composition root as `Arc<MarketCache>`; handlers take snapshots from it.
 /// Holds a clone of the process-wide HTTP client for all market REST calls.
-pub(super) struct MarketCache {
+pub struct MarketCache {
     http: reqwest::Client,
     cache: arc_swap::ArcSwapOption<WfmCache>,
 }
@@ -336,7 +336,7 @@ struct WfmItemDetail {
 // ── Typed order/price summaries ──
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub(super) struct PriceStats {
+pub struct PriceStats {
     pub min: Option<f64>,
     pub max: Option<f64>,
     pub median: Option<f64>,
@@ -344,7 +344,7 @@ pub(super) struct PriceStats {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub(super) struct OrderSummary {
+pub struct OrderSummary {
     pub sell: PriceStats,
     pub buy: PriceStats,
     pub total_listings: usize,
@@ -352,7 +352,7 @@ pub(super) struct OrderSummary {
 
 /// Market price summary for a single item
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub(super) struct MarketSummary {
+pub struct MarketSummary {
     pub slug: Slug,
     pub ducats: Option<i64>,
     pub prices: OrderSummary,
@@ -719,6 +719,23 @@ pub(super) async fn fetch_market_summary(
 ) -> Option<MarketSummary> {
     let cache = market.ensure().await.ok()?;
     let wfm_item = cache.lookup_by_game_ref(game_ref)?;
+    let orders = fetch_orders(&market.http, &wfm_item.slug).await.ok()?;
+    let prices = summarize_orders(&orders);
+
+    Some(MarketSummary {
+        slug: wfm_item.slug.clone(),
+        ducats: wfm_item.ducats,
+        prices,
+        cache_age_secs: Some(cache.age_secs()),
+    })
+}
+
+pub(super) async fn fetch_market_summary_by_name(
+    market: &MarketCache,
+    name: &str,
+) -> Option<MarketSummary> {
+    let cache = market.ensure().await.ok()?;
+    let wfm_item = cache.search(name).into_iter().next()?;
     let orders = fetch_orders(&market.http, &wfm_item.slug).await.ok()?;
     let prices = summarize_orders(&orders);
 

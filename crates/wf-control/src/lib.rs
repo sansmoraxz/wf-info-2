@@ -20,7 +20,7 @@ pub use inventory::{
     CountFilter, CountOp, FilterParams, LoadInventoryParams, RefreshParams, StaleParams,
     TimestampParam,
 };
-pub use market::MarketPriceParams;
+pub use market::{MarketCache, MarketPriceParams};
 pub use requests::{Handles, Request, ResponseEnvelope};
 pub use screenshot::{ScreenshotConfig, ScreenshotParams, ScreenshotState, WaylandCapture};
 pub use server::{

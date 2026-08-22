@@ -190,8 +190,15 @@ pub struct DmTabOpenedEvent {
 pub struct TradeSuccessEvent(pub TradeInfo);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelicItem {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market: Option<super::market::MarketSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelicSelectionPopup {
-    pub items: Vec<String>,
+    pub items: Vec<RelicItem>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
