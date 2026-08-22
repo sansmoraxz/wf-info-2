@@ -14,7 +14,9 @@ use wf_ocr::{RelicRecognizer, load_image};
 
 use futures_util::future::join_all;
 
-use crate::events::{EventBus, RelicItem, RelicSelectionPopup, TradeFailedEvent, TradeSuccessEvent};
+use crate::events::{
+    EventBus, RelicItem, RelicSelectionPopup, TradeFailedEvent, TradeSuccessEvent,
+};
 use crate::market::{MarketCache, fetch_market_summary_by_name};
 use crate::screenshot::{ScreenshotState, capture_screen};
 use crate::{
@@ -472,7 +474,10 @@ async fn handle_relic_selection_popup(
     }
 }
 
-#[allow(clippy::too_many_arguments, reason = "watcher entry point threading all deps from composition root")]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "watcher entry point threading all deps from composition root"
+)]
 pub async fn observe_warframe_activity_with_lifecycle<S>(
     events: EventBus,
     http: reqwest::Client,
@@ -488,7 +493,14 @@ where
 {
     log::info!("Watching for Warframe activity...");
     let log_processor = LogProcessingEngine::new()?;
-    let mut state = WatchState::new(events, http, screenshot, warframe_pid, auto_callbacks, market);
+    let mut state = WatchState::new(
+        events,
+        http,
+        screenshot,
+        warframe_pid,
+        auto_callbacks,
+        market,
+    );
     let mut assembler = LineAssembler::default();
 
     loop {
